@@ -130,6 +130,7 @@ python3 codec.py enc hex -f picture.png
 | `codec dec <编码名> <文本>` | 用指定编码解码 |
 | `codec enc <编码名> <文本>` | 用指定编码编码 |
 | `codec list` | 列出全部支持的编码名 |
+| `codec dec mojibake --deep [N]` | 多层乱码反复还原，直到正常文字占比 ≥ N%（默认 50） |
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 

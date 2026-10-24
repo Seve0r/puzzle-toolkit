@@ -17,6 +17,8 @@
   -q, --quiet          只输出结果，不要解释
   --depth N            auto 的递归深度（默认 3）
   --best               配合 dec mojibake：数据残缺时强制输出最佳猜测，缺失处标 ?
+  --deep [N]           配合 dec mojibake：反复还原直到正常文字占比 >= N%
+                       （0~100，默认 50）。多层乱码一步到位，并列出每层可读率。
 
 例：
   codec.py auto 'S1VWRVIgTEFOR1VBR0U='
@@ -24,6 +26,7 @@
   codec.py dec base58 '2NEpo7TZRRrLZSi2U'
   codec.py enc hex --file /bin/ls | head
   codec.py dec mojibake --best '瀹跺涵鐘跺喌'
+  codec.py dec mojibake --deep 80 --file cipher.txt
 """
 import sys
 import os
@@ -713,6 +716,73 @@ def mojibake_best(s):
     return out, ratio, bad, enc
 
 
+def readability(s):
+    """「正常文字占比」：**CJK 字符里** GB2312 能编码的比例（0~1）。
+
+    用它判断"解够了没有"比看损失率可靠。UTF-8 被 GBK 误读后会产出
+    鑷 / 嵆 / 鍖 / 遠 这类 GB2312 之外的生僻字，正常中文则几乎全在里面。
+    实测：正常中文 100%、一层乱码 26%、两层乱码 89%。
+
+    ★ 分子分母都只看 CJK，ASCII 不计入。
+    否则解过头变成 `?1?7?1?7` 那种 ASCII 噪音时，反而会被算成高可读率，
+    导致 --deep 一路解到烂。没有 CJK 字符时直接返回 0。
+    """
+    cjk = [c for c in s if "\u4e00" <= c <= "\u9fff"]
+    if not cjk:
+        return 0.0
+    ok = 0
+    for ch in cjk:
+        try:
+            ch.encode("gb2312")
+            ok += 1
+        except Exception:
+            pass
+    return ok / len(cjk)
+
+
+def mojibake_deep(s, threshold=50, max_rounds=5):
+    """反复还原，直到「正常文字占比」达到 threshold（0~100）为止。
+
+    threshold 由使用者指定：想解干净就调高（如 80），只要大致能读就调低。
+    默认 50 对应"一半以上已经是常见汉字"。
+
+    返回 (最佳结果, 每层记录, 停在第几层)。
+    每层记录格式 [(编码名, 损失率, 该层可读率), ...]。
+
+    ★ 可读率不是单调上升的。实测一串双层乱码的逐层可读率是
+      36.6% → 31.1% → 52.5% → 48.6%，中间会先降后升再降。
+      所以不能"一提升就继续"，而是每层都记下来、最后取可读率最高的那层，
+      解过头了也能自动退回去。
+
+    注意：只对"整段层数一致"的乱码有效。如果同一行里有的部分已经解开、
+    有的还没有（混合层数），无脑递归会把已经解好的部分重新弄坏——那种
+    情况必须人工切段。所以这里 max_rounds 默认 5 层封顶。
+    """
+    lo = max(0, min(100, int(threshold)))
+    cur = s
+    layers = []
+    # (可读率, 内容, 层号)
+    best = (readability(cur), cur, 0)
+    for n in range(1, max_rounds + 1):
+        # 每层开头先看当前是否已经够用——阈值 0 时应当直接原样返回
+        if readability(cur) * 100 >= lo:
+            break
+        rows = mojibake_rank(cur)
+        if not rows:
+            break
+        ratio, bad, enc, out = rows[0]
+        if out == cur:
+            break
+        cur = out
+        rd = readability(cur)
+        layers.append((enc, ratio, rd))
+        if rd > best[0]:
+            best = (rd, cur, n)
+        if rd * 100 >= lo:
+            break
+    return best[1], layers, best[2]
+
+
 # ---------------------------------------------------------------- 评分 / 识别
 
 COMMON_EN = set("the be to of and in that have it for not on with he as you do at "
@@ -1046,6 +1116,17 @@ def main():
     quiet = "-q" in argv or "--quiet" in argv
     best = "--best" in argv
     argv = [a for a in argv if a not in ("-q", "--quiet", "--best")]
+    # --deep [N]：反复还原直到「正常文字占比」达到 N%（0~100，默认为 50）。
+    # N 可选，写成 --deep 80 或直接 --deep（等价 50）。
+    deep = None
+    if "--deep" in argv:
+        i = argv.index("--deep")
+        if i + 1 < len(argv) and re.fullmatch(r"\d+", argv[i + 1]):
+            deep = max(0, min(100, int(argv[i + 1])))
+            argv = argv[:i] + argv[i + 2:]
+        else:
+            deep = 50
+            argv = argv[:i] + argv[i + 1:]
     depth = 3
     for flag in ("--depth", "-d"):
         if flag in argv:
@@ -1168,6 +1249,27 @@ def main():
                 sys.stderr.write(
                     "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；? 处需要靠上下文猜\n"
                     % (ratio * 100, bad, enc))
+            return 0
+        # dec mojibake --deep [N]：反复还原直到「正常文字占比」达到 N%
+        if cmd.startswith("dec") and name == "mojibake" and deep is not None:
+            out, layers, used = mojibake_deep(text, deep)
+            # 先把层级信息打到 stderr，再用一个空行隔开后输出结果。
+            # 顺序反过来（结果在前、诊断在后）时，长文本会把它俩推得很远，
+            # 末尾那一大段说明反而抢了视线；放前面则结果紧接其后，一眼看到。
+            # stderr 不进管道，所以重定向/管道时结果依然是干净的。
+            if layers:
+                for n, (enc, ratio, rd) in enumerate(layers, 1):
+                    sys.stderr.write(
+                        "  第 %d 层  %-12s 损失 %5.1f%%  可读率 %3.0f%%%s\n"
+                        % (n, enc, ratio * 100, rd * 100,
+                           "  ←采信" if n == used else ""))
+            sys.stderr.write(
+                "  采信第 %d 层（可读率 %.0f%%，阈值 %d%%）%s\n\n"
+                % (used, readability(out) * 100, deep,
+                   "；残片若仍乱，可能是混合层数，需手工切段" if layers else ""))
+            sys.stderr.flush()
+            print(out.replace("\ufffd", "?"))
+            sys.stdout.flush()
             return 0
         fn = table.get(name)
         if not fn:
