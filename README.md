@@ -4,21 +4,21 @@
 
 ## 快速开始
 
+> **这是私有仓库**，只能用 SSH 地址克隆（`git@github.com:...`），且本机需要已在
+> GitHub 添加过 SSH 公钥。HTTPS 地址和 `raw.githubusercontent.com` 链接对私有仓库无效。
+
 ```bash
-curl -O https://raw.githubusercontent.com/Seve0r/puzzle-toolkit/main/codec.py
+git clone git@github.com:Seve0r/puzzle-toolkit.git
+cd puzzle-toolkit
 python3 codec.py auto 'S1VWRVIgTEFOR1VBR0U='
 ```
-
-单个脚本就能跑。想要全部四个 + 内置词表，用下面的完整安装。
-
-> Windows PowerShell 里 `curl` 是 `Invoke-WebRequest` 的别名，语法不同，请写 `curl.exe`。
 
 ## 安装
 
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/Seve0r/puzzle-toolkit.git ~/tools/puzzle-toolkit
+git clone git@github.com:Seve0r/puzzle-toolkit.git ~/tools/puzzle-toolkit
 ```
 
 加到 `~/.bashrc`：
@@ -33,10 +33,16 @@ alias stego="python3 $D/stego.py"
 
 ### Windows
 
+私有仓库要先能通过 GitHub 认证，二选一：
+
+- **SSH**：`ssh-keygen -t ed25519` 生成密钥，把 `id_ed25519.pub` 的内容贴到
+  https://github.com/settings/keys ，再用下面的命令克隆
+- **GitHub Desktop**：图形界面登录后直接 Clone repository，不用碰密钥
+
 PowerShell：
 
 ```powershell
-git clone https://github.com/Seve0r/puzzle-toolkit.git "$HOME\tools\puzzle-toolkit"
+git clone git@github.com:Seve0r/puzzle-toolkit.git "$HOME\tools\puzzle-toolkit"
 ```
 
 在脚本所在目录为每个脚本建一个 `.cmd`，例如 `codec.cmd`：
