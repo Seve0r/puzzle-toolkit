@@ -26,7 +26,29 @@ python3 $C list                            # 看支持哪些名字
 Base16/32/32hex/58/62/64/64url/85/91、hex、二进制、十进制、八进制、
 URL、HTML 实体、Unicode 转义（`\u`/`\U`/`\x`/`U+XXXX`）、Quoted-Printable、ROT13/ROT47/Atbash、
 摩斯、盲文（含 8 点原始位串 `dec braillebits`）、gzip/zlib/bz2 内嵌流、
-UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GBK。
+UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GBK、
+**mojibake**（UTF-8 被误读成 GBK 的还原，见下方第 ⑦ 条）。
+
+## mojibake：`浜哄彧鑳界湅` → `人只能看`
+
+UTF-8 的中文被当成 GBK 读了一遍，是 ARG 里最常见的乱码。还原方向反直觉：
+**先 `encode('gbk')` 拿回原始字节，再 `decode('utf-8')`**。
+
+`dec mojibake` 会枚举 gb18030/gbk/big5/shift_jis/euc-kr/latin-1 等假设，
+各自反编码回字节再按 UTF-8 解，**取 U+FFFD 损失率最低的那个**——
+猜中时无损，猜错时字节流不合法会碎成大量替换字符。
+
+损失率本身就是信号：
+
+- **0%** → 数据完整，还原可信
+- **>2%** → 直接报错，说明原始字节流本身就缺字节
+
+第二种情况不能用「猜个最像的」硬输出。比如 `濡備綍杩涘叆寮備笘鐣出殑闂紵`
+最好假设也损失 30.8%，还原成 `如何进入异世畳���闼�`——后半段是猜的，
+当成答案会误导。**要回头找更原始的来源。**
+
+`codec.py mojibake_rank(s)` 可以直接看到所有假设的损失率排名，用来判断数据坏在哪。
+
 
 ## 矩阵重排（`grid`）
 

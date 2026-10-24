@@ -12,11 +12,19 @@
   exif <image>                读元数据（EXIF / PNG 文本块 / 注释）
   pngchunks <png>             列出 PNG 每个块，标出可疑块
   zipinfo <zip>               不依赖 unzip：列条目、注释、伪加密标记
-  qr <image>                  用 zbarimg 识别二维码/条形码（--all 尝试全分辨率）
+  unzip <zip> [--out DIR]     解压到目录（store/deflate，加密条目跳过，带路径越界防护）
+  hexdump <file> [-l N]       十六进制查看
+  qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试）
   spec <audio> [--out a.png]  ffmpeg 生成频谱图（看隐藏的摩斯/文字）
   meta <file>                 文件类型 + 尺寸 + 熵
 
-通用：-q 只输出结果
+通用：
+  -q, --quiet                 只输出结果
+
+例：
+  stego.py binwalk mystery.png
+  stego.py tail photo.jpg
+  stego.py lsbscan cover.png
 """
 import sys
 import os

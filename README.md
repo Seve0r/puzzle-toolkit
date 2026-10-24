@@ -1,11 +1,9 @@
 # puzzle-toolkit
 
 解谜 / CTF 用的离线解码工具箱。四个脚本，纯 Python 标准库，无第三方依赖。
+由于大部分情况下都是给我自己用的而我刚开始学这些，写入了一些基本操作说明。
 
 ## 快速开始
-
-> **这是私有仓库**，只能用 SSH 地址克隆（`git@github.com:...`），且本机需要已在
-> GitHub 添加过 SSH 公钥。HTTPS 地址和 `raw.githubusercontent.com` 链接对私有仓库无效。
 
 ```bash
 git clone git@github.com:Seve0r/puzzle-toolkit.git
@@ -73,6 +71,31 @@ python3 ~/tools/puzzle-toolkit/codec.py auto 'S1VWRVIgTEFOR1VBR0U='
 py "$HOME\tools\puzzle-toolkit\codec.py" auto 'S1VWRVIgTEFOR1VBR0U='
 ```
 
+## 怎么喂数据
+
+**优先用 `-f` 从文件读，不要把密文直接塞进命令行。**
+
+```bash
+python3 codec.py auto -f cipher.txt
+python3 codec.py dec bin -f bits.txt
+python3 codec.py enc hex -f picture.png
+```
+
+四种情况下 `-f` 是唯一靠谱的方式：
+
+- **多行密文**：cmd 会把粘贴内容里的换行当成命令分隔符，直接执行下一行
+- **超长密文**：cmd 单条命令上限约 8191 字符，超出会被**静默截断**
+- **含特殊字符**：`$`、`&`、`"` 在 PowerShell 里会被解释掉
+- **二进制文件**：只有 `-f` 能拿到原始字节，否则会被 UTF-8 替换成 U+FFFD
+
+生成文件最快的办法：记事本粘贴 → 另存为 → 编码选 **UTF-8**。
+
+三条容易踩的用错：
+
+1. **多行二进制要整段喂**。按行切会切断字符的字节边界，每行都解出半个字。
+2. **混合编码不能自动分段**。一份文件里有 base64 + hex + 二进制时，`auto` 只套用一种解码器，得先手工切分、每次喂一段。
+3. **二进制文件（图片 / 音频 / 压缩包）用 `stego.py`**，`codec.py` 面向文本。
+
 ## 先跑哪个
 
 手上有东西但不确定是什么，先查这张表：
@@ -85,6 +108,8 @@ py "$HOME\tools\puzzle-toolkit\codec.py" auto 'S1VWRVIgTEFOR1VBR0U='
 | 大量 `0000` 的 8 位分组 | `codec auto`（UTF-32） |
 | 点划序列 | `codec auto`（摩斯） |
 | 像英语但读不通 | `classic auto` |
+| 中文正常但读不通（`浜哄彧`） | `codec dec mojibake` |
+| 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
 | 32/40/64 位 hex | `hc identify` → `hc crack` |
 | 图片 / 音频 / 压缩包 | `stego binwalk` |
 | 疑似图片藏东西 | `stego lsbscan` |
@@ -93,6 +118,100 @@ py "$HOME\tools\puzzle-toolkit\codec.py" auto 'S1VWRVIgTEFOR1VBR0U='
 两点补充：二进制串要整段一起喂，别按行切；`stego lsbscan` 比 `lsb` 更彻底。
 
 每个脚本 `-h` 看完整参数，`docs/` 下有各脚本的详细说明。
+
+## 全部命令
+
+### codec.py —— 编码识别与解码
+
+| 命令 | 说明 |
+|---|---|
+| `codec auto <文本>` | 自动识别编码并递归剥皮（默认 3 层） |
+| `codec brute <文本>` | 每种编码都试一遍，列出所有可读结果 |
+| `codec dec <编码名> <文本>` | 用指定编码解码 |
+| `codec enc <编码名> <文本>` | 用指定编码编码 |
+| `codec list` | 列出全部支持的编码名 |
+| `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
+| `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
+
+支持的编码有四十多种（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、
+Unicode 转义、摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、mojibake…），
+完整列表用 `codec list`。
+
+### classic.py —— 古典密码
+
+| 命令 | 说明 |
+|---|---|
+| `classic auto <文本>` | 全部手法跑一遍，按英文契合度排序 |
+| `classic caesar [--key N] <文本>` | 凯撒；不给 key 就 26 种全爆破 |
+| `classic vigenere --key K <文本>` | 维吉尼亚，`--enc` 加密 |
+| `classic vigcrack <文本>` | 维吉尼亚无密钥破解（IC 定长 + 逐列频率） |
+| `classic affine [--a N --b N] <文本>` | 仿射；不给参数就 312 种全爆破 |
+| `classic sub <文本>` | 单表替换爬山法破解（需 ≥300 字母才可靠） |
+| `classic bacon [--old] <文本>` | 培根密码，也吃大小写隐写 |
+| `classic railfence [--rails N] <文本>` | 栅栏；不给栏数就全爆破 |
+| `classic columnar [--key K] <文本>` | 列置换；不给 key 就按长度爆破 |
+| `classic atbash <文本>` | Atbash（反字母表） |
+| `classic a1z26 [--dec] <文本>` | A1Z26（1–26 ↔ a–z） |
+| `classic polybius [--dec] <文本>` | 波利比奥斯方阵（I/J 合并） |
+| `classic playfair --key K <文本>` | 普莱菲尔方阵，`--enc` 加密，`--clean` 去掉填充 x |
+| `classic adfgx --key K [--trans K] <文本>` | ADFGX 方阵 |
+| `classic keyboard [--layout qwerty\|dvorak\|azerty] <文本>` | 键盘错位还原 |
+| `classic t9 <数字>` | 手机九宫格，列出所有可能 |
+
+### hashcrypto.py —— 哈希与现代密码
+
+| 命令 | 说明 |
+|---|---|
+| `hc identify <哈希>` | 猜测哈希类型（长度 / 字符集 / 前缀） |
+| `hc hash <算法> <文本>` | 计算哈希 |
+| `hc crack <哈希> [--algo A] [--wordlist F] [--rules]` | 字典爆破，不给 algo 就自动识别 |
+| `hc xor <数据> [--key HEX \| --key-str TEXT]` | 单字节全试 / 指定 key 异或 / 多字节自动 |
+| `hc repeat-xor <文件>` | 检测重复密钥 XOR 并还原密钥 |
+| `hc aes --key HEX [--iv HEX] [--mode cbc\|ecb\|ctr\|gcm] <数据>` | AES 解密，`--enc` 加密 |
+| `hc rc4 --key TEXT <数据>` | RC4 |
+| `hc rsa --n N --e E [--c C] [--d D]` | RSA 解密与常见攻击 |
+| `hc jwt <token> [--crack]` | 解析 JWT；按 `alg` 爆破 HS256/384/512 密钥 |
+| `hc list` | 列出识别的哈希类型 |
+
+### stego.py —— 文件隐写取证
+
+| 命令 | 说明 |
+|---|---|
+| `stego binwalk <文件>` | 扫描内嵌文件特征 |
+| `stego tail <文件>` | 检测文件尾附加数据（IEND / EOI / GIF trailer 之后） |
+| `stego strings <文件> [-n 6]` | 可打印字符串，标出可疑项（flag / URL / base64 / 长 hex） |
+| `stego lsb <图片>` | 逐通道 LSB 提取 |
+| `stego lsbscan <图片>` | 更彻底：1~3 位、6 种通道组合 |
+| `stego exif <图片>` | 读元数据（EXIF / PNG 文本块 / 注释） |
+| `stego pngchunks <png>` | 列出 PNG 每个块，标出可疑块 |
+| `stego zipinfo <zip>` | 不依赖 unzip：列条目、注释、伪加密标记 |
+| `stego unzip <zip> [--out 目录]` | 解压到目录（只支持 store/deflate，加密条目跳过，带路径越界防护） |
+| `stego hexdump <文件> [-l N]` | 十六进制查看 |
+| `stego qr <图片> [--all]` | 识别二维码/条形码，`--all` 会放大 2×/4× 重试 |
+| `stego spec <音频> [--out 图.png]` | 生成频谱图（看隐藏的摩斯/文字） |
+| `stego meta <文件>` | 文件类型 + 尺寸 + 熵 |
+
+### 通用选项
+
+| 选项 | 适用 | 说明 |
+|---|---|---|
+| `-f, --file <路径>` | 全部 | 从文件读输入，二进制安全。多行/超长/带特殊字符时**必须用这个** |
+| `-q, --quiet` | 全部 | 只输出结果，不要解释 |
+| `--depth N` | `codec auto` | 递归剥皮层数，默认 3 |
+| `--best` | `codec dec mojibake` | 数据本身残缺时，强制输出最佳猜测，缺失处标 `?` |
+| `--enc` | `classic` / `hc` | 编码方向（默认解码） |
+| `-h, --help` | 全部 | 看完整参数 |
+
+## 数据完整性
+
+解出来带替换字符 `�`（U+FFFD），说明**原始数据本身缺字节**，不是脚本的问题。
+
+- 干净解出 → 结果可信
+- 带 `�` → 回头找更原始的来源（原帖、原始文件、更早的截图）
+
+这条对任何编码都成立：base64 被截断、hex 是奇数长度、mojibake 缺字节，都会表现成 `�`。
+
+`dec mojibake` 会把损失率算出来：0% 才认定还原成功，超过 2% 直接报错，而不是猜一个最像的硬输出。
 
 ## 关于词表
 
@@ -118,6 +237,17 @@ Debian / Ubuntu 默认不装系统词典，需要的话：
 sudo apt install wamerican
 ```
 
+## 更新
+
+仓库是私有的，两种拿新版本的方式：
+
+```bash
+git pull
+```
+
+或者网页上重新 Download ZIP 覆盖解压。**注意 ZIP 里 `data/words.txt` 要一起换**——
+只更新 `.py` 会导致词表缺失，单表替换破解的准确率会下降（程序会提示降级）。
+
 ## 目录结构
 
 ```
@@ -127,7 +257,12 @@ puzzle-toolkit/
   hashcrypto.py   哈希与现代密码
   stego.py        文件隐写
   data/words.txt  内置英语词表（约 1500 常用词）
-  docs/           各脚本的详细说明
+  docs/
+    codec.md      ← codec.py 的详细说明
+    classic.md    ← classic.py
+    hashcrypto.md ← hashcrypto.py
+    stego.md      ← stego.py
+  CHANGELOG.md    更新日志
 ```
 
 ## 依赖
