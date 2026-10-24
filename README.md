@@ -6,7 +6,7 @@
 ## 快速开始
 
 ```bash
-git clone git@github.com:Seve0r/puzzle-toolkit.git
+git clone https://github.com/Seve0r/puzzle-toolkit.git
 cd puzzle-toolkit
 python3 codec.py auto 'S1VWRVIgTEFOR1VBR0U='
 ```
@@ -16,7 +16,7 @@ python3 codec.py auto 'S1VWRVIgTEFOR1VBR0U='
 ### Linux / macOS
 
 ```bash
-git clone git@github.com:Seve0r/puzzle-toolkit.git ~/tools/puzzle-toolkit
+git clone https://github.com/Seve0r/puzzle-toolkit.git ~/tools/puzzle-toolkit
 ```
 
 加到 `~/.bashrc`：
@@ -31,17 +31,17 @@ alias stego="python3 $D/stego.py"
 
 ### Windows
 
-私有仓库要先能通过 GitHub 认证，二选一：
-
-- **SSH**：`ssh-keygen -t ed25519` 生成密钥，把 `id_ed25519.pub` 的内容贴到
-  https://github.com/settings/keys ，再用下面的命令克隆
-- **GitHub Desktop**：图形界面登录后直接 Clone repository，不用碰密钥
-
-PowerShell：
+仓库是公开的，克隆不需要任何认证。PowerShell：
 
 ```powershell
-git clone git@github.com:Seve0r/puzzle-toolkit.git "$HOME\tools\puzzle-toolkit"
+git clone https://github.com/Seve0r/puzzle-toolkit.git "$HOME\tools\puzzle-toolkit"
 ```
+
+没装 Git 也行：网页上点 **Code → Download ZIP**，解压到 `%USERPROFILE%\tools\puzzle-toolkit`。
+**注意别漏掉 `data/words.txt`**，少了它单表替换破解会降级。
+
+只有想往回 push 时才需要认证：`ssh-keygen -t ed25519` 生成密钥，把 `id_ed25519.pub`
+的内容贴到 https://github.com/settings/keys ；或者用 GitHub Desktop 登录。
 
 在脚本所在目录为每个脚本建一个 `.cmd`，例如 `codec.cmd`：
 
@@ -240,14 +240,21 @@ sudo apt install wamerican
 
 ## 更新
 
-仓库是私有的，两种拿新版本的方式：
-
 ```bash
 git pull
 ```
 
-或者网页上重新 Download ZIP 覆盖解压。**注意 ZIP 里 `data/words.txt` 要一起换**——
+或者网页上点 **Code → Download ZIP** 覆盖解压。**注意 ZIP 里 `data/words.txt` 要一起换**——
 只更新 `.py` 会导致词表缺失，单表替换破解的准确率会下降（程序会提示降级）。
+
+仓库是公开的，也可以单独下某个文件，不用克隆：
+
+```bash
+curl -O https://raw.githubusercontent.com/Seve0r/puzzle-toolkit/main/codec.py
+```
+
+> 国内直连 `raw.githubusercontent.com` 经常超时（curl 返回 000，不是 404）。
+> 挂代理即可：`curl -x http://127.0.0.1:7897 -O https://raw.githubusercontent.com/...`
 
 ## 目录结构
 
