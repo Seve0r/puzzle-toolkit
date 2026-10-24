@@ -653,6 +653,27 @@ MOJIBAKE_ENCODINGS = [
 ]
 
 
+# CP936 把单字节 0x80 定义成欧元符号 €，但 Python 的 gbk/gb18030 codec 不认
+# 这个单字节（gb18030 反而把 U+20AC 编成双字节 A2E3）。乱码里一旦出现 €，
+# 多出来的那个字节会让它之后整行错位一格：本来能无损伤还原的内容会变成
+# 「丢?个亲生孩子」这种鬼样子，还会把损失率抬上去、把正确假设挤掉。
+# 所以 GBK 系回编码时必须手动把 € 还原成 0x80。
+_GBK_FAMILY = {"gb18030", "gbk"}
+
+
+def _encode_back(s, enc):
+    """把乱码字符串按 enc 还原成原始字节（含 CP936 的 0x80 ↔ € 特例）。"""
+    if enc not in _GBK_FAMILY or "\u20ac" not in s:
+        return s.encode(enc)
+    out = bytearray()
+    for ch in s:
+        if ch == "\u20ac":
+            out.append(0x80)
+        else:
+            out += ch.encode(enc)
+    return bytes(out)
+
+
 def mojibake_rank(s):
     """枚举「UTF-8 被误读成别的编码」的所有可能，按 U+FFFD 损失率排序。
 
@@ -665,7 +686,7 @@ def mojibake_rank(s):
     rows = []
     for enc in MOJIBAKE_ENCODINGS:
         try:
-            raw = s.encode(enc)          # 严格：不在该编码里的字符直接判该假设失败
+            raw = _encode_back(s, enc)   # 严格：不在该编码里的字符直接判该假设失败
         except (UnicodeEncodeError, LookupError):
             continue
         out = raw.decode("utf-8", errors="replace")
