@@ -108,7 +108,7 @@ python3 codec.py enc hex -f picture.png
 | 大量 `0000` 的 8 位分组 | `codec auto`（UTF-32） |
 | 点划序列 | `codec auto`（摩斯） |
 | 像英语但读不通 | `classic auto` |
-| 中文正常但读不通（`浜哄彧`） | `codec dec mojibake` |
+| 中文正常但读不通（`浜哄彧`） | `codec dec mojibake`，解完还乱就加 `--deep` |
 | 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
 | 32/40/64 位 hex | `hc identify` → `hc crack` |
 | 图片 / 音频 / 压缩包 | `stego binwalk` |
@@ -130,7 +130,9 @@ python3 codec.py enc hex -f picture.png
 | `codec dec <编码名> <文本>` | 用指定编码解码 |
 | `codec enc <编码名> <文本>` | 用指定编码编码 |
 | `codec list` | 列出全部支持的编码名 |
+| `codec dec mojibake <文本>` | 还原单层乱码（`浜哄彧` → `人只`）。损失 >2% 直接报错，不硬猜 |
 | `codec dec mojibake --deep [N]` | 多层乱码反复还原，直到正常文字占比 ≥ N%（默认 50） |
+| `codec dec mojibake --best <文本>` | 数据本身残缺时强制输出最佳猜测，缺失处标 `?`，并给出损失率 |
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 

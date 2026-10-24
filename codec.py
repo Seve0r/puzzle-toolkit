@@ -25,6 +25,7 @@
   codec.py brute '&#x4f60;&#x597d;'
   codec.py dec base58 '2NEpo7TZRRrLZSi2U'
   codec.py enc hex --file /bin/ls | head
+  codec.py dec mojibake '浜哄彧鑳界湅'
   codec.py dec mojibake --best '瀹跺涵鐘跺喌'
   codec.py dec mojibake --deep 80 --file cipher.txt
 """
