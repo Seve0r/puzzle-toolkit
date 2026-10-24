@@ -639,8 +639,15 @@ def _e_gbk(s):
     return as_bytes(s).decode("gbk", "replace")
 
 
-MOJIBAKE_ENCODINGS = ["gb18030", "gbk", "big5", "shift_jis", "euc-kr",
-                      "latin-1", "cp1252", "cp1251", "iso-8859-2"]
+# 顺序有讲究：cp932 放在 shift_jis 前面，因为 cp932（Windows-31J）是
+# Shift_JIS 的超集，能覆盖 ㈹ / 半角片假名这类「机种依存文字」，
+# 而严格的 shift_jis 遇到它们会直接 encode 失败、整个假设被跳过。
+MOJIBAKE_ENCODINGS = [
+    "gb18030", "gbk",
+    "cp932", "shift_jis", "shift_jis_2004", "shift_jisx0213",
+    "big5", "euc-kr",
+    "latin-1", "cp1252", "cp1251", "iso-8859-2",
+]
 
 
 def mojibake_rank(s):
