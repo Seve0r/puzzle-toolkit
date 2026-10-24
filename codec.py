@@ -686,10 +686,16 @@ def _d_mojibake(s):
     # 但也不能只报错什么都不给——把最佳猜测和损失率一起亮出来，
     # 让使用者自己判断哪一段还能信。
     if ratio > 0.02:
+        # 结果本身可能是多行，直接接在冒号后面会把缩进冲掉、还跟报错文字
+        # 挤在一起。统一另起一行，逐行缩进四格。
+        guess = out.replace("\ufffd", "?")
+        body = "\n".join("    " + ln for ln in (guess.splitlines() or [""]))
         raise ValueError(
             "还原损失 %.1f%%（%d 个替换字符，假设 %s），原始字节流可能有缺失。\n"
-            "      最佳猜测（不可全信，缺字节处已用 ? 代替）：%s"
-            % (ratio * 100, bad, enc, out.replace("\ufffd", "?")))
+            "\n"
+            "  最佳猜测（? = 缺失处，不可全信）：\n"
+            "%s"
+            % (ratio * 100, bad, enc, body))
     return out
 
 
@@ -1156,10 +1162,12 @@ def main():
         if cmd.startswith("dec") and name == "mojibake" and best:
             out, ratio, bad, enc = mojibake_best(text)
             print(out.replace("\ufffd", "?"))
+            # stdout 带缓冲、stderr 不带，不 flush 的话提示会跑到结果前面
+            sys.stdout.flush()
             if ratio > 0:
                 sys.stderr.write(
-                    "  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；"
-                    "? 处需要靠上下文猜\n" % (ratio * 100, bad, enc))
+                    "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；? 处需要靠上下文猜\n"
+                    % (ratio * 100, bad, enc))
             return 0
         fn = table.get(name)
         if not fn:
