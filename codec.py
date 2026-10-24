@@ -9,17 +9,21 @@
   dec    <enc> <text>  用指定编码解码
   enc    <enc> <text>  用指定编码编码
   list                 列出所有支持的编码名
+  grid   <text>        切矩阵枚举读法（行/列/蛇形/反转），--rows --cols --width
+  blocks <text>        定长块按进制转字节，-w 块宽 -r 进制（如 -w 2 -r 36）
 
 通用选项：
   -f, --file <path>    从文件读输入（二进制安全，配合 enc hex/base64 很有用）
   -q, --quiet          只输出结果，不要解释
   --depth N            auto 的递归深度（默认 3）
+  --best               配合 dec mojibake：数据残缺时强制输出最佳猜测，缺失处标 ?
 
 例：
   codec.py auto 'S1VWRVIgTEFOR1VBR0U='
   codec.py brute '&#x4f60;&#x597d;'
   codec.py dec base58 '2NEpo7TZRRrLZSi2U'
   codec.py enc hex --file /bin/ls | head
+  codec.py dec mojibake --best '瀹跺涵鐘跺喌'
 """
 import sys
 import os
@@ -635,6 +639,67 @@ def _e_gbk(s):
     return as_bytes(s).decode("gbk", "replace")
 
 
+MOJIBAKE_ENCODINGS = ["gb18030", "gbk", "big5", "shift_jis", "euc-kr",
+                      "latin-1", "cp1252", "cp1251", "iso-8859-2"]
+
+
+def mojibake_rank(s):
+    """枚举「UTF-8 被误读成别的编码」的所有可能，按 U+FFFD 损失率排序。
+
+    原理：把当前字符串按候选编码**反向编码回字节**，再按 UTF-8 解开。
+    猜中当初的误读方式时，拿回的正是原始 UTF-8 字节，解码无损；
+    猜错时字节流不合法，会碎成一堆 U+FFFD。所以损失率最低 = 最可能。
+
+    返回 [(损失率, 替换字符数, 编码名, 还原结果), ...]，已排序。
+    """
+    rows = []
+    for enc in MOJIBAKE_ENCODINGS:
+        try:
+            raw = s.encode(enc)          # 严格：不在该编码里的字符直接判该假设失败
+        except (UnicodeEncodeError, LookupError):
+            continue
+        out = raw.decode("utf-8", errors="replace")
+        bad = out.count("\ufffd")
+        rows.append((bad / max(1, len(out)), bad, enc, out))
+    rows.sort()
+    return rows
+
+
+@dec_name("mojibake", "garbled", "乱码")
+def _d_mojibake(s):
+    """UTF-8 被当成 GBK / Big5 / Latin-1 读过的还原（如「浜哄彧」→「人只」）。"""
+    if all(ord(c) < 128 for c in s):
+        raise ValueError("纯 ASCII，不可能是 UTF-8 被误读的结果")
+    rows = mojibake_rank(s)
+    if not rows:
+        raise ValueError("没有可用的反编码假设")
+    ratio, bad, enc, out = rows[0]
+    # 只有几乎无损才认。损失率 >2% 说明原始字节流本身就缺字节，
+    # 这时候硬输出等于把猜测当成答案，比报错更坑。
+    # 但也不能只报错什么都不给——把最佳猜测和损失率一起亮出来，
+    # 让使用者自己判断哪一段还能信。
+    if ratio > 0.02:
+        raise ValueError(
+            "还原损失 %.1f%%（%d 个替换字符，假设 %s），原始字节流可能有缺失。\n"
+            "      最佳猜测（不可全信，缺字节处已用 ? 代替）：%s"
+            % (ratio * 100, bad, enc, out.replace("\ufffd", "?")))
+    return out
+
+
+def mojibake_best(s):
+    """宽松还原：不管损失多大都返回最佳假设。
+
+    用于「作者给的数据本身就是残缺的」这类谜题——这时候不存在"更原始的来源"，
+    能做的只有把最可能的还原摊开、把缺失位置标成 ?，让人自己靠上下文补。
+    返回 (结果, 损失率, 替换字符数, 编码名)。
+    """
+    rows = mojibake_rank(s)
+    if not rows:
+        raise ValueError("没有可用的反编码假设")
+    ratio, bad, enc, out = rows[0]
+    return out, ratio, bad, enc
+
+
 # ---------------------------------------------------------------- 评分 / 识别
 
 COMMON_EN = set("the be to of and in that have it for not on with he as you do at "
@@ -712,7 +777,7 @@ STRUCT_BONUS = 60.0
 
 LOOSE_ORDER = [
     "base64", "base64url", "base32", "base58", "base85", "ascii85",
-    "base91", "base62", "qp", "gzip", "dec", "oct",
+    "base91", "base62", "qp", "gzip", "dec", "oct", "mojibake",
 ]
 
 
@@ -966,6 +1031,8 @@ def read_input(args, want_bytes=False):
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
+    best = "--best" in argv
+    argv = [a for a in argv if a not in ("-q", "--quiet", "--best")]
     depth = 3
     for flag in ("--depth", "-d"):
         if flag in argv:
@@ -1077,6 +1144,16 @@ def main():
         if not text:
             text = ""
         table = DECODERS if cmd.startswith("dec") else ENCODERS
+        # dec mojibake --best：谜题里数据本身残缺时，强制给出最佳猜测，
+        # 缺失处标 ?，并把损失率告诉使用者。
+        if cmd.startswith("dec") and name == "mojibake" and best:
+            out, ratio, bad, enc = mojibake_best(text)
+            print(out.replace("\ufffd", "?"))
+            if ratio > 0:
+                sys.stderr.write(
+                    "  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；"
+                    "? 处需要靠上下文猜\n" % (ratio * 100, bad, enc))
+            return 0
         fn = table.get(name)
         if not fn:
             print("不支持的编码：%s（用 codec.py list 看全部）" % name)
