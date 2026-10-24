@@ -1,0 +1,127 @@
+---
+name: codec-toolkit
+description: Use when text looks like encoded/garbled data and needs identifying or decoding — Base64/Base32/Base58/Base85/Base91、hex、二进制、URL 编码、HTML 实体、Unicode 转义、摩斯电码、盲文、ROT13/ROT47、多层嵌套剥皮、ARG 解谜里"这一串到底是什么"。Auto-detects the encoding by structural signature and recursively peels nested layers; run this before hand-writing any base64/hex decoding.
+---
+
+# 编码识别的坑与解法
+
+一串可疑文本，先别手写 `base64 -d`。判断"这属于哪种编码"比解码本身难得多，
+`scripts/codec.py` 把常见格式的**结构特征**都编进去了。
+
+```bash
+C=~/.dsh/skills/codec-toolkit/scripts/codec.py
+
+python3 $C auto 'S1VWRVIgTEFOR1VBR0U='     # 自动识别 + 递归剥皮
+python3 $C brute 'aGVsbG8gd29ybGQ='        # 所有编码全试一遍，按可读性排序
+python3 $C dec base58 '2NEpo7TZRRrLZSi2U'  # 指定编码解码
+python3 $C grid '322T332T36363A312T'       # 矩阵重排：各种行/列/蛇形读法
+python3 $C enc hex -f some.bin             # 文件输入（二进制安全）
+python3 $C list                            # 看支持哪些名字
+```
+
+`auto` 会打印**解码路径**（如 `url → base64`），多层嵌套也能剥。`-q` 只输出结果。
+
+## 支持的编码
+
+Base16/32/32hex/58/62/64/64url/85/91、hex、二进制、十进制、八进制、
+URL、HTML 实体、Unicode 转义（`\u`/`\U`/`\x`/`U+XXXX`）、Quoted-Printable、ROT13/ROT47/Atbash、
+摩斯、盲文（含 8 点原始位串 `dec braillebits`）、gzip/zlib/bz2 内嵌流、
+UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GBK。
+
+## 矩阵重排（`grid`）
+
+很多谜题是「切块 → 排成矩阵 → 换一种读法」。`grid` 会按块宽切成矩阵，
+枚举 2..12 行以及行优先/列优先/蛇形/反转等各种读法。
+
+块数正好是完全平方数（4/9/16/25）时，转置几乎是必试项。
+
+典型的完整链路：
+
+```
+MzIyVDMzMlQzNjM2M0EzMTJU
+  ↓ base64
+322T332T36363A312T
+  ↓ 每 2 字符一块（base36 两位数 = 一个字节）
+  ↓ 3×3 按列读
+322T3A2T363133362T
+  ↓ 每块 base36 → 十进制 → ASCII
+nevermore
+```
+
+**块宽默认是 1，但一定要再试一次 2**——上面这个例子块宽 1 怎么转都不通。
+
+## 六个必须知道的坑
+
+**① ROT13 / ROT47 / Atbash 绝不能放进自动识别。**
+它们对任何输入都能"成功"，且输出和输入一样可读——评分函数根本分不出来，
+放进去会永远把结果带偏（早期版本就是因为这个把 `S1VWRVIg...` 解成了乱码）。
+所以 `auto` 只做**有结构特征**的编码，`brute` 才把 ROT 类作为候选列出来给人工判断。
+
+**② UTF-16 是个假中文陷阱。**
+任意偶数长度的 ASCII 都能被 UTF-16BE "解码"成汉字（`aGVs...` → `慇噳扇...`），
+而且全是生僻字却看起来像中文。判定办法：**用高频字比例加权**——
+真中文里"的一是在不了"会大量出现，UTF-16 误读全是生僻字。脚本里已经这么做了，
+自己也用这个标准人工复核。
+
+**③ Base 系列靠"字符集 + 长度"约束，不能只看字符集。**
+`helloworld` 是合法 Base64 字符集但不是合法 Base64（长度 10 不是 4 的倍数）。
+Base32 看整体长度（含 padding）能不能被 8 整除；Base58 靠"排除 0OIl"这个特征；
+hex 看长度能不能被 2 整除、且字符集是 `0-9a-fA-F`。
+
+**④ 纯 0/1 位流必须整段拼起来再解，不能按行单解。**
+单行 32 位只有 4 字节，而一个汉字要 3 字节——行边界几乎永远不落在字符边界上，
+单行解出来必然是 `禁食�` 这种半截乱码。`dec bin` 会自动忽略换行和空格，
+所以把**所有行原样一起**传进去：
+
+```bash
+python3 $C dec bin '11100111...
+10100011...
+...'
+```
+
+出题人通常是先写好一句话，再按固定宽度（常用 32 位）切成多行，末尾补 `00` 凑整行。
+看到「11 行 × 32 位 = 44 字节 = 42 有效 + 2 填充」这种结构，直接整段当 UTF-8 位流。
+反过来 `enc bin` 会输出空格分隔的单行，需要自己按固定宽度断行。
+`auto` 现在对纯 0/1 输入只认 `bin`（0/1 恰好是 base64 字符集子集，以前会被 base64 抢走）；
+单行给它会明确报「没有可靠的编码路径」，这是对的，别怀疑。
+
+**⑤ UTF-32 很容易被 base16 吞掉。**
+`000000230000006A00007ED9...` 这种「每码点 8 位 hex」是 **UTF-32BE**（解出 `#j给...`）。
+它同时是合法 hex —— 按 base16 解会得到一串夹着 `\x00` 的乱字节，看起来像"解错了"，
+实际是从一开始就选错了编码。
+
+判别：hex 长度是 8 的倍数，**且超过一半的 8 位组带大片前导零**（`0000xxxx` 或 `xxxx0000`）。
+现在 `auto` 会优先判 `utf32be`；没有 BOM 时 `dec utf32` 按首个码点的前导零分布猜字节序。
+
+**⑥ `\xNN` 必须先聚成 bytes 再解，不能逐字节 chr()。**
+`\xe4\xbd\xa0` 是「你」的 UTF-8 三字节。逐字节 `chr()` 会得到 `ä½`（latin-1 乱码）——
+**它看起来像"解出来了"，但其实是错的**，比报错更危险。
+
+正确做法：把连续的 `\xNN` 拼成 `bytes` 再 `decode('utf-8')`，失败才回退 latin-1。
+`dec unicode` 现在覆盖 `\uXXXX` / `\UXXXXXXXX` / `\u{1F600}` / `U+4F60` / `%u4F60` /
+以及代理对合并（`\ud83d\ude00` → 😀）。
+
+## 顺序建议
+
+1. `auto` 先跑一次，看它给的路径对不对
+2. 不满意就 `brute`，人眼从候选里挑
+3. 有明确怀疑对象再 `dec <名字>`，一次只剥一层，方便每步核对
+
+## 盲文特别说明
+
+`dec braille` 给英文（处理数字符号 `⠼` / 大写符号 `⠠`）；
+`dec braillebits` 给**每个字符的点阵原始位串**，输出三种视图：
+
+```json
+{"per_char": [...], "bits_concat": "...", "bits_by_dot": "..."}
+```
+
+8 点盲文的点序是
+```
+1 4
+2 5
+3 6
+7 8
+```
+如果对方用的是自定义点阵（比如 8 个固定位置的闪光点），用 `bits_by_dot`
+（按点的通道竖着读）而不是 `bits_concat`（横着连起来读）。
