@@ -89,6 +89,37 @@ GB2312 能编码的比例（只看 CJK，ASCII 不算）。
 手工切段，分别用 `--best` 处理。
 
 
+## Punycode：`XN--L8JEXE7NOG3971A` → `あの子がきらい`
+
+把非 ASCII 文本塞进纯 ASCII 域名的编码，IDN（`.jp` 的日文域名那种）就用它。
+固定带 `xn--` 前缀，属于**可逆编码**，性质接近 Base64 而不是加密。
+
+```bash
+python3 codec.py dec punycode 'XN--L8JEXE7NOG3971A'   # あの子がきらい
+python3 codec.py dec punycode -f 四条.txt              # 多行批量，一段一行输出
+python3 codec.py enc punycode 'あの子がきらい'          # xn--l8jexe7nog3971a
+```
+
+`auto` 会自动认出 `xn--` 前缀。
+
+**两个坑**：
+
+1. **不能用 `idna` codec 解**。`idna` 会当成完整域名做校验，谜题数据里带逗号
+   （例如 `XN--,-47TL2MZE6MYDZA3P` 解出 `おはよう,ニセモノ`）或空格就一律报错。
+   必须剥掉前缀后直接走 `punycode` codec。
+2. **必须抢在 base64url 前面**。这类串长度常是 4 的倍数、字符集又落在
+   base64url 里（`-` 是合法字符），不优先识别就会被 base64url 抢走，解出乱码。
+
+实测样例（ERIKO #003）：
+
+| Punycode | 明文 |
+|---|---|
+| `XN--L8JEXE7NOG3971A` | あの子がきらい |
+| `XN--,-47TL2MZE6MYDZA3P` | おはよう,ニセモノ |
+| `XN--N8JPD2B0B8RJB` | わたしがきらい |
+| `XN--68JP3C3G5ILDWA3N` | わたしはニセモノ |
+
+
 ## 矩阵重排（`grid`）
 
 很多谜题是「切块 → 排成矩阵 → 换一种读法」。`grid` 会按块宽切成矩阵，

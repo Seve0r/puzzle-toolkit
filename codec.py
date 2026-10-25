@@ -294,6 +294,50 @@ def _e_oct(s):
     return " ".join(format(b, "o") for b in as_bytes(s))
 
 
+# ---------------------------------------------------------------- Punycode
+
+# 把非 ASCII 文本塞进纯 ASCII 域名的编码，IDN（如 .jp 的日文域名）就用它，
+# 形式上固定带 `xn--` 前缀。属于「可逆编码」，性质接近 Base64 而不是加密。
+#
+# ★ 不能用 idna codec 解：idna 会当完整域名来校验，带逗号、空格的谜题数据
+#   一律报错。必须剥掉前缀后直接走 punycode codec。
+# ★ 以 xn-- 开头的串长度常是 4 的倍数、字符集又落在 base64url 里（- 合法），
+#   所以结构识别必须排在 base64url 前面，否则会被它抢走。
+_PUNY_SEP = re.compile(r"[.\s]+")
+_PUNY_PREFIX = re.compile(r"^xn--", re.IGNORECASE)
+
+
+@dec_name("punycode", "puny", "idn")
+def _d_punycode(s):
+    raw = s.strip()
+    parts = [p for p in _PUNY_SEP.split(raw) if p]
+    if not parts:
+        raise ValueError("空输入")
+    out = []
+    for p in parts:
+        # 前缀去掉后直接 punycode 解码；不做 ascii 预检，
+        # 非 ASCII 字符会在 encode("ascii") 处自然抛错
+        body = _PUNY_PREFIX.sub("", p)
+        out.append(body.encode("ascii").decode("punycode"))
+    if "." in raw:
+        return ".".join(out)        # 域名形式：按标签还原成点分
+    if len(out) > 1:
+        return "\n".join(out)       # 多行/多段：一段一行，别粘成一坨
+    return out[0]
+
+
+@enc_name("punycode", "puny", "idn")
+def _e_punycode(s):
+    out = []
+    for ln in [x for x in s.splitlines() if x.strip()]:
+        # 纯 ASCII 的行不需要编码（IDNA 也是这个规则），原样保留更好读
+        out.append(ln if ln.isascii()
+                   else "xn--" + ln.encode("punycode").decode("ascii"))
+    if not out:
+        raise ValueError("空输入")
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------- 转义类
 
 @dec_name("url", "urlenc", "percent")
@@ -902,6 +946,10 @@ def structural_candidates(text):
     compact = re.sub(r"\s+", "", t)
     cands = []
 
+    # Punycode：`xn--` 前缀是强签名，看到就该直接认。必须排在最前 —— 这类串
+    # 长度常是 4 的倍数、字符集又落在 base64url 里（- 合法），否则会被抢走。
+    if re.search(r"(?im)^[ \t]*xn--", t):
+        cands.append("punycode")
     if re.search(r"[\u2800-\u28ff]", t):
         cands.append("braille")
     if re.fullmatch(r"[.\-\u00b7\u2022\u2014\u2013\u2212_\s/|]{4,}", t):
