@@ -1431,6 +1431,22 @@ def main():
             print("得分：%.1f" % sc)
         else:
             print("没有可靠的编码路径（原样输出）")
+            # 只说「没有可靠路径」等于什么都没说：用户分不清是「这压根不是编码」
+            # 还是「是乱码但数据坏了」。这里再探一次 mojibake，把损失率亮出来。
+            try:
+                mb_out, mb_ratio, mb_bad, mb_enc = mojibake_best(text)
+            except Exception:
+                mb_ratio = 0.0
+            if 0 < mb_ratio <= 0.6:
+                # stdout 带缓冲、stderr 不带，不 flush 的话提示会窜到上面去
+                sys.stdout.flush()
+                sys.stderr.write(
+                    "\n  [提示] 最接近的是 mojibake（假设 %s，损失 %.1f%%，%d 处缺失）：\n"
+                    "    %s\n"
+                    "  数据本身可能有损坏。看残缺全貌用 `dec mojibake --best`，"
+                    "或回头找更原始的来源。\n"
+                    % (mb_enc, mb_ratio * 100, mb_bad,
+                       mb_out.replace("\ufffd", "?")[:120]))
         print("结果：")
         print(final)
         return 0
