@@ -39,6 +39,30 @@
 
 ### 修复
 
+- **全量功能测试挖出的一批问题**（42 个双向编码往返 + 四个脚本全部子命令）：
+  - `codec dec uu`：**完全失效**。原实现只取第一行去 `binascii.a2b_uu`，
+    而那是 `begin 666 file` 文件头，标准 uuencode 一律报 `Illegal char`。
+    改成按 `begin` / 数据行 / `` ` `` / `end` 的结构逐行解，同时兼容裸数据行。
+  - `codec dec utf16` / `utf16le` / `utf16be` / `utf32`：用 `as_bytes()`
+    （UTF-8 编码）处理二进制，BOM `FF FE` 被改成 `C3 BF C3 BE`，导致
+    **永远报「没有 BOM，不能确定字节序」**。新增 `raw_bytes()`：码点全 <256
+    时按 latin-1 还原，压缩流也统一走它。
+  - `codec ... -f`：读二进制文件时同样被 UTF-8 解码破坏（BOM、gzip 魔数全毁）。
+    改成先试 UTF-8，失败则按 latin-1 逐字节承载。
+  - `codec dec punycode`：纯 ASCII 输入会抛 `UnicodeError`，enc/dec 往返不自洽。
+    现在无 `xn--` 前缀且是全 ASCII 的段原样返回。
+  - `classic adfgx`：**没有加密函数**，`--enc` 被忽略、输入被当密文过滤成空串，
+    静默输出空行。补上 `adfgx_enc`。
+  - `classic` 词表：缺 35 个高频词（`hello`、`flag`、`key`、`secret`、`password`、
+    `cipher`、`puzzle` 等解谜常用词竟全都不在），补齐到 1582。词表也同步到了
+    skill 侧（此前 skill 目录没有 `data/`，会静默退到系统词典，两份结果可能不一致）。
+  - `classic english_score`：只查 98 词的 `COMMON_WORDS`，`hello`/`help`/`world`
+    都不在其中。结果 `t9 '43556'` 把 `hellm` 排在 `hello` 之前（两者得分完全相同）。
+    现在额外按完整词表给一次分。
+  - `hc repeat-xor`：不认 hex 文本文件。Cryptopals 那类题目几乎都给 hex 文件，
+    按二进制处理会解出一串乱码还看不出原因。现在纯 hex 且偶数长度时自动 hex 解码。
+  - `hc xor`：**没有多字节自动检测**，但 `--help` 明确写着「多字节自动」。
+    现在单字节全都解不成话时会自动延伸做重复密钥分析。
 - `codec dec <任何编码>`：**以 `-` 开头的输入会被整段吃掉**，表现为莫名其妙的
   「空输入」。原因是 `read_input` 按「以 `-` 开头」过滤实参，而摩斯电码本身
   就长这样（`--.-.`、`-....`），国际摩斯其实一直有这问题。已知选项都在

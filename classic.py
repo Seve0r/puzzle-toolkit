@@ -122,6 +122,12 @@ def english_score(s):
         hits = sum(1 for w in words if w in COMMON_WORDS)
         sc += 25.0 * hits
         sc += 8.0 * hits / len(words)
+        # 再按完整词表给一次分。COMMON_WORDS 只有 98 个词，覆盖太窄
+        # （hello / help / world 都不在里面），单靠它区分不出真词与假词：
+        # t9 的 `43556` 会把 hellm 排在 hello 前面，两者得分完全相同。
+        # 权重取 12（低于高频词的 25），只用来把「确实是词」的候选顶上来。
+        dict_hits = sum(1 for w in words if w in WORDS)
+        sc += 12.0 * dict_hits
 
     # 长单词奖励（真实英文单词普遍较长）
     for w in words:
@@ -854,6 +860,27 @@ def adfgx_dec(s, key, trans_key=None):
     return "".join(out)
 
 
+def adfgx_enc(s, key, trans_key=None):
+    """adfgx_dec 的逆过程。
+
+    之前只有 dec：`--enc` 会被忽略、输入被当成密文过滤成空串，静默输出空行。
+    `--enc` 是全局选项，用户有理由认为它管用，所以补上。
+    """
+    sq = adfgx_square(key)
+    pos = {c: (r, i) for r, row in enumerate(sq) for i, c in enumerate(row)}
+    letters = []
+    for c in s.lower():
+        if c == "j":                 # 方阵里 i/j 合并，加密时统一按 i
+            c = "i"
+        if c in pos:
+            r, i = pos[c]
+            letters.append(ADFGX_ROWS[r] + ADFGX_COLS[i])
+    out = "".join(letters)
+    if trans_key:
+        out = columnar_enc(out, trans_key)
+    return out
+
+
 # ------------------------------------------------------------------ 键盘错位
 
 LAYOUTS = {
@@ -1163,7 +1190,7 @@ def main():
             if not key:
                 print("需要 --key")
                 return 2
-            print(adfgx_dec(text, key, trans_key))
+            print(adfgx_enc(text, key, trans_key) if enc else adfgx_dec(text, key, trans_key))
             return 0
 
         if cmd == "keyboard":

@@ -73,6 +73,7 @@ asking
 asks
 at
 ate
+audio
 aunt
 autumn
 available
@@ -171,6 +172,7 @@ buy
 buying
 buys
 by
+caesar
 call
 called
 calling
@@ -215,6 +217,8 @@ chooses
 choosing
 chose
 chosen
+cipher
+ciphertext
 cities
 city
 class
@@ -234,7 +238,9 @@ closes
 closing
 cloud
 clouds
+clue
 clung
+code
 coffee
 cold
 college
@@ -299,6 +305,8 @@ decided
 decides
 deciding
 decision
+decode
+decrypt
 deep
 deliver
 delivered
@@ -389,6 +397,8 @@ eleven
 email
 emails
 empty
+encode
+encrypt
 end
 energy
 engine
@@ -455,6 +465,7 @@ fifty
 fight
 fighting
 fights
+file
 film
 films
 final
@@ -478,6 +489,7 @@ fix
 fixed
 fixes
 fixing
+flag
 fled
 flew
 flies
@@ -539,6 +551,7 @@ go
 going
 gone
 good
+goodbye
 got
 gotten
 grade
@@ -582,6 +595,7 @@ hears
 heart
 heavy
 held
+hello
 help
 helped
 helpful
@@ -591,9 +605,13 @@ her
 here
 hers
 herself
+hey
+hi
+hidden
 high
 him
 himself
+hint
 his
 history
 hit
@@ -659,6 +677,7 @@ keep
 keeping
 keeps
 kept
+key
 kid
 kidney
 kill
@@ -818,6 +837,7 @@ more
 moreover
 morning
 mornings
+morse
 most
 mother
 mothers
@@ -892,6 +912,7 @@ offices
 official
 often
 oil
+okay
 old
 on
 once
@@ -930,6 +951,7 @@ parents
 part
 parts
 party
+password
 past
 patient
 pay
@@ -949,6 +971,8 @@ pieces
 pink
 place
 places
+plain
+plaintext
 plan
 plane
 planes
@@ -962,6 +986,7 @@ players
 playing
 plays
 pleaded
+please
 point
 points
 police
@@ -1007,6 +1032,7 @@ purpose
 put
 puts
 putting
+puzzle
 quarter
 question
 questions
@@ -1114,6 +1140,7 @@ season
 seasons
 second
 seconds
+secret
 security
 see
 seeing
@@ -1212,6 +1239,7 @@ song
 songs
 sons
 soon
+sorry
 sought
 soup
 source
@@ -1330,7 +1358,9 @@ ten
 tenth
 test
 tests
+text
 than
+thanks
 that
 the
 their
@@ -1435,8 +1465,10 @@ vegetable
 vehicle
 version
 very
+video
 view
 views
+vigenere
 village
 villages
 voice
@@ -1474,6 +1506,7 @@ weak
 weather
 week
 weeks
+welcome
 well
 went
 wept
@@ -1534,6 +1567,7 @@ wrong
 wrote
 wrung
 yard
+yeah
 year
 years
 yellow
@@ -1545,3 +1579,4 @@ young
 your
 yours
 yourself
+zero

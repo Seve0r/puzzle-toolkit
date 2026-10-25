@@ -823,12 +823,36 @@ def main():
         print("单字节 XOR 前 10：")
         for sc, k, out in rows[:10]:
             print("  key=0x%02x %6.2f  %r" % (k, sc, out[:70]))
+        # --help 里承诺了「多字节自动」，但这里原先直接 return 了，实际只做单字节。
+        # 补上：单字节全都解不成话时，再按重复密钥分析一次。
+        # 阈值 4.0 是经验值——正常英文的 score_bytes 一般 3.5 以上，
+        # 全乱码则都在 2.x；长度不足 32 时汉明距离统计不可靠，不做。
+        best_single = rows[0][0]
+        if best_single < 4.0 and len(data) >= 32:
+            multi = xor_repeat_detect(data)
+            if multi and multi[0][0] > best_single + 0.3:
+                print("\n多字节重复密钥 XOR（单字节解不成立，自动延伸）：")
+                for sc, k, out in multi[:5]:
+                    print("  key=%-16r %6.2f" % (k, sc))
+                    print("    %r" % out[:100])
         return 0
 
     if cmd == "repeat-xor":
         if not rest:
             die("缺少文件或 hex")
-        data = open(rest[0], "rb").read() if os.path.exists(rest[0]) else bytes.fromhex(rest[0])
+        if os.path.exists(rest[0]):
+            data = open(rest[0], "rb").read()
+            # 文件里可能是原始密文，也可能是 hex 文本——Cryptopals 那类题目几乎
+            # 都给 hex 文件。若按二进制处理，解出来是一串乱码、还看不出原因。
+            # 这里先判断一次：纯 hex 字符（允许空白）且长度为偶数，就按 hex 解。
+            body = re.sub(rb"\s+", b"", data.strip())
+            if len(body) >= 16 and len(body) % 2 == 0 and re.fullmatch(rb"[0-9a-fA-F]+", body):
+                try:
+                    data = bytes.fromhex(body.decode())
+                except ValueError:
+                    pass
+        else:
+            data = bytes.fromhex(rest[0])
         rows = xor_repeat_detect(data)
         for sc, key, pt in rows[:5]:
             print("  key=%-16r %6.2f" % (key, sc))

@@ -72,6 +72,24 @@ def as_bytes(s):
     return s.encode("utf-8", "surrogateescape") if isinstance(s, str) else s
 
 
+def raw_bytes(s):
+    """把「用 latin-1 承载的原始字节」还原成 bytes。
+
+    CLI 从命令行或文本文件拿到的是 str，但压缩流 / UTF-16 这类输入本质上是
+    二进制，通常被 1 字符 = 1 字节地保存（latin-1 视角）。
+
+    直接 as_bytes() 会按 UTF-8 重新编码，把 `0xFF` 变成 `C3 BF`——
+    UTF-16 的 BOM `FF FE` 因此变成 `C3 BF C3 BE`，BOM 检测永远失败，
+    报「没有 BOM，不能确定字节序」。压缩流也会因为魔数被改写而全部解不开。
+
+    判断方式：所有码点都 < 256 就按 latin-1 还原，否则说明确实是 Unicode
+    文本，走 as_bytes。
+    """
+    if isinstance(s, str) and all(ord(c) < 256 for c in s):
+        return s.encode("latin-1")
+    return as_bytes(s)
+
+
 def as_text(b):
     return b.decode("utf-8", "replace") if isinstance(b, (bytes, bytearray)) else b
 
@@ -315,9 +333,14 @@ def _d_punycode(s):
         raise ValueError("空输入")
     out = []
     for p in parts:
-        # 前缀去掉后直接 punycode 解码；不做 ascii 预检，
-        # 非 ASCII 字符会在 encode("ascii") 处自然抛错
         body = _PUNY_PREFIX.sub("", p)
+        # 没有 xn-- 前缀、整段又是纯 ASCII：编码方向不会改动它（IDNA 也是
+        # 这个规则），解码就原样返回。否则 "hello world" 这种普通英文会被
+        # 当成 punycode 硬解，抛 UnicodeError("incomplete punicode string")，
+        # enc/dec 往返就不自洽了。
+        if body == p and p.isascii():
+            out.append(p)
+            continue
         out.append(body.encode("ascii").decode("punycode"))
     if "." in raw:
         return ".".join(out)        # 域名形式：按标签还原成点分
@@ -661,7 +684,7 @@ def _e_braille(s):
 
 @dec_name("gzip", "zlib", "bz2", "deflate", "inflate")
 def _d_compress(s):
-    raw = s.encode("latin-1", "ignore") if all(ord(c) < 256 for c in s) else as_bytes(s)
+    raw = raw_bytes(s)
     for fn in (lambda b: gzip.decompress(b),
                zlib.decompress,
                lambda b: zlib.decompress(b, -15),
@@ -675,12 +698,37 @@ def _d_compress(s):
 
 @dec_name("uu")
 def _d_uu(s):
-    return as_text(binascii.a2b_uu(s.split("\n")[0]))
+    # uuencode 的完整结构是：
+    #   begin 644 文件名
+    #   <数据行>
+    #   `            ← 长度 0 的行，表示结束
+    #   end
+    # 早期实现直接拿第一行去 a2b_uu，而那是 begin 头，永远报 Illegal char——
+    # 等于标准格式的 uuencode 一律解不出来。这里按结构逐行解，
+    # 同时兼容「只有裸数据行、没有 begin/end 包裹」的输入。
+    out = []
+    body = False
+    for ln in s.splitlines():
+        if ln.startswith("begin "):
+            body = True
+            continue
+        if ln.strip() == "end" or ln.startswith("`"):
+            break
+        if not ln.strip():
+            continue
+        body = True
+        try:
+            out.append(binascii.a2b_uu(ln))
+        except binascii.Error as e:
+            raise ValueError("uuencode 数据行解析失败：%s" % e)
+    if not out:
+        raise ValueError("没有可解码的 uuencode 数据")
+    return as_text(b"".join(out))
 
 
 @dec_name("utf16")
 def _d_utf16(s):
-    raw = as_bytes(s)
+    raw = raw_bytes(s)
     if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
         return raw.decode("utf-16")
     raise ValueError("没有 BOM，不能确定字节序")
@@ -688,13 +736,13 @@ def _d_utf16(s):
 
 @dec_name("utf16be")
 def _d_utf16be(s):
-    raw = as_bytes(s)
+    raw = raw_bytes(s)
     return raw.decode("utf-16-be")
 
 
 @dec_name("utf16le")
 def _d_utf16le(s):
-    raw = as_bytes(s)
+    raw = raw_bytes(s)
     return raw.decode("utf-16-le")
 
 
@@ -706,7 +754,7 @@ def _u32_input(s):
     t = re.sub(r"\s+", "", s)
     if len(t) >= 8 and len(t) % 8 == 0 and re.fullmatch(r"[0-9a-fA-F]+", t):
         return bytes.fromhex(t)
-    return as_bytes(s)
+    return raw_bytes(s)
 
 
 @dec_name("utf32")
@@ -1286,7 +1334,17 @@ def read_input(args, want_bytes=False):
         # want_bytes 用于 enc hex / enc base64 这类"把原始字节转成文本表示"的场景。
         # 不加这个开关，二进制文件会先被 as_text 用 U+FFFD 替换掉，
         # 输出的 hex 根本不是文件的真实字节。
-        return (data if want_bytes else as_text(data)), args
+        if want_bytes:
+            return data, args
+        # 文件可能是 UTF-8 文本，也可能是二进制（压缩流 / UTF-16 / 图片）。
+        # 以前无条件 as_text（UTF-8 + replace），二进制会被替换成 U+FFFD，
+        # BOM 和 gzip 魔数全毁，`dec utf16 -f x.txt` 直接解不出来。
+        # 这里先按 UTF-8 严格解，失败就认定是二进制、用 latin-1 逐字节承载，
+        # 这样 raw_bytes() 能原样还原回去。
+        try:
+            return data.decode("utf-8"), args
+        except UnicodeDecodeError:
+            return data.decode("latin-1"), args
     # 不能按「以 - 开头」过滤：摩斯电码本身就长这样（`--.-.`、`-....`），
     # 一过滤整段输入就没了，表现为莫名其妙的「空输入」。已知选项
     # （-q / --best / --deep / --depth）在 main() 里都已消费，这里直接拼接。
