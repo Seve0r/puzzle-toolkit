@@ -1148,6 +1148,13 @@ def auto(text, depth=3, _memo=None):
         out = try_decode(text, name)
         if out is None or not acceptable(out) or len(out) > 200000:
             continue
+        # 解码后长度骤减 = 信息被丢掉了，不算有效解码。
+        # 实例：四行 punycode 解出的日文再被 base91「解」成单个 "G"，
+        # 而 score() 算的全是比例，一字符输出各项都是 100%，得分反而
+        # 高过正确的日文，导致 auto 选错路径。阈值取 10%：中文 base64
+        # 的压缩比约 25%（4 字符→1 汉字），不会被误伤。
+        if len(text) >= 8 and len(out) < max(2, len(text) * 0.1):
+            continue
         sub_sc, final, path = auto(out, depth - 1, _memo)
         cand = sub_sc + bonus
         if cand > best[0] + 1e-9:

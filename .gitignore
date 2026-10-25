@@ -1,3 +1,7 @@
+# 本地笔记与维护规程，不上传
+TODO.md
+AGENTS.md
+
 __pycache__/
 *.py[cod]
 *.egg-info/
