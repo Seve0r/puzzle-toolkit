@@ -563,6 +563,20 @@ _WABUN_DAKU = {
 _WABUN_HANDAKU = {"ハ": "パ", "ヒ": "ピ", "フ": "プ", "ヘ": "ペ", "ホ": "ポ"}
 
 
+def _wabun_near(a, b, maxd=1):
+    """编辑距离 <= maxd。只用来给「查不到的段」提示最接近的几个候选。"""
+    if abs(len(a) - len(b)) > maxd:
+        return False
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1,
+                         prev[j - 1] + (a[i - 1] != b[j - 1]))
+        prev = cur
+    return prev[len(b)] <= maxd
+
+
 @dec_name("wabun", "wabunmorse")
 def _d_wabun(s):
     t = (s.replace("·", ".").replace("•", ".").replace("・", ".")
@@ -572,10 +586,12 @@ def _d_wabun(s):
     if not segs:
         raise ValueError("空输入")
     out = []
-    for seg in segs:
+    unknown = []
+    for idx, seg in enumerate(segs, 1):
         cands = WABUN_REV.get(seg)
         if not cands:
             out.append("?")                 # 表里没有这个码
+            unknown.append((idx, seg))
         elif len(cands) == 1:
             out.append(cands[0])
         else:
@@ -589,6 +605,17 @@ def _d_wabun(s):
             merged[-1] = _WABUN_HANDAKU[merged[-1]]
         else:
             merged.append(c)
+    # 光在结果里打个 `?` 没用：几十个词里有一个坏点，人得逐段比对才知道是哪。
+    # 把查不到的段连同序号一起写到 stderr，命令行重定向时结果依然干净。
+    if unknown:
+        sys.stderr.write(
+            "\n  [!] 有 %d 段在和文モールス表里查不到（多半是抄写错误）：\n"
+            % len(unknown))
+        for idx, seg in unknown:
+            near = [k for k, v in WABUN.items() if _wabun_near(seg, v)]
+            hint = ("；相近的有 " + " / ".join("%s=%s" % (k, WABUN[k]) for k in near[:3])) if near else ""
+            sys.stderr.write("      第 %d 段  %s%s\n" % (idx, seg, hint))
+        sys.stderr.write("\n")
     return "".join(merged)
 
 
@@ -1078,13 +1105,19 @@ def structural_candidates(text):
         cands.append("punycode")
     if re.search(r"[\u2800-\u28ff]", t):
         cands.append("braille")
-    if re.fullmatch(r"[.\-\u00b7\u2022\u2014\u2013\u2212_\s/|]{4,}", t):
+    # 摩斯符号的字符集必须把**全角变体**也包进来。
+    # 实测踩过：日文谜题里常写成 `・`(U+30FB 片假名中点) 和 `－`(U+FF0D 全角连字符)，
+    # 而这里原先只有 `·`(U+00B7) / `—`(U+2014) 那些，于是 auto 直接判成
+    # 「不是摩斯」、连候选都不进——`dec wabun` 却因为内部有 replace 能正常解，
+    # 表现为「手动指定可以、auto 就不行」，非常难猜。
+    if re.fullmatch(r"[.\-\u00b7\u2022\u2014\u2013\u2212\uff0d\uff0e\u30fb\u2027_\s/|]{4,}", t):
         # 国际摩斯与和文モールス在符号层面同形（`....` 国际是 H、和文是 ヌ），
         # 光看符号分不出来，靠「哪些码在表里查不到」判：
         # 只要有一段不在国际表里，就只可能是和文（`--.-.` 国际根本没有）。
         # 反过来全部能按国际解释时优先国际 —— 它的覆盖率更高，而和文几乎
         # 总能"硬解"出一串无意义假名，不能让它靠这个赢。
         norm = (t.replace("·", ".").replace("•", ".").replace("・", ".")
+                 .replace("．", ".").replace("‧", ".")
                  .replace("—", "-").replace("－", "-").replace("–", "-")
                  .replace("−", "-").replace("_", "-"))
         segs = [x for x in re.split(r"[/\s]+", norm.strip()) if x]
