@@ -500,6 +500,75 @@ def _e_morse(s):
     return " / ".join(words)
 
 
+# ------------------------------------------------- 和文モールス（Wabun code）
+
+# 与国际摩斯是**两套完全不同的体系**：同样的符号在两张表里代表不同字符，
+# 所以不能共用一个解码器。表源：無線局運用規則 別表第一号（総務省）。
+#
+# ★ 这张表里有同码：ト 与 ウ 都是 `..-`，ル 与「（」都是 `-.--.`。
+#   光看符号永远定不下来，只能靠上下文。所以解码时同码位置输出 `{A|B}`，
+#   把选择权交回给人——静默返回第一个候选会给出「语法通顺但意思全错」的
+#   答案。实测踩过：`..-` 取 ト 得「じんことのかみ」，取 ウ 得
+#   「じんこうのかみ」(人工の神)，两者日语都通顺，但只有后者对得上剧情。
+WABUN = {
+    "ア": "--.--", "イ": ".-", "ウ": "..-", "エ": "-.---", "オ": ".-...",
+    "カ": ".-..", "キ": "-..-..", "ク": "...-", "ケ": "-.--", "コ": "----",
+    "サ": "-.-.-", "シ": "--.-.", "ス": "---.-", "セ": ".---.", "ソ": "---.",
+    "タ": "-.", "チ": "..-.", "ツ": ".--.", "テ": ".-.--", "ト": "..-",
+    "ナ": ".-.", "ニ": "-.-.", "ヌ": "....", "ネ": "--.-", "ノ": "..--",
+    "ハ": "-...", "ヒ": "--..-", "フ": "--..", "ヘ": ".", "ホ": "-..",
+    "マ": "-..-", "ミ": "..-.-", "ム": "-", "メ": "-...-", "モ": "-..-.",
+    "ヤ": ".--", "ユ": "-..--", "ヨ": "--",
+    "ラ": "...", "リ": "--.", "ル": "-.--.", "レ": "---", "ロ": ".-.-",
+    "ワ": "-.-", "ヰ": ".-..-", "ヱ": ".--..", "ヲ": ".---", "ン": ".-.-.",
+    "゛": "..", "゜": "..--.", "ー": ".--.-",
+    "、": ".-.-.-", "（": "-.--.", "）": ".-..-.",
+}
+
+WABUN_REV = {}
+for _k, _v in WABUN.items():
+    WABUN_REV.setdefault(_v, []).append(_k)
+
+# 浊音/半浊音在摩斯里是独立符号（゛/゜），解码后要粘回前一个假名。
+# 和文モールス正是靠这个机制表达的，所以没有单独的清音→浊音编码。
+_WABUN_DAKU = {
+    "カ": "ガ", "キ": "ギ", "ク": "グ", "ケ": "ゲ", "コ": "ゴ",
+    "サ": "ザ", "シ": "ジ", "ス": "ズ", "セ": "ゼ", "ソ": "ゾ",
+    "タ": "ダ", "チ": "ヂ", "ツ": "ヅ", "テ": "デ", "ト": "ド",
+    "ハ": "バ", "ヒ": "ビ", "フ": "ブ", "ヘ": "ベ", "ホ": "ボ",
+}
+_WABUN_HANDAKU = {"ハ": "パ", "ヒ": "ピ", "フ": "プ", "ヘ": "ペ", "ホ": "ポ"}
+
+
+@dec_name("wabun", "wabunmorse")
+def _d_wabun(s):
+    t = (s.replace("·", ".").replace("•", ".").replace("・", ".")
+          .replace("—", "-").replace("－", "-").replace("–", "-")
+          .replace("−", "-").replace("_", "-"))
+    segs = [x for x in re.split(r"[/\s]+", t.strip()) if x]
+    if not segs:
+        raise ValueError("空输入")
+    out = []
+    for seg in segs:
+        cands = WABUN_REV.get(seg)
+        if not cands:
+            out.append("?")                 # 表里没有这个码
+        elif len(cands) == 1:
+            out.append(cands[0])
+        else:
+            out.append("{%s}" % "|".join(cands))   # 同码：全部列出，不替人做决定
+    # 浊音符号粘回前一个假名；前一个若是 {A|B} 歧义组则原样保留，不硬合并
+    merged = []
+    for c in out:
+        if c == "゛" and merged and merged[-1] in _WABUN_DAKU:
+            merged[-1] = _WABUN_DAKU[merged[-1]]
+        elif c == "゜" and merged and merged[-1] in _WABUN_HANDAKU:
+            merged[-1] = _WABUN_HANDAKU[merged[-1]]
+        else:
+            merged.append(c)
+    return "".join(merged)
+
+
 # ---------------------------------------------------------------- 盲文
 
 BRAILLE_BASE = 0x2800
@@ -873,6 +942,11 @@ def score(text):
     printable = sum(1 for c in s if c.isprintable() or c in "\n\t ")
     ctrl = sum(1 for c in s if ord(c) < 32 and c not in "\n\t ")
     cjk = sum(1 for c in s if "\u4e00" <= c <= "\u9fff")
+    # 假名（平假名 + 片假名）也是正常文字，必须单独计分。
+    # 否则日文结果一分不得，反而输给解出一堆 `?` 的国际摩斯——和文モールス
+    # 就走这条路：同一串符号用 morse 解得 `? I + ? U ?`，用 wabun 才是假名，
+    # 但因为假名不加分，auto 会选前者。
+    kana = sum(1 for c in s if "\u3040" <= c <= "\u30ff")
     cn_hit = sum(1 for c in s if c in COMMON_CN)
     ascii_letters = sum(1 for c in s if c.isascii() and c.isalpha())
     digits = sum(1 for c in s if c.isdigit())
@@ -888,6 +962,10 @@ def score(text):
     if cjk:
         ratio = cn_hit / cjk
         sc += 40.0 * (cjk / n) * (0.3 + 0.7 * ratio)
+
+    if kana:
+        # 假名没有"常用字表"可比，给一个低于汉字、但足以压过乱码的固定权重
+        sc += 35.0 * (kana / n)
 
     sc += 25.0 * ascii_letters / n
     sc += 10.0 * digits / n
@@ -953,7 +1031,19 @@ def structural_candidates(text):
     if re.search(r"[\u2800-\u28ff]", t):
         cands.append("braille")
     if re.fullmatch(r"[.\-\u00b7\u2022\u2014\u2013\u2212_\s/|]{4,}", t):
-        cands.append("morse")
+        # 国际摩斯与和文モールス在符号层面同形（`....` 国际是 H、和文是 ヌ），
+        # 光看符号分不出来，靠「哪些码在表里查不到」判：
+        # 只要有一段不在国际表里，就只可能是和文（`--.-.` 国际根本没有）。
+        # 反过来全部能按国际解释时优先国际 —— 它的覆盖率更高，而和文几乎
+        # 总能"硬解"出一串无意义假名，不能让它靠这个赢。
+        norm = (t.replace("·", ".").replace("•", ".").replace("・", ".")
+                 .replace("—", "-").replace("－", "-").replace("–", "-")
+                 .replace("−", "-").replace("_", "-"))
+        segs = [x for x in re.split(r"[/\s]+", norm.strip()) if x]
+        if segs and any(x not in MORSE for x in segs):
+            cands.append("wabun")
+        else:
+            cands.append("morse")
     if re.fullmatch(r"[01\s]{16,}", t):
         # 纯 0/1 位流没有任何歧义，直接定死；否则 0/1 恰好是 base64 字符集子集，会被 base64 抢走
         return ["bin"]
@@ -1197,8 +1287,10 @@ def read_input(args, want_bytes=False):
         # 不加这个开关，二进制文件会先被 as_text 用 U+FFFD 替换掉，
         # 输出的 hex 根本不是文件的真实字节。
         return (data if want_bytes else as_text(data)), args
-    rest = [a for a in args if not a.startswith("-")]
-    return " ".join(rest), args
+    # 不能按「以 - 开头」过滤：摩斯电码本身就长这样（`--.-.`、`-....`），
+    # 一过滤整段输入就没了，表现为莫名其妙的「空输入」。已知选项
+    # （-q / --best / --deep / --depth）在 main() 里都已消费，这里直接拼接。
+    return " ".join(args), args
 
 
 def main():

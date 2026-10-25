@@ -15,19 +15,43 @@ python3 codec.py auto 'S1VWRVIgTEFOR1VBR0U='
 
 ### Linux / macOS
 
+clone 到任意位置，下面假设 `~/tools/puzzle-toolkit`（换成你自己习惯的路径也行）：
+
 ```bash
 git clone https://github.com/Seve0r/puzzle-toolkit.git ~/tools/puzzle-toolkit
 ```
 
-加到 `~/.bashrc`：
+然后用 alias 把它们变成命令。**两步都要先确认，直接用抄来的会失效**：
+
+**① 你用的是哪个 shell？**
 
 ```bash
-D=~/tools/puzzle-toolkit
+echo $SHELL
+```
+
+| 输出 | 改这个文件 |
+|---|---|
+| `/bin/bash` | `~/.bashrc` |
+| `/bin/zsh` | `~/.zshrc`（macOS 默认、很多 Linux 也是） |
+
+**② 仓库实际 clone 在哪？** 下面这个 `D` 必须是你自己的真实路径——
+写错的话 alias 会指向一个不存在的文件，命令报 `No such file or directory`：
+
+```bash
+D=~/tools/puzzle-toolkit      # ← 改成你实际 clone 的位置
 alias codec="python3 $D/codec.py"
 alias classic="python3 $D/classic.py"
 alias hc="python3 $D/hashcrypto.py"
 alias stego="python3 $D/stego.py"
 ```
+
+验证一下 `D` 对不对：
+
+```bash
+ls $D/codec.py     # 能列出来才对
+```
+
+改完 `source ~/.zshrc`（或 `~/.bashrc`），或者重开终端生效。
 
 ### Windows
 
@@ -137,7 +161,7 @@ python3 codec.py enc hex -f picture.png
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
 支持的编码有四十多种（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、
-Unicode 转义、摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…），
+Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…），
 完整列表用 `codec list`。
 
 ### classic.py —— 古典密码
