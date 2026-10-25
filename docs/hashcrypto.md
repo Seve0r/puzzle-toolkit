@@ -3,7 +3,7 @@ name: hash-crypto
 description: Use when dealing with hashes, modern crypto, or CTF crypto challenges — 哈希识别/爆破、MD5/SHA/NTLM、xor 异或、重复密钥 XOR、AES 加解密、RC4、RSA 分解与攻击、JWT 解析与密钥爆破、弱密码字典、加盐哈希（$1$/$5$/$6$/$2b$）。Provides hash type identification, dictionary cracking, single/repeating-key XOR recovery, and RSA attacks (Pollard rho, Fermat, Wiener, small-e).
 ---
 
-# 哈希 / 现代密码 / CTF 密码学
+# 哈希 / 现代密码
 
 ```bash
 H=~/.dsh/skills/hash-crypto/scripts/hashcrypto.py
@@ -21,6 +21,17 @@ python3 $H <子命令> ...
 | `rc4 --key TEXT` | RC4 同理 |
 | `rsa --n N --e E [--c C]` | 因式分解 → 求 d → 解密；会先试 Wiener |
 | `jwt <token> [--crack]` | 解析 header/payload；按 `alg` 爆破 HS256/384/512 弱密钥 |
+
+## 从文件读输入
+
+以文件为输入时用 `-f`：
+
+```bash
+python3 $H identify -f hash.txt
+python3 $H crack -f hash.txt
+```
+
+`repeat-xor` 是例外——它本来就吃文件路径：`python3 $H repeat-xor data.bin`。
 
 ## 参数与格式约定
 

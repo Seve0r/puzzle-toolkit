@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-哈希、现代密码与 CTF 常见密码学。
+哈希、现代密码与常见密码学。
 
 子命令：
   identify <hash>                  猜测哈希类型（长度/字符集/前缀）
@@ -19,7 +19,8 @@
   jwt <token>                      解析 JWT；--crack 尝试爆破 HS256 密钥
   list                             列出识别的哈希类型
 
-通用：--hex 输入是 hex，默认按文本；-q 只输出结果
+通用：--hex 输入是 hex，默认按文本；-f/--file FILE 从文件读输入（路径支持 ~）；
+-q 只输出结果
 """
 import sys
 import os
@@ -734,6 +735,27 @@ def main():
     e_opt = opt("--e", int, None)
     c_opt = opt("--c", int, None)
     d_opt = opt("--d", int, None)
+
+    # -f / --file：从文件读输入。README 的「通用选项」表一直写着「适用全部」，
+    # 但这里从来没实现过——`-f` 会被当成数据的一部分静默吃掉。
+    # 内容作为一个整体参数追加到末尾，进入下面的 rest。
+    if "-f" in argv or "--file" in argv:
+        i = argv.index("-f") if "-f" in argv else argv.index("--file")
+        if i + 1 >= len(argv):
+            raise SystemExit("错误：-f/--file 后面要跟文件路径")
+        path = os.path.expanduser(argv[i + 1])
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        except FileNotFoundError:
+            raise SystemExit("错误：文件不存在：%s" % path)
+        except IsADirectoryError:
+            raise SystemExit("错误：%s 是个目录，要指向具体文件" % path)
+        except PermissionError:
+            raise SystemExit("错误：没有读取权限：%s" % path)
+        except OSError as e:
+            raise SystemExit("错误：读取 %s 失败：%s" % (path, e))
+        argv = argv[:i] + argv[i + 2:] + [data.decode("utf-8", "replace")]
 
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(__doc__)

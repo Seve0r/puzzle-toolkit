@@ -1121,9 +1121,22 @@ def read_input(args, want_bytes=False):
         idx = args.index("-f") if "-f" in args else args.index("--file")
         if idx + 1 >= len(args):
             raise SystemExit("错误：-f/--file 后面要跟文件路径")
-        path = args[idx + 1]
-        with open(path, "rb") as fh:
-            data = fh.read()
+        path = os.path.expanduser(args[idx + 1])
+        # 直接 open 失败会抛 FileNotFoundError，一路冒泡到顶层变成整屏
+        # Python traceback——用户看到的是一堆内部栈，而不是"文件没找到"。
+        # 这里统一转成人话。另外 expanduser 是必须的：加了引号的
+        # "~/Documents/x.txt" 不会被 shell 展开，open() 也不认 ~。
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        except FileNotFoundError:
+            raise SystemExit("错误：文件不存在：%s" % path)
+        except IsADirectoryError:
+            raise SystemExit("错误：%s 是个目录，要指向具体文件" % path)
+        except PermissionError:
+            raise SystemExit("错误：没有读取权限：%s" % path)
+        except OSError as e:
+            raise SystemExit("错误：读取 %s 失败：%s" % (path, e))
         args = args[:idx] + args[idx + 2:]
         # want_bytes 用于 enc hex / enc base64 这类"把原始字节转成文本表示"的场景。
         # 不加这个开关，二进制文件会先被 as_text 用 U+FFFD 替换掉，
