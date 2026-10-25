@@ -469,7 +469,20 @@ def zip_extract(data, entries):
 def spectrum(path, out=None):
     # 不要写死 /tmp：Windows 上根本没有这个目录，会直接失败
     out = out or os.path.join(tempfile.gettempdir(), "spectrum.png")
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", path,
+    if not os.path.exists(path):
+        raise RuntimeError("文件不存在：%s" % path)
+    # 必须先 shutil.which 找 ffmpeg。直接 subprocess.run(["ffmpeg", ...]) 时，
+    # 如果 ffmpeg 不在 PATH，Windows 抛的是 `[WinError 2] 系统找不到指定的文件`
+    # —— 看起来像「输入文件不存在」，实际上是找不到 ffmpeg 这个可执行文件，
+    # 极容易误导。qr_scan 那边早就是这么写的，这里漏了。
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError(
+            "需要 ffmpeg，但 PATH 里找不到。\n"
+            "  Windows：下载 ffmpeg 后把 ffmpeg.exe 所在目录加进系统 PATH，重开终端\n"
+            "  macOS  ：brew install ffmpeg\n"
+            "  Debian ：sudo apt install ffmpeg")
+    cmd = [ffmpeg, "-y", "-v", "error", "-i", path,
            "-lavfi", "showspectrumpic=s=1600x900:legend=1:scale=log", out]
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0:
