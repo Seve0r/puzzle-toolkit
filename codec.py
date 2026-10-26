@@ -1090,12 +1090,92 @@ def mojibake_cross(s, min_plain=0.85, min_gain=0.4, min_han=0.5, min_len=3):
     return rows
 
 
+def mojibake_split(s, min_plain=0.85, min_ok_ratio=0.5):
+    """含 U+FFFD（字节已丢）的乱码：分段还原。
+
+    谜题数据常常是「半路丢了几个字节」——从网页复制、OCR、聊天记录转存都会
+    这样，缺失处显示成 `�`（U+FFFD）。这时候整段一起 encode 必定失败
+    （U+FFFD 不在任何编码里），于是所有假设都被跳过，工具只能说「数据损坏」。
+
+    但**缺失处两侧的字节是完好的**。切成几段分别还原，能救的部分全都救得回来，
+    救不了的段原样留着。实测：
+
+      崱傑偱慡偰� 偺壧偲夋柺偼堄枴偑偁� ... → 今まで全て� の歌と画面は意味があ� ...
+
+    ★ 编码对取「能把最多段解成正常文字」的那一对，而不是每段各自猜——
+      同一段乱码本来自同一对编码，逐段独立猜会拼出互相矛盾的版本。
+    ★ 仍要求每段结果可读度 ≥min_plain，且成功段数占比 ≥min_ok_ratio，
+      否则分段太短、假阳性会失控。
+
+    返回 (结果, "源→目标", 成功段数, 非空段数) 或 None（不适用/没救出东西）。
+    """
+    if "\ufffd" not in s:
+        return None
+    # 准入门槛和跨编码一致，而且更严一点：分段之后每段都很短，假阳性特别容易
+    # 出现。实测两条反例——正常中文 `正常中文�乱码` 被转成 `攣끽櫓匡�쫘쯤`、
+    # 正常日文 `今まで全て� の歌` 被转成 `書まで畠て� の梧`。
+    # 判据：原文得「像中日韩乱码」而不是「本来就正常」。
+    if _han_ratio(s) < 0.5 or _common_ratio(s) > 0.35:
+        return None
+    parts = s.split("\ufffd")
+    total = sum(1 for p in parts if p.strip())
+    if total == 0:
+        return None
+    best = None
+    for src in MOJIBAKE_ENCODINGS:
+        for tgt in MOJIBAKE_TARGETS:
+            if _same_encoding_family(src, tgt):
+                continue
+            outs = []
+            ok = 0
+            score = 0.0
+            for p in parts:
+                if not p.strip():
+                    outs.append(None)    # 空段/纯空白：原样保留，不计入成功数
+                    continue
+                o = None
+                try:
+                    o = _encode_back(p, src).decode(tgt)
+                except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+                    o = None
+                if o is not None and _plain(o) >= min_plain:
+                    ok += 1
+                    score += _plain(o)
+                    outs.append(o)
+                else:
+                    outs.append(None)
+            if ok == 0 or ok < total * min_ok_ratio:
+                continue
+            key = (ok, score)
+            if best is None or key > best[0]:
+                best = (key, src, tgt, list(outs))
+    if best is None:
+        return None
+    (ok, _score), src, tgt, outs = best
+    rendered = "\ufffd".join(p if o is None else o
+                             for p, o in zip(parts, outs))
+    return rendered, "%s→%s" % (src, tgt), ok, total
+
+
 def mojibake_explicit(s, src, tgt):
     """显式指定「源编码→目标编码」的还原，不做任何猜测。
 
     自动路径摸不清时用它。典型：GBK 编的日文被当作 GBK 显示 = 这堆字，
     正确读法是 `--from gbk --to shift_jis`。
     """
+    # 含 U+FFFD 时整段必然编不回去（U+FFFD 不在任何编码里），但缺失处两侧的
+    # 字节是好的：分段转，转不了的段原样留着。缺失位置用 ? 标出。
+    if "\ufffd" in s:
+        outs = []
+        for part in s.split("\ufffd"):
+            if not part:
+                outs.append("")
+                continue
+            try:
+                outs.append(_encode_back(part, src).decode(tgt))
+            except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+                outs.append(part)       # 这段救不了，原样留着
+        return "\ufffd".join(outs)
     try:
         raw = _encode_back(s, src)
     except (UnicodeEncodeError, LookupError) as e:
@@ -1160,6 +1240,19 @@ def _d_mojibake(s):
                "；另有等价解 " + "、".join(others[:3]) if others else ""))
         sys.stderr.flush()
         return cout
+    # ---- 三级：输入本身含 U+FFFD（复制/转存时就丢了字节）。整段一起 encode
+    # 必然失败（U+FFFD 不在任何编码里），但缺失处两侧的字节是完好的，
+    # 分段还原能把能救的都救回来，而不是一句「数据损坏」了事。
+    sp = mojibake_split(s)
+    if sp:
+        sout, pair, sok, stotal = sp
+        sys.stdout.flush()
+        sys.stderr.write(
+            "\n  [分段还原] 按 %s 解；原文有 %d 处字节缺失（输出里标 ?），"
+            "成功还原 %d/%d 段\n"
+            % (pair, s.count("\ufffd"), sok, stotal))
+        sys.stderr.flush()
+        return sout
     if rejected is not None:
         renc, rout = rejected
         raise ValueError(
@@ -1208,6 +1301,12 @@ def mojibake_best(s):
     if cross:
         p, cenc, ctgt, cout = cross[0]
         return cout, 0.0, 0, "%s→%s" % (cenc, ctgt)
+    # 三级：数据半路丢了字节（含 U+FFFD），整段转不了，分段救
+    sp = mojibake_split(s)
+    if sp:
+        sout, pair, _sok, _stotal = sp
+        lost = sout.count("\ufffd")
+        return sout, lost / max(1, len(sout)), lost, pair + "(分段)"
     return out, ratio, bad, enc
 
 
@@ -1865,7 +1964,12 @@ def main():
             print(out.replace("\ufffd", "?"))
             # stdout 带缓冲、stderr 不带，不 flush 的话提示会跑到结果前面
             sys.stdout.flush()
-            if "\u2192" in enc:
+            if "(分段)" in enc:
+                sys.stderr.write(
+                    "\n  [分段还原] 按 %s 解；原文 %d 处字节缺失（标 ?）\n"
+                    % (enc.replace("(分段)", "").replace("\u2192", " 编回字节、按 "),
+                       bad))
+            elif "\u2192" in enc:
                 # 跨编码无损解出：enc 形如 gb18030→shift_jis
                 sys.stderr.write(
                     "\n  [跨编码] 按 %s 解，完整无损（不是残缺数据）\n"
