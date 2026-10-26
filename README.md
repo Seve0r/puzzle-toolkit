@@ -229,6 +229,7 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | `--depth N` | `codec auto` | 递归剥皮层数，默认 3 |
 | `--best` | `codec dec mojibake` | 数据本身残缺时，强制输出最佳猜测，缺失处标 `?` |
 | `--from A --to B` | `codec dec mojibake` | 显式指定乱码的编码对（源 → 目标），跳过猜测 |
+| `--katakana` | `codec dec wabun` | 输出片假名（默认平假名） |
 | `--enc` | `classic` / `hc` | 编码方向（默认解码） |
 | `-h, --help` | 全部 | 看完整参数 |
 

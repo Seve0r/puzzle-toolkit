@@ -22,6 +22,7 @@
   --from <enc>         配合 dec mojibake：指定当初「把字节解成乱码」用的编码
   --to <enc>           配合 dec mojibake：指定当初「把文字编成字节」用的编码
                        两个都不用猜；只给一个时另一个取默认（gb18030 / utf-8）。
+  --katakana           配合 dec wabun：输出片假名（默认平假名）
 
 例：
   codec.py auto 'S1VWRVIgTEFOR1VBR0U='
@@ -568,6 +569,23 @@ _WABUN_DAKU = {
 _WABUN_HANDAKU = {"ハ": "パ", "ヒ": "ピ", "フ": "プ", "ヘ": "ペ", "ホ": "ポ"}
 
 
+# 和文モールス表按惯例用片假名书写（無線局運用規則別表もそう），但解出来的
+# 日文用平假名更自然——歌词、台词、正文都是平假名混汉字。
+#
+# ★ 表本身必须保持片假名：浊音合并表 _WABUN_DAKU 是按片假名索引的，
+#   中途转成平假名会让「シ + ゛ → ジ」直接失效。只在最终输出时转。
+# ★ 不能简单地把整个片假名区 -0x60：长音符 ー(U+30FC) 减过去会变成 ゜，
+#   繰り返し記号 ヽヾ 也会变成乱七八糟的东西。只转 ァ–ヶ（U+30A1–U+30F6）。
+def _kata2hira(s):
+    return "".join(chr(ord(c) - 0x60) if 0x30A1 <= ord(c) <= 0x30F6 else c
+                   for c in s)
+
+
+def _hira2kata(s):
+    return "".join(chr(ord(c) + 0x60) if 0x3041 <= ord(c) <= 0x3096 else c
+                   for c in s)
+
+
 def _wabun_near(a, b, maxd=1):
     """编辑距离 <= maxd。只用来给「查不到的段」提示最接近的几个候选。"""
     if abs(len(a) - len(b)) > maxd:
@@ -621,7 +639,9 @@ def _d_wabun(s):
             hint = ("；相近的有 " + " / ".join("%s=%s" % (k, WABUN[k]) for k in near[:3])) if near else ""
             sys.stderr.write("      第 %d 段  %s%s\n" % (idx, seg, hint))
         sys.stderr.write("\n")
-    return "".join(merged)
+    # 表是片假名，交出去的是平假名（日文正文的惯用写法）。
+    # 要片假名用 `dec wabun --katakana`。
+    return _kata2hira("".join(merged))
 
 
 # ---------------------------------------------------------------- 盲文
@@ -1785,7 +1805,10 @@ def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
     best = "--best" in argv
-    argv = [a for a in argv if a not in ("-q", "--quiet", "--best")]
+    # 和文モールス表是片假名，但默认输出平假名；--katakana 保留片假名
+    katakana = "--katakana" in argv
+    argv = [a for a in argv
+            if a not in ("-q", "--quiet", "--best", "--katakana")]
     # --deep [N]：反复还原直到「正常文字占比」达到 N%（0~100，默认为 50）。
     # N 可选，写成 --deep 80 或直接 --deep（等价 50）。
     deep = None
@@ -2009,6 +2032,9 @@ def main():
         except Exception as e:
             print("失败：%s" % e)
             return 1
+        # 和文モールス默认输出平假名；--katakana 转回片假名方便对照原表
+        if katakana and name in ("wabun", "wabunmorse") and isinstance(out, str):
+            out = _hira2kata(out)
         print(out)
         return 0
 
