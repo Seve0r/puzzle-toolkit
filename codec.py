@@ -282,7 +282,10 @@ def _d_bin(s):
     bits = re.sub(r"[^01]", "", s)
     if len(bits) % 8:
         raise ValueError("二进制位数不是 8 的倍数")
-    return as_text(bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8)))
+    out = as_text(bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8)))
+    # 末尾的 0x00 是「位数补齐到 8 的倍数」留下的填充，没有信息量。
+    # 留着结果是带不可见字符的：终端看不出区别，但复制走、比较、再编码都会出问题。
+    return out.rstrip("\x00")
 
 
 @enc_name("bin", "binary")
@@ -1708,6 +1711,14 @@ def blocks_to_bytes(text, width=2, radix=36, alphabet=None):
     return bytes(out)
 
 
+# 各编码的「合理最小输出长度比例」，供 auto 的长度骤减保护使用。
+# 默认 0.1（中文 base64 约 25%，安全）；位流类天生压缩得狠，必须单独放宽：
+#   bin: 8 位 → 1 字节，中文再 3 字节 → 1 字符，合计 24:1（4.2%），取 0.03 留余量
+MIN_OUT_RATIO = {
+    "bin": 0.03,
+}
+
+
 def auto(text, depth=3, _memo=None):
     """递归剥皮：每一步在所有编码里挑"得分 + 结构奖励"最高的分支"""
     if _memo is None:
@@ -1741,7 +1752,13 @@ def auto(text, depth=3, _memo=None):
         # 而 score() 算的全是比例，一字符输出各项都是 100%，得分反而
         # 高过正确的日文，导致 auto 选错路径。阈值取 10%：中文 base64
         # 的压缩比约 25%（4 字符→1 汉字），不会被误伤。
-        if len(text) >= 8 and len(out) < max(2, len(text) * 0.1):
+        #
+        # ★ 但阈值不能一刀切：位流类天生压缩得狠。bin 是 8 位→1 字节，
+        #   再叠加 UTF-8 中文 3 字节→1 字符，合起来是 24:1（4.2%）。
+        #   实测一道 363 字符的 0/1 流正确解出 16 个汉字，却因为 4.4% < 10%
+        #   被当成「信息丢失」丢掉，auto 报「没有可靠的编码路径」。
+        min_ratio = MIN_OUT_RATIO.get(name, 0.1)
+        if len(text) >= 8 and len(out) < max(2, len(text) * min_ratio):
             continue
         sub_sc, final, path = auto(out, depth - 1, _memo)
         cand = sub_sc + bonus
