@@ -63,8 +63,19 @@ ALPHA = "abcdefghijklmnopqrstuvwxyz"
 
 # ------------------------------------------------------------------ 基础
 
+def is_az(c):
+    """是不是 ASCII 字母（a-z / A-Z）。
+
+    ★ 绝对不能用 `c.isalpha()` 代替：中文、日文假名、希腊字母在 Python 里
+      都算 alpha。`ord('注')` 是 27880，减掉基数再 `% 26` 会把它变成某个
+      英文字母，于是「注意空列表」被位移成「CQUTH」、「会議は」变成「VLQ」。
+      凡是只该作用于 A-Z 的地方，一律走这个函数。
+    """
+    return "a" <= c <= "z" or "A" <= c <= "Z"
+
+
 def only_letters(s):
-    return "".join(c for c in s.lower() if c.isalpha())
+    return "".join(c for c in s.lower() if is_az(c))
 
 
 def chi_squared(letters):
@@ -172,7 +183,7 @@ def _load_wordlist():
             with open(_path, encoding="utf-8", errors="ignore") as _f:
                 for _line in _f:
                     _w = _line.strip().lower()
-                    if 2 <= len(_w) <= 9 and _w.isalpha():
+                    if 2 <= len(_w) <= 9 and _w.isascii() and _w.isalpha():
                         _found.add(_w)
         except Exception:
             continue
@@ -272,7 +283,7 @@ def vig_shift(s, key, enc=False):
     out = []
     i = 0
     for c in s:
-        if c.isalpha():
+        if is_az(c):
             base = 97 if c.islower() else 65
             kk = ord(k[i % len(k)]) - 97
             if enc:
@@ -405,7 +416,7 @@ def affine_dec(s, a, b):
     inv = modinv(a)
     out = []
     for c in s:
-        if c.isalpha():
+        if is_az(c):
             base = 97 if c.islower() else 65
             x = ord(c) - base
             out.append(chr((inv * (x - b)) % 26 + base))
@@ -417,7 +428,7 @@ def affine_dec(s, a, b):
 def affine_enc(s, a, b):
     out = []
     for c in s:
-        if c.isalpha():
+        if is_az(c):
             base = 97 if c.islower() else 65
             x = ord(c) - base
             out.append(chr((a * x + b) % 26 + base))
@@ -523,7 +534,7 @@ def bacon_decode(text, old=False):
     letters = "".join(c for c in text.upper() if c in "AB")
     # 如果 A/B 太少，试试大小写隐写：大写=B，小写=A
     if len(letters) < 5:
-        bits = "".join("B" if c.isupper() else "A" for c in text if c.isalpha())
+        bits = "".join("B" if c.isupper() else "A" for c in text if is_az(c))
     else:
         bits = letters
     table = BACON_24 if old else BACON_26
@@ -536,7 +547,7 @@ def bacon_decode(text, old=False):
 
 def bacon_encode(text, old=False):
     rev = {v: k for k, v in (BACON_24 if old else BACON_26).items()}
-    return " ".join(rev.get(c.lower(), "?") for c in text if c.isalpha())
+    return " ".join(rev.get(c.lower(), "?") for c in text if is_az(c))
 
 
 # ------------------------------------------------------------------ 栅栏
@@ -781,7 +792,7 @@ def _pf_strip_pad(s):
 
 def playfair(s, key, enc=False, clean_pad=False):
     sq = playfair_square(key)
-    txt = [c for c in s.lower() if c.isalpha()]
+    txt = [c for c in s.lower() if is_az(c)]
     txt = [("i" if c == "j" else c) for c in txt]
 
     pairs = []
