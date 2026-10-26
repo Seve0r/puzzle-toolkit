@@ -133,6 +133,7 @@ python3 codec.py enc hex -f picture.png
 | 点划序列 | `codec auto`（摩斯） |
 | 像英语但读不通 | `classic auto` |
 | 中文正常但读不通（`浜哄彧`） | `codec dec mojibake`，解完还乱就加 `--deep` |
+| 一堆生僻汉字但不像中文（`孨偼堦惗`） | `codec dec mojibake`（GBK 编的日文被当 GBK 读） |
 | 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
 | 32/40/64 位 hex | `hc identify` → `hc crack` |
 | 图片 / 音频 / 压缩包 | `stego binwalk` |
@@ -154,9 +155,10 @@ python3 codec.py enc hex -f picture.png
 | `codec dec <编码名> <文本>` | 用指定编码解码 |
 | `codec enc <编码名> <文本>` | 用指定编码编码 |
 | `codec list` | 列出全部支持的编码名 |
-| `codec dec mojibake <文本>` | 还原单层乱码（`浜哄彧` → `人只`）。损失 >2% 直接报错，不硬猜 |
+| `codec dec mojibake <文本>` | 还原乱码（`浜哄彧` → `人只`）。UTF-8 被当 GBK 读、中日韩编码互相误读都认 |
 | `codec dec mojibake --deep [N]` | 多层乱码反复还原，直到正常文字占比 ≥ N%（默认 50） |
 | `codec dec mojibake --best <文本>` | 数据本身残缺时强制输出最佳猜测，缺失处标 `?`，并给出损失率 |
+| `codec dec mojibake --from A --to B` | 显式指定乱码的编码对，不猜（如 `--from gbk --to shift_jis`） |
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
@@ -226,6 +228,7 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | `-q, --quiet` | 全部 | 只输出结果，不要解释 |
 | `--depth N` | `codec auto` | 递归剥皮层数，默认 3 |
 | `--best` | `codec dec mojibake` | 数据本身残缺时，强制输出最佳猜测，缺失处标 `?` |
+| `--from A --to B` | `codec dec mojibake` | 显式指定乱码的编码对（源 → 目标），跳过猜测 |
 | `--enc` | `classic` / `hc` | 编码方向（默认解码） |
 | `-h, --help` | 全部 | 看完整参数 |
 
@@ -239,6 +242,8 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 这条对任何编码都成立：base64 被截断、hex 是奇数长度、mojibake 缺字节，都会表现成 `�`。
 
 `dec mojibake` 会把损失率算出来：0% 才认定还原成功，超过 2% 直接报错，而不是猜一个最像的硬输出。
+例外是中日韩编码互相误读那一类——它本来就不该有损失，判据换成「结果是否显著更像正常文字」，
+命中时会打一行 `[跨编码]` 告诉你用了哪对编码。
 
 ## 关于词表
 

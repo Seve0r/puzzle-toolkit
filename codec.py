@@ -19,6 +19,9 @@
   --best               配合 dec mojibake：数据残缺时强制输出最佳猜测，缺失处标 ?
   --deep [N]           配合 dec mojibake：反复还原直到正常文字占比 >= N%
                        （0~100，默认 50）。多层乱码一步到位，并列出每层可读率。
+  --from <enc>         配合 dec mojibake：指定当初「把字节解成乱码」用的编码
+  --to <enc>           配合 dec mojibake：指定当初「把文字编成字节」用的编码
+                       两个都不用猜；只给一个时另一个取默认（gb18030 / utf-8）。
 
 例：
   codec.py auto 'S1VWRVIgTEFOR1VBR0U='
@@ -28,6 +31,8 @@
   codec.py dec mojibake '浜哄彧鑳界湅'
   codec.py dec mojibake --best '瀹跺涵鐘跺喌'
   codec.py dec mojibake --deep 80 --file cipher.txt
+  codec.py dec mojibake '孨偼堦惗巹傪朰傟側偄'          # 自动认出 GBK→Shift_JIS
+  codec.py dec mojibake --from gbk --to shift_jis '孨偼堦惗巹傪朰傟側偄'
 """
 import sys
 import os
@@ -850,6 +855,41 @@ MOJIBAKE_ENCODINGS = [
 _GBK_FAMILY = {"gb18030", "gbk"}
 
 
+# 「目标编码」= 当初把原始字节解成这堆乱码时用的那个编码。
+# mojibake_rank 只假设目标是 UTF-8（最常见），但中日韩编码之间互相误读
+# 同样常见，而且**这种乱码用 UTF-8 是解不出来的**——必须换目标。
+#
+# 实测：孨偼堦惗巹傪朰傟側偄 按 GBK 编回字节再按 Shift_JIS 解 = 君は一生私を忘れない。
+# 按 UTF-8 解则损失 60%，而且报错还会误导成「数据损坏」。
+#
+# 不含 utf-16/utf-32：它们只要字节数是偶数就几乎总能「成功」，产出一堆
+# 私用区字符却报 0 损失，是纯粹的假阳性来源。
+MOJIBAKE_TARGETS = [
+    "gb18030", "gbk",
+    "big5",
+    "cp932", "shift_jis", "shift_jis_2004", "shift_jisx0213",
+    "euc-kr", "euc-jp", "iso2022_jp",
+    "latin-1", "cp1252",
+]
+
+# 同族编码互相转码是恒等变换（gb18030 是 gbk 的超集，cp932 是 shift_jis 的
+# 超集），「按 A 编回字节再按 B 解」得到的还是原文自己。不排除的话它们会以
+# 0% 损失永远霸占第一名，把真正有用的假设全挤掉。
+_MOJIBAKE_FAMILIES = [
+    {"gb18030", "gbk"},
+    {"cp932", "shift_jis", "shift_jis_2004", "shift_jisx0213"},
+    {"latin-1", "cp1252"},
+    {"cp1251", "iso-8859-2"},
+]
+
+
+def _same_encoding_family(a, b):
+    """a、b 是否属于同一个编码族（互相转码等于没转）。"""
+    if a == b:
+        return True
+    return any(a in fam and b in fam for fam in _MOJIBAKE_FAMILIES)
+
+
 def _encode_back(s, enc):
     """把乱码字符串按 enc 还原成原始字节（含 CP936 的 0x80 ↔ € 特例）。"""
     if enc not in _GBK_FAMILY or "\u20ac" not in s:
@@ -885,15 +925,248 @@ def mojibake_rank(s):
     return rows
 
 
+_ENC_CACHE = {}
+
+
+def _encodable(ch, enc):
+    """该字符能否用 enc 表示。带缓存——_plain 会被反复调用，试编很贵。"""
+    key = (ch, enc)
+    hit = _ENC_CACHE.get(key)
+    if hit is None:
+        try:
+            ch.encode(enc)
+            hit = True
+        except Exception:
+            hit = False
+        _ENC_CACHE[key] = hit
+    return hit
+
+
+def _plain(s):
+    """「像不像正常文字」0~1。用来在跨编码还原的多个候选中挑出真结果。
+
+    只看字符落点，不看语义：
+      加分：GB2312 内的常用汉字、平假名/片假名、ASCII、谚文
+      减分：私用区、U+FFFD、控制符、C1、西里尔/希腊、拉丁扩展、杂项文字
+
+    ★ 汉字分「GB2312 内 / 外」两种待遇，这是判据的核心：中文乱码的产物
+      是 孨偼堦惗巹傪 这类 GB2312 之外的生僻字，正常文本则几乎全在里面。
+      实测：孨偼堦惗巹傪朰傟側偄 → 0.00，君は一生私を忘れない → 1.00。
+    """
+    if not s:
+        return 0.0
+    good = bad = 0.0
+    for ch in s:
+        o = ord(ch)
+        if 0xE000 <= o <= 0xF8FF or o == 0xFFFD:
+            bad += 3.0          # 私用区 / 替换符：几乎必然是误解码
+        elif o < 0x20 and ch not in "\t\n\r":
+            bad += 3.0          # 控制符
+        elif 0x80 <= o <= 0x9F:
+            bad += 3.0          # C1 控制符
+        elif 0x4E00 <= o <= 0x9FFF:
+            # 「常用汉字」按 GB2312 **或** Shift_JIS 收录来判。
+            # 只看 GB2312 会误伤日文新字体：実 / 嘘 / 雫 这些是日文常用字，
+            # 但 GB2312 里没有，会被当成乱码特征——实测「真実はどこに」
+            # 因此只拿 0.83 分、被门槛挡在门外。
+            # 而真乱码的产物（孨偼堦惗巹傪朰傟側偄）两个表里都查不到。
+            if _encodable(ch, "gb2312") or _encodable(ch, "shift_jis"):
+                good += 1.0
+            else:
+                bad += 1.0      # 生僻字：乱码特征
+        elif 0x3040 <= o <= 0x30FF:
+            good += 1.0         # 平/片假名
+        elif 0x3000 <= o <= 0x303F or 0xFF01 <= o <= 0xFF60:
+            good += 0.8         # CJK / 全角标点，正常文字的一部分
+        elif 0xFF61 <= o <= 0xFF9F:
+            bad += 0.5          # 半角片假名：多为误读产物
+        elif o < 0x7F:
+            good += 0.6         # ASCII
+        elif 0x400 <= o <= 0x4FF:
+            bad += 1.0          # 西里尔
+        elif 0x370 <= o <= 0x3FF:
+            bad += 1.0          # 希腊
+        elif 0xAC00 <= o <= 0xD7A3:
+            good += 0.8         # 谚文：真韩文也长这样，只轻加分
+        elif 0xC0 <= o <= 0x24F:
+            bad += 0.4          # 拉丁扩展
+        else:
+            bad += 0.6          # 其它文字系统
+    return good / max(good + bad, 1e-9)
+
+
+def _han_ratio(s):
+    """「CJK 汉字占比」：跨编码假设的准入门槛。
+
+    ★ 为什么必须有这个门槛：GB18030 是**全 Unicode 覆盖**的，任何文本都能被它
+      编回字节，再按 Big5 解出一堆 GB2312 汉字。于是「可读度提升」这个判据对
+      一切非中日的文本都成立——实测俄文 Русский текст 被"翻译"成 妓批扼扼抗我抄，
+      韩文、假名为主的文本也都会被乱转。这是纯粹的假阳性，比不修更糟。
+
+    但「中日韩编码互相误读」这个假设本身就有前提：**原文得是中日韩文字**。
+    一个满是西里尔字母的字符串不可能是 GBK 文本被当 Shift_JIS 读的产物。
+
+    所以只认「以 CJK 汉字为主」的原文。假名/谚文为主的不算：那种原文更可能
+    本来就是正常日文/韩文，而不是乱码。
+    """
+    if not s:
+        return 0.0
+    han = sum(1 for ch in s if 0x4E00 <= ord(ch) <= 0x9FFF or 0x3400 <= ord(ch) <= 0x4DBF)
+    return han / len(s)
+
+
+def _common_ratio(s):
+    """原文里「一看就是正常文字」的字符占比——跨编码判据的基准线。
+
+    ★ 为什么不用 _plain 当基准：_plain 为了认日文新字体（実/嘘）把判定放宽到
+      Shift_JIS，而 GBK 的罕用字（僂/僣/僉）恰好也在 JIS 里，于是乱码原文也能
+      拿到 0.75 分。拿它当基准，「真乱码 → 正常文字」的提升就被吃掉大半，
+      实测 僂僜僣僉 → ウソツキ 因此被门槛挡掉。
+
+      基准只认真正高频的东西：GB2312 常用汉字、日文假名、ASCII、CJK 标点。
+      乱码的产物（孨偼堦惗 / 僂僜僣僉）这些一个都不是，所以基准是 0。
+    """
+    if not s:
+        return 0.0
+    n = 0
+    for ch in s:
+        o = ord(ch)
+        if 0x4E00 <= o <= 0x9FFF:
+            if _encodable(ch, "gb2312"):
+                n += 1
+        elif 0x3040 <= o <= 0x30FF:
+            n += 1
+        elif o < 0x7F or 0x3000 <= o <= 0x303F:
+            n += 1
+    return n / len(s)
+
+
+def mojibake_cross(s, min_plain=0.85, min_gain=0.4, min_han=0.5, min_len=3):
+    """第二级还原：假设「原始字节被**非 UTF-8** 的编码解成了这堆字」。
+
+    第一级（mojibake_rank）只试 UTF-8 目标，能覆盖「UTF-8 被当 GBK 读」这个
+    最常见的情况。但中日韩编码之间互相误读是另一类，UTF-8 完全解不出来——
+    它的字节流在 UTF-8 眼里就是非法序列，只能碎成一堆 U+FFFD。
+
+    所以这里把「源编码 × 目标编码」全组合都试一遍，用两个门槛筛：
+
+      1. 严格 decode 必须成功（0 损失）——有丢字符说明字节流本身就不对；
+      2. 结果要**明显比原文像正常文字**（min_gain），且本身够干净（min_plain）。
+
+    第 2 条是防假阳性的关键。实测两个真实案例：
+      · 孨偼堦惗巹傪朰傟側偄 → plain 0.00，跨编码得 1.00，提升 1.00 → 采信
+      · 锟斤拷            → plain 1.00（真的是常用汉字），跨编码得韩文 1.00，
+                            提升 0 → 拒绝。这正是「数据已经坏了」该有的表现，
+                            此时任何跨编码结果都是编出来的，不能给。
+
+    返回 [(plain 分数, 源编码, 目标编码, 结果), ...]，已排序；空列表 = 没找到。
+    """
+    # 原文不以 CJK 汉字为主 → 「中日韩互读」这个假设不成立，直接不试。
+    # 详见 _han_ratio 的说明：不设这道门槛，任何外文都会被硬转成汉字胡话。
+    if _han_ratio(s) < min_han or len(s) < min_len:
+        return []
+    base = _common_ratio(s)
+    rows = []
+    for enc in MOJIBAKE_ENCODINGS:
+        try:
+            raw = _encode_back(s, enc)
+        except (UnicodeEncodeError, LookupError):
+            continue
+        for tgt in MOJIBAKE_TARGETS:
+            if _same_encoding_family(enc, tgt):
+                continue
+            try:
+                out = raw.decode(tgt)
+            except (UnicodeDecodeError, LookupError):
+                continue
+            if out == s:
+                continue
+            p = _plain(out)
+            if p < min_plain or (p - base) < min_gain:
+                continue
+            rows.append((p, enc, tgt, out))
+    # 同分时按目标编码名字典序，保证结果稳定可复现（cp932 稳定排在 shift_jis 前）
+    rows.sort(key=lambda r: (-r[0], r[2]))
+    return rows
+
+
+def mojibake_explicit(s, src, tgt):
+    """显式指定「源编码→目标编码」的还原，不做任何猜测。
+
+    自动路径摸不清时用它。典型：GBK 编的日文被当作 GBK 显示 = 这堆字，
+    正确读法是 `--from gbk --to shift_jis`。
+    """
+    try:
+        raw = _encode_back(s, src)
+    except (UnicodeEncodeError, LookupError) as e:
+        raise ValueError("按 %s 编回字节失败：%s（原文里有该编码表示不了的字符）" % (src, e))
+    try:
+        return raw.decode(tgt)
+    except (UnicodeDecodeError, LookupError) as e:
+        raise ValueError("%d 字节按 %s 解不开：%s" % (len(raw), tgt, e))
+
+
 @dec_name("mojibake", "garbled", "乱码")
 def _d_mojibake(s):
-    """UTF-8 被当成 GBK / Big5 / Latin-1 读过的还原（如「浜哄彧」→「人只」）。"""
+    """被误读文本的还原（如「浜哄彧」→「人只」）。
+
+    两级假设：
+
+    · 一级（mojibake_rank）：把字按各候选编码编回字节、再按 **UTF-8** 解。
+      覆盖「UTF-8 被当 GBK / Big5 / Latin-1 读」，是最常见的一类。
+      损失率 ≤2% 才采信 —— 无损才说明猜对了。
+
+    · 二级（mojibake_cross）：一级损失过大时，说明目标根本不是 UTF-8。
+      转而枚举「中日韩编码互相误读」的组合，判据换成「可读度有没有明显提升」。
+      典型：孨偼堦惗巹傪朰傟側偄 → 君は一生私を忘れない（GBK 字节按 Shift_JIS 解）。
+
+    两级都不成，才报「数据可能残缺」。
+    """
     if all(ord(c) < 128 for c in s):
-        raise ValueError("纯 ASCII，不可能是 UTF-8 被误读的结果")
+        raise ValueError("纯 ASCII，不可能是被误读的结果")
+    # 一两个字不够下结论：单字 茻 会被无损「解」成 踈（字节碰巧合法），
+    # 这种结果比报错更容易误导。乱码是被系统性误读的产物，必然成串出现——
+    # 实测最短的真实乱码是 浣犲ソ（3 字符，→ 你好）。
+    if len(s) < 3:
+        raise ValueError(
+            "只有 %d 个字符，不足以判断是不是乱码（乱码通常成串出现）。\n"
+            "若确定是，用 --from/--to 显式指定当初的编码对。" % len(s))
     rows = mojibake_rank(s)
-    if not rows:
-        raise ValueError("没有可用的反编码假设")
-    ratio, bad, enc, out = rows[0]
+    rejected = None
+    if rows:
+        ratio, bad, enc, out = rows[0]
+        # 无损还不够，还得**解完不能显著更差**。字节流碰巧是合法 UTF-8 的情况
+        # 不少：あいうえお → ƦƨƪƬƮ、茻 → Ɵ，都是 0 损失却是纯垃圾。
+        # 但门槛只能设成「不许变差」而不是「必须变好」——浣犲ソ → 你好 里原文
+        # 含一个假名 ソ，plain 就已经是 1.0 了，要求严格提升会把正确解判掉。
+        # 第一级的本职是看损失率，plain 只负责拦明显的垃圾。
+        if ratio <= 0.02 and _plain(out) >= _plain(s) - 0.05:
+            return out
+        if ratio <= 0.02:
+            rejected = (enc, out)    # 无损但解得更差 → 巧合，不是真乱码
+    else:
+        ratio, bad, enc, out = 1.0, len(s), "?", s
+    # ---- 二级：换成非 UTF-8 的目标编码再试
+    cross = mojibake_cross(s)
+    if cross:
+        p, cenc, ctgt, cout = cross[0]
+        others = ["%s→%s" % (r[1], r[2]) for r in cross[1:]]
+        # stdout 有缓冲、stderr 没有，不 flush 会跑到结果后面去
+        sys.stdout.flush()
+        sys.stderr.write(
+            "\n  [跨编码] 按 %s 编回字节、按 %s 解"
+            "（可读度 %.0f%% → %.0f%%）%s\n"
+            % (cenc, ctgt, _common_ratio(s) * 100, p * 100,
+               "；另有等价解 " + "、".join(others[:3]) if others else ""))
+        sys.stderr.flush()
+        return cout
+    if rejected is not None:
+        renc, rout = rejected
+        raise ValueError(
+            "按 %s 能无损解出 %r，但结果并不比原文更像正常文字。\n"
+            "这只是字节碰巧合法，不是真的被误读过——别把它当答案。\n"
+            "若你确信原文是乱码，用 --from/--to 显式指定当初的编码对。"
+            % (renc, rout))
     # 只有几乎无损才认。损失率 >2% 说明原始字节流本身就缺字节，
     # 这时候硬输出等于把猜测当成答案，比报错更坑。
     # 但也不能只报错什么都不给——把最佳猜测和损失率一起亮出来，
@@ -904,10 +1177,13 @@ def _d_mojibake(s):
         guess = out.replace("\ufffd", "?")
         body = "\n".join("    " + ln for ln in (guess.splitlines() or [""]))
         raise ValueError(
-            "还原损失 %.1f%%（%d 个替换字符，假设 %s），原始字节流可能有缺失。\n"
+            "还原损失 %.1f%%（%d 个替换字符，假设 %s）。\n"
+            "既不是 UTF-8 被误读，也不像中日韩编码互相误读——原始字节流可能真的有缺失。\n"
             "\n"
             "  最佳猜测（? = 缺失处，不可全信）：\n"
-            "%s"
+            "%s\n"
+            "\n"
+            "  若你已知当初的编码对，直接指定：dec mojibake --from gbk --to shift_jis '...'"
             % (ratio * 100, bad, enc, body))
     return out
 
@@ -918,36 +1194,49 @@ def mojibake_best(s):
     用于「作者给的数据本身就是残缺的」这类谜题——这时候不存在"更原始的来源"，
     能做的只有把最可能的还原摊开、把缺失位置标成 ?，让人自己靠上下文补。
     返回 (结果, 损失率, 替换字符数, 编码名)。
+
+    跨编码能无损解出时优先用它，此时损失率记 0、编码名写成 `源→目标`。
     """
     rows = mojibake_rank(s)
-    if not rows:
-        raise ValueError("没有可用的反编码假设")
-    ratio, bad, enc, out = rows[0]
+    if rows:
+        ratio, bad, enc, out = rows[0]
+        if ratio <= 0.02:
+            return out, ratio, bad, enc
+    else:
+        ratio, bad, enc, out = 1.0, len(s), "?", s
+    cross = mojibake_cross(s)
+    if cross:
+        p, cenc, ctgt, cout = cross[0]
+        return cout, 0.0, 0, "%s→%s" % (cenc, ctgt)
     return out, ratio, bad, enc
 
 
 def readability(s):
-    """「正常文字占比」：**CJK 字符里** GB2312 能编码的比例（0~1）。
+    """「正常文字占比」0~1：汉字看是否 GB2312 常用，假名算正常。
 
     用它判断"解够了没有"比看损失率可靠。UTF-8 被 GBK 误读后会产出
     鑷 / 嵆 / 鍖 / 遠 这类 GB2312 之外的生僻字，正常中文则几乎全在里面。
     实测：正常中文 100%、一层乱码 26%、两层乱码 89%。
 
-    ★ 分子分母都只看 CJK，ASCII 不计入。
+    ★ 分子分母都只看中日韩文字，ASCII 不计入。
     否则解过头变成 `?1?7?1?7` 那种 ASCII 噪音时，反而会被算成高可读率，
-    导致 --deep 一路解到烂。没有 CJK 字符时直接返回 0。
+    导致 --deep 一路解到烂。没有这类字符时直接返回 0。
+
+    ★ 假名也算「好」，半角片假名不算。早先只统计 CJK 汉字，结果纯假名的正确
+      解（おはよう、ニセモノ）可读率恒为 0%，--deep 会一路跑满还在原文打转。
     """
-    cjk = [c for c in s if "\u4e00" <= c <= "\u9fff"]
-    if not cjk:
+    units = []
+    for ch in s:
+        o = ord(ch)
+        if 0x4E00 <= o <= 0x9FFF:
+            units.append(_encodable(ch, "gb2312"))
+        elif 0x3040 <= o <= 0x30FF:
+            units.append(True)      # 平/片假名：正常文字
+        elif 0xFF61 <= o <= 0xFF9F:
+            units.append(False)     # 半角片假名：多为误读产物
+    if not units:
         return 0.0
-    ok = 0
-    for ch in cjk:
-        try:
-            ch.encode("gb2312")
-            ok += 1
-        except Exception:
-            pass
-    return ok / len(cjk)
+    return sum(1 for u in units if u) / len(units)
 
 
 def mojibake_deep(s, threshold=50, max_rounds=5):
@@ -978,9 +1267,18 @@ def mojibake_deep(s, threshold=50, max_rounds=5):
         if readability(cur) * 100 >= lo:
             break
         rows = mojibake_rank(cur)
-        if not rows:
+        # 一层 UTF-8 假设不成立时，这一层可能就是「中日韩编码互相误读」——
+        # 不试的话 --deep 只会在原地打转，跑满 5 层仍然交回原文。
+        cross = [] if (rows and rows[0][0] <= 0.02) else mojibake_cross(cur)
+        if rows and rows[0][0] <= 0.02:
+            ratio, bad, enc, out = rows[0]
+        elif cross:
+            _, cenc, ctgt, out = cross[0]
+            ratio, enc = 0.0, "%s→%s" % (cenc, ctgt)
+        elif rows:
+            ratio, bad, enc, out = rows[0]
+        else:
             break
-        ratio, bad, enc, out = rows[0]
         if out == cur:
             break
         cur = out
@@ -1407,6 +1705,21 @@ def main():
             depth = int(argv[i + 1])
             argv = argv[:i] + argv[i + 2:]
 
+    # --from <源编码> / --to <目标编码>：显式指定乱码的编码对，完全不猜。
+    # 自动路径摸不清时（或已知作者用的编码）用它，结果可复现。
+    mb_from = mb_to = None
+    for flag, key in (("--from", "f"), ("--to", "t")):
+        while flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                print("%s 后面要跟一个编码名（如 gbk / shift_jis）" % flag)
+                return 2
+            if key == "f":
+                mb_from = argv[i + 1]
+            else:
+                mb_to = argv[i + 1]
+            argv = argv[:i] + argv[i + 2:]
+
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(__doc__)
         return 0
@@ -1527,6 +1840,24 @@ def main():
         if not text:
             text = ""
         table = DECODERS if cmd.startswith("dec") else ENCODERS
+        # dec mojibake --from X --to Y：显式编码对，不猜。
+        # 只给一侧时另一侧取默认（源 gb18030 / 目标 utf-8），并在 stderr 说清。
+        if cmd.startswith("dec") and name == "mojibake" and (mb_from or mb_to):
+            src = mb_from or "gb18030"
+            tgt = mb_to or "utf-8"
+            try:
+                out = mojibake_explicit(text, src, tgt)
+            except ValueError as e:
+                print("失败：%s" % e)
+                return 1
+            sys.stdout.flush()
+            sys.stderr.write(
+                "\n  [显式] 按 %s 编回字节 → 按 %s 解%s\n"
+                % (src, tgt,
+                   "（未指定的那一侧用了默认值）" if not (mb_from and mb_to) else ""))
+            sys.stderr.flush()
+            print(out)
+            return 0
         # dec mojibake --best：谜题里数据本身残缺时，强制给出最佳猜测，
         # 缺失处标 ?，并把损失率告诉使用者。
         if cmd.startswith("dec") and name == "mojibake" and best:
@@ -1534,7 +1865,12 @@ def main():
             print(out.replace("\ufffd", "?"))
             # stdout 带缓冲、stderr 不带，不 flush 的话提示会跑到结果前面
             sys.stdout.flush()
-            if ratio > 0:
+            if "\u2192" in enc:
+                # 跨编码无损解出：enc 形如 gb18030→shift_jis
+                sys.stderr.write(
+                    "\n  [跨编码] 按 %s 解，完整无损（不是残缺数据）\n"
+                    % enc.replace("\u2192", " 编回字节、按 "))
+            elif ratio > 0:
                 sys.stderr.write(
                     "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；? 处需要靠上下文猜\n"
                     % (ratio * 100, bad, enc))

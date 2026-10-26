@@ -1,6 +1,6 @@
 ---
 name: codec-toolkit
-description: Use when text looks like encoded/garbled data and needs identifying or decoding — Base64/Base32/Base58/Base85/Base91、hex、二进制、URL 编码、HTML 实体、Unicode 转义、摩斯电码、盲文、ROT13/ROT47、多层嵌套剥皮、ARG 解谜里"这一串到底是什么"。Auto-detects the encoding by structural signature and recursively peels nested layers; run this before hand-writing any base64/hex decoding.
+description: Use when text looks like encoded/garbled data and needs identifying or decoding — Base64/Base32/Base58/Base85/Base91、hex、二进制、URL 编码、HTML 实体、Unicode 转义、摩斯电码、盲文、ROT13/ROT47、多层嵌套剥皮、乱码还原（mojibake：UTF-8 被当 GBK 读 / 中日韩编码互相误读）、ARG 解谜里"这一串到底是什么"。Auto-detects the encoding by structural signature and recursively peels nested layers; run this before hand-writing any base64/hex decoding.
 ---
 
 # 编码识别的坑与解法
@@ -27,7 +27,7 @@ Base16/32/32hex/58/62/64/64url/85/91、hex、二进制、十进制、八进制�
 URL、HTML 实体、Unicode 转义（`\u`/`\U`/`\x`/`U+XXXX`）、Quoted-Printable、ROT13/ROT47/Atbash、
 摩斯、盲文（含 8 点原始位串 `dec braillebits`）、gzip/zlib/bz2 内嵌流、
 UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GBK、
-**mojibake**（UTF-8 被误读成 GBK 的还原，见下方第 ⑦ 条）。
+**mojibake**（乱码还原：UTF-8 被误读成 GBK，以及中日韩编码互相误读，见下方第 ⑦ 条）。
 
 ## mojibake：`浜哄彧鑳界湅` → `人只能看`
 
@@ -48,6 +48,56 @@ UTF-8 的中文被当成 GBK 读了一遍，是 ARG 里最常见的乱码。还�
 当成答案会误导。**要回头找更原始的来源。**
 
 `codec.py mojibake_rank(s)` 可以直接看到所有假设的损失率排名，用来判断数据坏在哪。
+
+### 第二类乱码：中日韩编码互相误读
+
+上面那套只假设「**目标是 UTF-8**」，覆盖不了另一大类：**GBK 文本被当成
+Shift_JIS 读**（或反过来）。这类乱码用 UTF-8 是彻底解不出来的——字节流在
+UTF-8 眼里全是非法序列，只会碎成一堆 `?`。
+
+典型（Bilibili ARG 里真实遇到的）：
+
+```
+孨偼堦惗巹傪朰傟側偄  →  君は一生私を忘れない
+```
+
+方向是 `encode('gbk')` 拿回字节，再 `decode('shift_jis')`。
+
+`dec mojibake` 会自动进入二级：把「源编码 × 目标编码」全组合试一遍，
+判据换成**「结果是否显著更像正常文字」**（不是损失率，因为很多组合都能
+0 损失但产出一堆垃圾）。命中时会打一行 `[跨编码]` 说明用了哪一对。
+
+四个防假阳性的门槛（实测踩出来的，缺一个就乱转）：
+
+| 门槛 | 作用 | 不设的后果 |
+|---|---|---|
+| 原文以 **CJK 汉字**为主（≥50%） | GB18030 是全 Unicode 覆盖，任何文本都能被它编回字节 | 俄文 `Русский текст` 被"翻译"成 `妓批扼扼抗我抄` |
+| 结果可读度 **≥0.85** | 挡住私用区/控制符/生僻字 | `锟斤拷` 被解成韩文 `占쏙옙` |
+| 可读度**提升 ≥0.4** | 已经是正常文字的不再改 | 正常中文被反复误转 |
+| 长度 **≥3** | 单字字节碰巧合法 | `茻` → `踈` |
+
+「可读度」= 汉字看是否 GB2312 或 Shift_JIS 收录（日文新字体 `実`/`嘘`
+在 GB2312 里没有，只看 GB2312 会把它们当成乱码特征），假名算好，
+半角片假名、私用区、控制符算坏。
+
+### 已知编码对就直接指定：`--from` / `--to`
+
+自动认不出、或你已知作者用的编码时，别让它猜：
+
+```bash
+python3 codec.py dec mojibake --from gbk --to shift_jis '孨偼堦惗巹傪朰傟側偄'
+# 君は一生私を忘れない
+```
+
+含义是「这段文字原本是按 `<源>` 编成字节的，被当 `<目标>` 解了」。只给一侧
+时另一侧取默认（源 `gb18030`、目标 `utf-8`），并在 stderr 说清用了默认值。
+这条路不做任何猜测，结果可复现。
+
+### 单字/双字不要用 `dec mojibake`
+
+一两个字符不足以下结论，字节碰巧合法就会给出误导性结果（`茻` → `踈`、
+`あいうえお` → `ƦƨƪƬƮ`）。工具现在会直接拒绝短于 3 字符的输入——
+真实的乱码是被系统性误读的产物，必然成串出现。
 
 ### `€` 与私用区字符：乱码里的「半个字节」
 
@@ -78,8 +128,10 @@ python3 codec.py dec mojibake --deep -f 原文.txt      # 默认阈值 50
 python3 codec.py dec mojibake --deep 85 -f 原文.txt   # 解得更彻底
 ```
 
-它逐层打印损失率和可读率，标出采信第几层。「正常文字占比」= CJK 字符里
-GB2312 能编码的比例（只看 CJK，ASCII 不算）。
+它逐层打印损失率和可读率，标出采信第几层。「正常文字占比」= 汉字看是否
+GB2312 常用、假名算正常（ASCII 不算，否则解过头的 ASCII 噪音会被算成高可读率）。
+
+跨编码那一级也会参与，所以 `--deep` 对 `孨偼堦惗巹傪朰傟側偄` 这类同样一步到位。
 
 **可读率不是单调的**：一串双层乱码实测是 33.7% → 36.4% → 88.5% → 0%，
 所以取的是全局最高那层而不是最后那层，解过头会自动退回。
