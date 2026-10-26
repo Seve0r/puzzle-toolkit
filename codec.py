@@ -632,7 +632,7 @@ def _d_wabun(s):
     # 把查不到的段连同序号一起写到 stderr，命令行重定向时结果依然干净。
     if unknown:
         sys.stderr.write(
-            "\n  [!] 有 %d 段在和文モールス表里查不到（多半是抄写错误）：\n"
+            "\n  [!] 有 %d 段在和文モールス表里查不到：\n"
             % len(unknown))
         for idx, seg in unknown:
             near = [k for k, v in WABUN.items() if _wabun_near(seg, v)]
@@ -1864,6 +1864,8 @@ def main():
         if path:
             print("路径：%s" % " → ".join(path))
             print("得分：%.1f" % sc)
+            print("结果：")
+            print(final)
         else:
             print("没有可靠的编码路径（原样输出）")
             # 只说「没有可靠路径」等于什么都没说：用户分不清是「这压根不是编码」
@@ -1873,17 +1875,21 @@ def main():
             except Exception:
                 mb_ratio = 0.0
             if 0 < mb_ratio <= 0.6:
+                # 多行乱码要逐行缩进：只缩进第一行的话，后面几行会顶格，
+                # 和上面的「原始：」糊成一片，看不出这段是提示的一部分。
+                # 不折叠：提示本来就没几行，省两行换来一句「还有 N 行没显示」
+                # 纯属添乱，而且下一行又会再叫一次 --best，同一件事说两遍。
+                lines = mb_out.replace("\ufffd", "?").splitlines() or [""]
+                body = "\n".join("    " + ln[:120] for ln in lines)
                 # stdout 带缓冲、stderr 不带，不 flush 的话提示会窜到上面去
                 sys.stdout.flush()
                 sys.stderr.write(
                     "\n  [提示] 最接近的是 mojibake（假设 %s，损失 %.1f%%，%d 处缺失）：\n"
-                    "    %s\n"
-                    "  数据本身可能有损坏。看残缺全貌用 `dec mojibake --best`，"
-                    "或回头找更原始的来源。\n"
-                    % (mb_enc, mb_ratio * 100, mb_bad,
-                       mb_out.replace("\ufffd", "?")[:120]))
-        print("结果：")
-        print(final)
+                    "%s\n"
+                    "  数据本身可能有损坏。使用 `dec mojibake --best` 查看完整信息。\n"
+                    % (mb_enc, mb_ratio * 100, mb_bad, body))
+            # 失败时不再打印「结果：+原文」：上面「原始：」已经完整给过，
+            # 再打一遍完全重复，还容易让人以为「结果」里有什么新东西。
         return 0
 
     if cmd == "blocks":
@@ -1989,17 +1995,17 @@ def main():
             sys.stdout.flush()
             if "(分段)" in enc:
                 sys.stderr.write(
-                    "\n  [分段还原] 按 %s 解；原文 %d 处字节缺失（标 ?）\n"
+                    "\n  [分段还原] 按 %s 解；原文 %d 处字节缺失\n"
                     % (enc.replace("(分段)", "").replace("\u2192", " 编回字节、按 "),
                        bad))
             elif "\u2192" in enc:
                 # 跨编码无损解出：enc 形如 gb18030→shift_jis
                 sys.stderr.write(
-                    "\n  [跨编码] 按 %s 解，完整无损（不是残缺数据）\n"
+                    "\n  [跨编码] 按 %s 解，完整无损\n"
                     % enc.replace("\u2192", " 编回字节、按 "))
             elif ratio > 0:
                 sys.stderr.write(
-                    "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）；? 处需要靠上下文猜\n"
+                    "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）\n"
                     % (ratio * 100, bad, enc))
             return 0
         # dec mojibake --deep [N]：反复还原直到「正常文字占比」达到 N%
@@ -2025,7 +2031,7 @@ def main():
             return 0
         fn = table.get(name)
         if not fn:
-            print("不支持的编码：%s（用 codec.py list 看全部）" % name)
+            print("不支持的编码：%s（使用 `codec.py list` 查看全部编码）" % name)
             return 2
         try:
             out = fn(text)
