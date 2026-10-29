@@ -938,7 +938,19 @@ def grid_read(path, channel=None, cols=None, rows=None, cell=None, off=None,
                     nn += 1
             vals.append(s / nn if nn else 0.0)
 
-    thr = threshold if threshold is not None else _otsu_split(vals)[0]
+    if threshold is None:
+        thr = _otsu_split(vals)[0]
+    else:
+        thr = float(threshold)
+        ones = sum(1 for v in vals if v > thr)
+        if ones == 0 or ones == len(vals):
+            # 阈值把所有格子判成同一类 = 这个结果必然是废的（界面把「留空」
+            # 发成 0 时就是这样），直接退回自动阈值并说明，别让用户对着
+            # 一整片 ### 猜哪儿错了。
+            auto = _otsu_split(vals)[0]
+            note.append("给定阈值 %g 把 %d 个格子全判成一类，已改为自动阈值 %.0f"
+                        % (threshold, len(vals), auto))
+            thr = auto
     bright = [1 if v > thr else 0 for v in vals]
 
     def bits_of(rev):

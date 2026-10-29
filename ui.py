@@ -894,7 +894,10 @@ function renderParams() {
     } else if (p.type === "int") {
       ctl = document.createElement("input");
       ctl.type = "number";
-      ctl.value = (p.default !== undefined) ? p.default : 0;
+      // 没有 default 就是「留空 = 自动」。以前这里硬填 0，于是每个数字化可选参数
+      // 都带着 0 发出去：grid 的阈值变 0（全部格子判成一类）、凯撒位移变 0
+      // （本该全爆破却只解一种）、仿射 a/b 变 0。
+      ctl.value = (p.default !== undefined) ? p.default : "";
       if (p.min !== undefined) ctl.min = p.min;
       if (p.max !== undefined) ctl.max = p.max;
     } else {
