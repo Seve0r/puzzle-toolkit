@@ -49,7 +49,8 @@ HASH_SIGNS = [
     ("sha384", 96, r"^[a-f0-9]{96}$", ""),
     ("sha512", 128, r"^[a-f0-9]{128}$", "128 位十六进制"),
     ("crc32", 8, r"^[a-f0-9]{8}$", "太短，碰撞多"),
-    ("mysql-old", 16, r"^[a-f0-9]{16}$", "MySQL 4.1 之前"),
+    ("md5-16", 16, r"^[a-f0-9]{16}$",
+     "老式「16 位 MD5」= 32 位 MD5 的第 9~24 个字符；也可能是 MySQL 4.1 之前的 hash"),
     ("bcrypt", None, r"^\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{53}$", "bcrypt"),
     ("md5crypt", None, r"^\$1\$[./A-Za-z0-9]{0,8}\$[./A-Za-z0-9]{22}$", "Linux md5crypt"),
     ("sha512crypt", None, r"^\$6\$", "Linux sha512crypt"),
@@ -74,8 +75,23 @@ def identify(h):
     for name, length, pat, note in HASH_SIGNS:
         if length is not None and len(h) != length:
             continue
-        if re.match(pat, h):
-            hits.append((name, note))
+        # ★ 必须大小写不敏感：哈希的十六进制大小写是随机的，而签名表里的
+        #   正则全是小写 `[a-f0-9]`。不加这个标志的话，`098F6BCD…` 会一路
+        #   漏到最后的 base64 规则上，表现为「大写 MD5 认不出来、小写就认得」。
+        if not re.match(pat, h, re.IGNORECASE):
+            continue
+        if name == "base64":
+            # 光看字符集不够 —— 任何十六进制串都满足 base64 的字符集，
+            # 于是每条哈希后面都跟着一条误导性的「可能就是 base64」。
+            # 解出来大部分不是可打印字符的，就不算。
+            try:
+                raw = base64.b64decode(h + "=" * (-len(h) % 4))
+                ok = sum(1 for b in raw if 32 <= b < 127 or b in b"\r\n\t")
+                if ok / max(1, len(raw)) < 0.85:
+                    continue
+            except Exception:
+                continue
+        hits.append((name, note))
     if not hits:
         # 字符集兜底
         if re.fullmatch(r"[A-Za-z0-9+/=]+", h):
