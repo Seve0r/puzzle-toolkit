@@ -166,6 +166,7 @@ python3 codec.py enc hex -f picture.png
 | 中文正常但读不通（`浜哄彧`） | `codec dec mojibake`，解完还乱就加 `--deep` |
 | 一堆生僻汉字但不像中文（`孨偼堦惗`） | `codec dec mojibake`（GBK 编的日文被当 GBK 读） |
 | 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
+| 一个数要换进制（`ff` ↔ `255`、十进制大数 ↔ hex） | `num.py` |
 | 32/40/64 位 hex | `hc identify` → `hc crack`（字典）或 `hc mask`（纯数字/已知格式） |
 | 图片 / 音频 / 压缩包 | `stego binwalk` |
 | 疑似图片藏东西 | `stego lsbscan` |
@@ -252,6 +253,29 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | `stego spec <音频> [--out 图.png]` | 生成频谱图（看隐藏的摩斯/文字） |
 | `stego grid <图片>` | 点阵图切成格子，自动测格宽/相位/阈值，输出 **0/1 点阵**（分析走 stderr），解码交给 `codec dec bin` |
 | `stego meta <文件>` | 文件类型 + 尺寸 + 熵 |
+
+### num.py —— 进制转换
+
+| 命令 | 说明 |
+|---|---|
+| `num.py <数>` | 列出 `dec` / `hex` / `bin` / `oct` 四种形式 |
+| `num.py <数> --to 16` | 转成指定进制（2..36） |
+| `num.py ff --from 16` | 指定输入进制；不给就按 `0x`/`0b`/`0o` 前缀或字面猜 |
+| `num.py <数> --pad 8` | 补零到 8 位（点阵位流 / 定长字段往返**必须**） |
+| `num.py <数> --upper` | 大写字母：`FF` |
+| `num.py <数> --prefix` | 带前缀：`0xff` |
+| `num.py -f nums.txt --to 16` | 批量，每行一个数（也可直接管道喂） |
+
+**数值视角，不做字节流编解码**——这条线要分清：
+
+| 你想要的 | 用哪个 |
+|---|---|
+| 一个数换种写法（`ff` ↔ `255`） | `num.py` |
+| 字节序列 ↔ 文本（`48656c6c6f` ↔ `Hello`） | `codec dec hex` |
+
+`codec` 里的 hex/bin/dec 是「字节流编解码」，它做不到 `255 → ff`。
+大整数直接吃（Python 的 int 没有位宽上限），`--from`/`--to` 支持 2..36
+（36 = `0-9` + `a-z`，符号用完为止；再往上属于编码，用 codec）。
 
 ### 通用选项
 
@@ -347,18 +371,23 @@ puzzle-toolkit/
   classic.py      古典密码
   hashcrypto.py   哈希与现代密码
   stego.py        文件隐写
+  num.py          进制转换（数值视角）
   data/words.txt  内置英语词表（约 1500 常用词）
   docs/
     codec.md      ← codec.py 的详细说明
     classic.md    ← classic.py
     hashcrypto.md ← hashcrypto.py
     stego.md      ← stego.py
+    num.md        ← num.py
   CHANGELOG.md    更新日志
 ```
 
 ## 依赖
 
 Python 3.8+。
+
+五个脚本里有四个是**纯标准库**（`codec` / `classic` / `hashcrypto` / `num`），
+`stego` 除 `qr` / `spec` 外也是纯标准库（PNG 内置解码器，不装 Pillow 也能读）。
 
 两个功能依赖外部命令，缺了不影响其余部分：
 
