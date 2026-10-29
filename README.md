@@ -1,7 +1,6 @@
 # puzzle-toolkit
 
-解谜时自己用的离线工具箱。四个脚本 + 一个图形界面，纯 Python 标准库，
-无第三方依赖。主要是我解 ARG 谜题时用；刚开始学这些，所以顺手写了一些操作说明。
+解谜时用的离线工具箱。
 
 ## 两种用法
 
@@ -11,7 +10,7 @@
 python3 ui.py            # 起本地服务并自动打开浏览器
 ```
 
-Windows 上直接双击 `启动界面.bat`（不弹黑框也行，用 `pythonw`）。
+Windows 上直接双击 `启动界面.bat`。
 手机想用就 `python3 ui.py --host 0.0.0.0`，同一个局域网内访问
 `http://<这台机器的IP>:8765/` —— 但**校园网/公共网络别这么开**，端口会暴露。
 
@@ -358,9 +357,9 @@ puzzle-toolkit/
 
 ## 依赖
 
-只需要 Python 3.8+。
+Python 3.8+。
 
 两个功能依赖外部命令，缺了不影响其余部分：
 
-- `stego.py qr` 需要 `zbarimg`（`apt install zbar-tools`）
+- `stego.py qr` 需要 `zbarimg`
 - `stego.py spec` 需要 `ffmpeg`
