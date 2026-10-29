@@ -1,0 +1,197 @@
+# -*- coding: utf-8 -*-
+"""界面参数表：每个「有选项」的功能在这里声明自己要什么参数。
+
+为什么单独一个文件
+------------------
+codec 的 mojibake 就有 `--best` / `--deep` / `--from` / `--to` 四个开关，
+classic 的 vigenere 要密钥、adfgx 要两个密钥、hashcrypto 的 rsa 要 n/e/c。
+如果每加一个功能就去界面代码里硬塞一组控件，界面会越来越难改。
+
+写成声明式表格之后：**加功能只改这里，界面代码一行不用动**。
+前端拿到这张表，按 type 生成对应控件。
+
+字段
+----
+key        提交给后端的字段名
+type       choice / int / text / check
+label      界面上显示的标签
+default    默认值（不填 = 不提交该字段）
+choices    type=choice 时的 [(值, 显示名), ...]
+show_if    只在另一个参数等于某值时才显示，如 {"mode": "deep"}
+hint       控件旁边的一行小字
+suffix     type=int 时的单位后缀
+
+注意
+----
+这里是**界面语言**，不是命令行参数的镜像。比如命令行有 `--best` / `--deep`
+两个互斥开关，界面上合成一个 `mode` 三选一更清楚，后端再拆回对应调用。
+"""
+
+
+# ---------------------------------------------------------------------------
+# 四个选项卡。codec 的「功能」就是编码名（由 codec.py 的注册表来），
+# 其余三个的「功能」是脚本的子命令，得在这里列。
+#
+#   input = "text"  普通文本框（classic / hashcrypto）
+#   input = "file"  只能选文件（stego 要原始字节，当文本读会损坏数据）
+# ---------------------------------------------------------------------------
+TABS = [
+    {"id": "codec", "label": "编码", "input": "text", "kind": "encoding"},
+    {
+        "id": "classic", "label": "古典密码", "input": "text",
+        "actions": [
+            {"name": "caesar", "label": "凯撒（不给位移就全爆破）"},
+            {"name": "vigenere", "label": "维吉尼亚"},
+            {"name": "vigcrack", "label": "维吉尼亚 · 无密钥破解"},
+            {"name": "affine", "label": "仿射（不给参数就全爆破）"},
+            {"name": "sub", "label": "单表替换 · 爬山法破解"},
+            {"name": "bacon", "label": "培根"},
+            {"name": "railfence", "label": "栅栏"},
+            {"name": "columnar", "label": "列置换"},
+            {"name": "atbash", "label": "Atbash"},
+            {"name": "a1z26", "label": "A1Z26"},
+            {"name": "polybius", "label": "波利比奥斯"},
+            {"name": "playfair", "label": "普莱菲尔"},
+            {"name": "adfgx", "label": "ADFGX"},
+            {"name": "keyboard", "label": "键盘错位"},
+            {"name": "t9", "label": "手机九宫格 T9"},
+            {"name": "auto", "label": "全部试一遍"},
+        ],
+    },
+    {
+        "id": "hashcrypto", "label": "哈希 / 现代密码", "input": "text",
+        "actions": [
+            {"name": "identify", "label": "识别哈希类型"},
+            {"name": "crack", "label": "字典爆破"},
+            {"name": "xor", "label": "XOR（单字节 / 指定密钥）"},
+            {"name": "repeat-xor", "label": "重复密钥 XOR 自动检测"},
+            {"name": "aes", "label": "AES 加解密"},
+            {"name": "rc4", "label": "RC4"},
+            {"name": "rsa", "label": "RSA 解密与攻击"},
+            {"name": "jwt", "label": "JWT 解析 / 爆破"},
+        ],
+    },
+    {
+        "id": "stego", "label": "隐写取证", "input": "file",
+        "actions": [
+            {"name": "binwalk", "label": "扫描内嵌文件"},
+            {"name": "tail", "label": "文件尾附加数据"},
+            {"name": "strings", "label": "可打印字符串"},
+            {"name": "lsb", "label": "LSB 逐通道提取"},
+            {"name": "lsbscan", "label": "LSB 彻底扫描"},
+            {"name": "exif", "label": "元数据"},
+            {"name": "pngchunks", "label": "PNG 块"},
+            {"name": "zipinfo", "label": "ZIP 结构"},
+            {"name": "unzip", "label": "解压"},
+            {"name": "hexdump", "label": "十六进制查看"},
+            {"name": "qr", "label": "二维码 / 条码"},
+            {"name": "spec", "label": "音频频谱图"},
+            {"name": "meta", "label": "文件类型与熵"},
+        ],
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# 各功能的参数表，键是 "选项卡/功能"（codec 直接用编码名）。
+# ---------------------------------------------------------------------------
+PARAMS = {
+    "mojibake": [
+        {
+            "key": "mode", "type": "choice", "label": "还原模式",
+            "default": "normal",
+            "choices": [
+                ("normal", "普通（损失 ≤2% 才认）"),
+                ("best", "最佳猜测 --best"),
+                ("deep", "多层还原 --deep"),
+            ],
+        },
+        {
+            "key": "deep", "type": "int", "label": "可读率阈值",
+            "default": 50, "min": 0, "max": 100, "suffix": "%",
+            "show_if": {"mode": "deep"},
+            "hint": "反复剥皮直到正常文字占比达到这个值",
+        },
+        {
+            "key": "from", "type": "text", "label": "源编码",
+            "placeholder": "如 gbk / shift_jis",
+            "hint": "当初「把字节解成乱码」用的那个编码",
+        },
+        {
+            "key": "to", "type": "text", "label": "目标编码",
+            "placeholder": "如 utf-8 / gbk",
+            "hint": "当初「把文字编成字节」用的那个编码。两个都填就不猜了",
+        },
+    ],
+    # ---------------- classic ----------------
+    "classic/caesar": [
+        {"key": "key", "type": "int", "label": "位移", "min": -25, "max": 25,
+         "hint": "不填就 26 种全爆破"},
+    ],
+    "classic/vigenere": [
+        {"key": "key", "type": "text", "label": "密钥", "placeholder": "如 LIME"},
+    ],
+    "classic/affine": [
+        {"key": "a", "type": "int", "label": "a", "hint": "与 26 互质；不填就 312 种全爆破"},
+        {"key": "b", "type": "int", "label": "b"},
+    ],
+    "classic/bacon": [
+        {"key": "old", "type": "check", "label": "旧式 24 字母（I/J、U/V 合并）"},
+    ],
+    "classic/railfence": [
+        {"key": "rails", "type": "int", "label": "栏数", "hint": "不填就全爆破"},
+    ],
+    "classic/columnar": [
+        {"key": "key", "type": "text", "label": "关键词", "hint": "不填就按长度爆破"},
+    ],
+    "classic/a1z26": [
+        {"key": "dec", "type": "check", "label": "数字 → 字母", "default": True,
+         "hint": "取消勾选则是字母 → 数字"},
+    ],
+    "classic/polybius": [
+        {"key": "dec", "type": "check", "label": "坐标 → 字母", "default": True},
+    ],
+    "classic/playfair": [
+        {"key": "key", "type": "text", "label": "关键词", "placeholder": "如 MONARCHY"},
+        {"key": "enc", "type": "check", "label": "加密方向"},
+        {"key": "clean", "type": "check", "label": "去掉填充的 X"},
+    ],
+    "classic/adfgx": [
+        {"key": "key", "type": "text", "label": "方阵关键词"},
+        {"key": "trans", "type": "text", "label": "转置关键词"},
+    ],
+    "classic/keyboard": [
+        {"key": "layout", "type": "choice", "label": "布局", "default": "qwerty",
+         "choices": [("qwerty", "QWERTY"), ("dvorak", "Dvorak"), ("azerty", "AZERTY")]},
+        {"key": "shift", "type": "choice", "label": "方向", "default": "-1",
+         "choices": [("-1", "往左还原"), ("1", "往右还原")]},
+    ],
+
+    # ---------------- hashcrypto ----------------
+    "hashcrypto/crack": [
+        {"key": "algo", "type": "text", "label": "算法", "placeholder": "不填自动识别"},
+        {"key": "rules", "type": "check", "label": "启用变形规则（大小写/加数字后缀）"},
+    ],
+    "hashcrypto/xor": [
+        {"key": "key", "type": "text", "label": "密钥 hex", "placeholder": "如 2A",
+         "hint": "留空则单字节全试并排序"},
+    ],
+    "hashcrypto/aes": [
+        {"key": "key", "type": "text", "label": "key (hex)"},
+        {"key": "iv", "type": "text", "label": "iv (hex)"},
+        {"key": "mode", "type": "choice", "label": "模式", "default": "cbc",
+         "choices": [("cbc", "CBC"), ("ecb", "ECB"), ("ctr", "CTR"), ("gcm", "GCM")]},
+        {"key": "enc", "type": "check", "label": "加密方向"},
+    ],
+    "hashcrypto/rc4": [
+        {"key": "key", "type": "text", "label": "密钥", "hint": "普通文本，不是 hex"},
+    ],
+    "hashcrypto/rsa": [
+        {"key": "n", "type": "text", "label": "n"},
+        {"key": "e", "type": "text", "label": "e"},
+        {"key": "c", "type": "text", "label": "密文 c", "hint": "十进制；不填就只做分解攻击"},
+    ],
+    "hashcrypto/jwt": [
+        {"key": "crack", "type": "check", "label": "尝试爆破 HS256 密钥"},
+    ],
+}
