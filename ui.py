@@ -39,7 +39,50 @@ import codec       # noqa: E402  必须在本文件同目录
 import classic     # noqa: E402
 import hashcrypto  # noqa: E402
 import stego       # noqa: E402
+import num         # noqa: E402
 import ui_params   # noqa: E402  参数表也在这里
+
+
+# ---------------------------------------------------------------- 进制面板
+
+def _run_num(payload):
+    """一个数 → 2..36 的全部写法。
+
+    只取**第一个非空行**：35 行结果已经够占地方，多值叠起来就没法看了；
+    批量转换去命令行（`num.py -f 文件`）。多行时会明说只转了第一个。
+    """
+    text = payload.get("text") or ""
+    params = payload.get("params") or {}
+    frm = params.get("from")
+    base_from = None
+    if frm not in (None, "", "auto"):
+        try:
+            base_from = int(frm)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "输入进制要是 2..36"}
+        if not (2 <= base_from <= 36):
+            return {"ok": False, "error": "输入进制要是 2..36"}
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return {"ok": False, "error": "先输入一个数"}
+    tok = lines[0]
+    try:
+        n, used, auto = num.parse_num(tok, base_from)
+    except ValueError as e:
+        return {"ok": False, "error": "解析不了 %r：%s" % (tok, e)}
+
+    note = ""
+    if len(lines) > 1:
+        note = "只转换了第一个数（%s）；批量请用命令行 num.py -f" % tok
+    if auto and used == 10:
+        body = tok.lstrip("+-").lower()
+        if len(body) >= 8 and len(body) % 8 == 0 and set(body) <= {"0", "1"}:
+            tip = "看着像二进制串，要按二进制算请把「输入进制」选成二进制"
+            note = tip + ("　" + note if note else "")
+    return {"ok": True, "token": tok, "src": used, "auto": auto,
+            "pairs": [[b, num.to_base(n, b)] for b in range(2, 37)],
+            "note": note}
 
 
 # ---------------------------------------------------------------- 后端逻辑
@@ -310,6 +353,9 @@ def run_action(payload):
     name = (payload.get("name") or "").strip()
     tab = (payload.get("tab") or "codec").strip()
 
+    if tab == "num":
+        return _run_num(payload)
+
     if tab == "stego":
         return _run_stego(action, payload.get("params") or {}, payload)
 
@@ -498,14 +544,15 @@ PAGE = r"""<!DOCTYPE html>
   nav button.active { color:var(--accent); border-bottom-color:var(--accent); }
   nav button:hover { color:var(--fg); }
   /* codec 专属按钮 / 其他选项卡的「执行」按钮互斥显示 */
-  .codec-only { display:inline-flex; }
-  .not-codec { display:none; }
-  body[data-tab="classic"] .codec-only,
-  body[data-tab="hashcrypto"] .codec-only,
-  body[data-tab="stego"] .codec-only { display:none !important; }
-  body[data-tab="classic"] .not-codec,
-  body[data-tab="hashcrypto"] .not-codec,
-  body[data-tab="stego"] .not-codec { display:inline-flex; }
+  /* 只有「编码」页才显示那些按钮；其余选项卡一律隐藏。
+     反过来写（默认显示、逐个 tab 关掉）会漏：加「进制」时就忘了补一行。 */
+  .codec-only { display:none; }
+  .not-codec { display:inline-flex; }
+  body[data-tab="codec"] .codec-only { display:inline-flex; }
+  body[data-tab="codec"] .not-codec { display:none; }
+  /* 进制页是实时转换的，不需要「执行」；功能下拉也只有「转换」一项 */
+  body[data-tab="num"] #btn-run,
+  body[data-tab="num"] #enc { display:none; }
 
   .bar {
     display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -565,6 +612,30 @@ PAGE = r"""<!DOCTYPE html>
   }
   #output { background:#15181d; }
 
+  /* ---- 进制面板：每行一个进制，值单独放在可复制的输入框里 ---- */
+  #numout {
+    display:none; flex:1; min-height:0; overflow:auto;
+    border:1px solid var(--line); border-radius:5px; background:#15181d;
+    padding:4px 2px;
+  }
+  body[data-tab="num"] #numout { display:block; }
+  body[data-tab="num"] #output { display:none; }
+  .numrow { display:flex; align-items:center; padding:0 4px; }
+  .numrow .numbase {
+    flex:0 0 54px; width:54px; text-align:right; color:var(--dim);
+    font-size:12px; user-select:none;
+    font-family:ui-monospace,Consolas,monospace;
+  }
+  .numrow.fav .numbase { color:var(--accent); font-weight:600; }
+  .numrow .numval {
+    flex:1; min-width:0; margin-left:6px; background:transparent;
+    border:1px solid transparent; border-radius:3px; color:var(--fg);
+    font-family:ui-monospace,Consolas,monospace; font-size:13px;
+    padding:1px 6px;
+  }
+  .numrow .numval:hover { border-color:var(--line); }
+  .numrow .numval:focus { outline:none; border-color:var(--accent); background:#1d222b; }
+
   .filrow { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; }
   .filrow input[type=file] { color:var(--dim); font-size:12px; max-width:210px; }
   .filrow .hint { color:var(--dim); }
@@ -614,7 +685,7 @@ PAGE = r"""<!DOCTYPE html>
   .meta { color:var(--dim); font-size:12px; margin-left:8px; }
 </style>
 </head>
-<body>
+<body data-tab="codec">
 <header>
   <h1>puzzle-toolkit <span>本地离线 · 只 import 现有脚本</span></h1>
   <nav id="tabs">
@@ -654,6 +725,7 @@ PAGE = r"""<!DOCTYPE html>
     <div id="cands"></div>
     <textarea id="output" readonly spellcheck="false"
               placeholder="结果显示在这里。点候选里的任意一行可以把它填到输入框。"></textarea>
+    <div id="numout"></div>
     <div id="preview"></div>
   </div>
 </main>
@@ -692,6 +764,7 @@ async function loadList() {
     TABS = data.tabs || [];
     if (!TABS.length)
       throw new Error(data.warning || "ui_params.py 是本目录下的旧版本");
+    renderTabs();
     fillFuncs();
   } catch (e) {
     say("加载功能列表失败：" + e.message +
@@ -1022,10 +1095,12 @@ function switchTab(id) {
     : "把密文粘到这里，或从下面选一个文件…";
   say("已切到「" + (tabDef().label || id) + "」" +
       (needFile ? "　→ 请先选择一个文件" : ""), needFile ? "warn" : "");
+  if (id === "num") doNum();
 }
 
 // classic / hashcrypto / stego 的执行入口：参数由参数表收集，原样交给后端
 async function doRun() {
+  if (currentTab === "num") return doNum();
   const payload = {
     tab: currentTab,
     action: encSel.value,
@@ -1053,9 +1128,58 @@ async function doRun() {
   }
 }
 
-document.querySelectorAll("#tabs button").forEach(b => {
-  b.onclick = () => switchTab(b.dataset.tab);
-});
+// 进制面板：一个数 → 2..36 全部写法。每行一个只读输入框，
+// 点一下全选、Ctrl+C 就能只复制那一项。
+let numTimer = null;
+async function doNum() {
+  const box = $("numout");
+  if (!input.value.trim()) {
+    box.innerHTML = "";
+    $("outmeta").textContent = "";
+    say("输入一个数，下面会列出它 2..36 的全部写法；" +
+        "原文不是十进制就在上方「按几进制读」里选", "");
+    return;
+  }
+  const res = await call({
+    tab: "num", action: "convert", text: input.value, params: paramValues(),
+  });
+  box.innerHTML = "";
+  $("outmeta").textContent = "";
+  if (!res.ok) { say(res.error || "转换失败", "err"); return; }
+  const fav = { 2: "bin", 8: "oct", 10: "dec", 16: "hex" };
+  for (const [b, s] of res.pairs) {
+    const row = document.createElement("div");
+    row.className = "numrow" + (fav[b] ? " fav" : "");
+    const lab = document.createElement("span");
+    lab.className = "numbase";
+    lab.textContent = fav[b] || ("b" + b);
+    const v = document.createElement("input");
+    v.className = "numval";
+    v.readOnly = true;
+    v.value = s;
+    v.title = "点一下全选，Ctrl+C 只复制这一项";
+    v.addEventListener("click", () => v.select());
+    row.appendChild(lab);
+    row.appendChild(v);
+    box.appendChild(row);
+  }
+  if (res.note) say(res.note, "warn");
+  else say("「" + res.token + "」按 " + res.src + " 进制读　→　2..36 共 35 行", "ok");
+}
+
+// 选项卡按钮从 TABS 生成，不写死在 HTML 里 —— 写死过一次，结果后端加了
+// 「进制」tab、/api/list 也返回了，界面却还是四个按钮（nav 里没加）。
+function renderTabs() {
+  const nav = $("tabs");
+  nav.innerHTML = "";
+  for (const t of TABS) {
+    const b = document.createElement("button");
+    b.dataset.tab = t.id;
+    b.textContent = t.label || t.id;
+    b.onclick = () => switchTab(t.id);
+    nav.appendChild(b);
+  }
+}
 
 $("btn-auto").onclick = doAuto;
 $("btn-struct").onclick = doStruct;
@@ -1064,10 +1188,22 @@ $("btn-decode").onclick = () => doDecodeOrEncode("decode");
 $("btn-encode").onclick = () => doDecodeOrEncode("encode");
 $("btn-run").onclick = doRun;
 
+// 参数控件是每次切换功能时重建的，所以事件挂在容器上做委托。
+// 进制页改「按几进制读」后必须立刻重算——之前只绑了输入框的 input 事件，
+// 改下拉没反应，得在输入框里敲一下才会刷。
+$("params").addEventListener("change", () => {
+  if (currentTab === "num") doNum();
+});
+
 search.oninput = fillFuncs;
 encSel.onchange = renderParams;
 
 input.addEventListener("input", updateMeta);
+input.addEventListener("input", () => {
+  if (currentTab !== "num") return;
+  clearTimeout(numTimer);
+  numTimer = setTimeout(doNum, 300);
+});
 input.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); doAuto(); }
 });
