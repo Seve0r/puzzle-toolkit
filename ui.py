@@ -203,7 +203,17 @@ def _run_stego(action, params, payload):
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(raw)
-        return _run_subcommand(stego, action, params, path)
+        res = _run_subcommand(stego, action, params, path)
+        # spec 会生成 PNG 但只把路径 print 出来，界面拿到一串文字没意义。
+        # 顺手把图读成 base64 一起返回，前端直接 <img> 显示。
+        if action == "spec" and res.get("ok"):
+            out_path = (res.get("result") or "").strip().splitlines()
+            out_path = out_path[-1].strip() if out_path else ""
+            if out_path and os.path.isfile(out_path):
+                with open(out_path, "rb") as f:
+                    res["image_b64"] = base64.b64encode(f.read()).decode()
+                res["image_name"] = os.path.basename(out_path)
+        return res
     finally:
         try:
             os.unlink(path)
@@ -248,7 +258,7 @@ def _run_mojibake(text, payload, log):
     if payload.get("best"):
         out, ratio, bad, enc = codec.mojibake_best(text)
         if ratio > 0:
-            log.write("损失 %.1f%%（%d 处缺失，假设 %s）；? 处需要靠上下文猜"
+            log.write("损失 %.1f%%（%d 处缺失，假设 %s）"
                       % (ratio * 100, bad, enc))
         else:
             log.write("按 %s 还原，完整无损" % enc)
@@ -551,6 +561,25 @@ PAGE = r"""<!DOCTYPE html>
   .filrow input[type=file] { color:var(--dim); font-size:12px; max-width:210px; }
   .filrow .hint { color:var(--dim); }
 
+  /* 频谱图预览：有图时替换掉文本框（图需要空间，一行字没必要留着） */
+  #preview {
+    display:none; flex:1; min-height:0; align-items:center;
+    justify-content:center; overflow:auto; background:#0d0f13;
+    border:1px solid var(--line); border-radius:5px;
+  }
+  #preview.on { display:flex; }
+  #preview img {
+    max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in;
+  }
+  #preview .hintbar {
+    position:absolute; bottom:6px; right:10px; font-size:11px;
+    color:var(--dim); background:rgba(13,15,19,.85); padding:2px 7px;
+    border-radius:3px;
+  }
+  #preview .wrap { position:relative; display:flex; align-items:center;
+                   justify-content:center; width:100%; height:100%; }
+  body.img-on #output { display:none; }
+
   #cands { display:none; margin-bottom:8px; max-height:32%; overflow:auto;
            border:1px solid var(--line); border-radius:5px; }
   #cands.on { display:block; }
@@ -617,6 +646,7 @@ PAGE = r"""<!DOCTYPE html>
     <div id="cands"></div>
     <textarea id="output" readonly spellcheck="false"
               placeholder="结果显示在这里。点候选里的任意一行可以把它填到输入框。"></textarea>
+    <div id="preview"></div>
   </div>
 </main>
 
@@ -733,6 +763,34 @@ function showLog(res) {
   if (parts.length) say(parts.join("\n"));
 }
 
+// 图片预览：stego 的 spec 会产出 PNG，后端转成 base64 一起返回
+function showImage(b64, name) {
+  const box = $("preview");
+  box.innerHTML = "";
+  const on = !!b64;
+  box.classList.toggle("on", on);
+  document.body.classList.toggle("img-on", on);
+  if (!on) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  const img = document.createElement("img");
+  img.src = "data:image/png;base64," + b64;
+  img.alt = name || "频谱图";
+  img.onclick = () => {                    // 点一下开新标签看原尺寸
+    const w = window.open();
+    if (w) w.document.write('<title>' + (name || "频谱图") +
+      '</title><body style="margin:0;background:#111"><img src="' + img.src +
+      '" style="max-width:100%">');
+  };
+  wrap.appendChild(img);
+  const bar = document.createElement("div");
+  bar.className = "hintbar";
+  bar.textContent = (name || "spectrum.png") + "　点击图片可放大";
+  wrap.appendChild(bar);
+  box.appendChild(wrap);
+}
+
 function renderCandidates(list) {
   cands.innerHTML = "";
   if (!list || !list.length) { cands.classList.remove("on"); return; }
@@ -763,6 +821,7 @@ function renderCandidates(list) {
 }
 
 async function doAuto() {
+  showImage(null);
   const res = await call({ action: "auto", text: input.value });
   renderCandidates([]);
   if (!res.ok) { output.value = ""; say("失败：" + res.error, "err"); return; }
@@ -776,10 +835,10 @@ async function doAuto() {
   // 但一定要标清楚这不是可信结果。
   if (res.partial) {
     output.value = res.partial;
-    $("outmeta").textContent = "疑似 · 不可全信";
+    $("outmeta").textContent = "疑似";
     say((res.partial_note || "自动识别把握不大") +
-        "——已填进结果区，? 处是丢失的字节。" +
-        "\n想更确定就把编码切到 mojibake，再用「最佳猜测」模式跑一次。", "warn");
+        "\n? 处是丢失的字节。" +
+        "\n建议使用 mojibake 模式的「最佳猜测」。", "warn");
     return;
   }
   output.value = "";
@@ -788,6 +847,7 @@ async function doAuto() {
 }
 
 async function doStruct() {
+  showImage(null);
   const res = await call({ action: "struct", text: input.value });
   renderCandidates([]);
   if (!res.ok) { say("失败：" + res.error, "err"); return; }
@@ -799,11 +859,7 @@ async function doStruct() {
   // 结构匹配到的只写名字；兜底猜出来的那条带「损失 X%」说明
   const lines = list.map(c => c.out ? `${c.name}　${c.out}` : c.name);
   const guessed = list.some(c => c.out);
-  say("结构识别结果：\n  " + lines.join("\n  ") +
-      (guessed
-        ? "\n（这条是猜的，不是结构匹配。点「解码」或「自动识别」才会真正解）"
-        : "\n（这只是「像什么」，点上面的按钮才会真正解码）"),
-      guessed ? "warn" : "");
+  say("结构识别结果：\n  " + lines.join("\n  "), guessed ? "warn" : "");
 }
 
 // ---- 参数区：完全由 ui_params.py 的声明驱动，这里不认识任何具体功能 ----
@@ -896,6 +952,7 @@ function paramValues() {
 }
 
 async function doDecodeOrEncode(dir) {
+  showImage(null);
   const payload = { action: dir, name: encSel.value, text: input.value };
   const pv = paramValues();
   // mode 是界面上的合成概念，拆回后端认识的 best / deep
@@ -908,10 +965,9 @@ async function doDecodeOrEncode(dir) {
   renderCandidates([]);
   if (!res.ok) {
     if (res.partial) {
-      // 解不动，但解码器在错误消息里其实给了最佳猜测：填进结果区，
-      // 并且明确标成「不可全信」，别让它看起来像是解对了。
+      // 解不动，但解码器在错误消息里其实给了最佳猜测：填进结果区。
       output.value = res.partial;
-      $("outmeta").textContent = "最佳猜测 · 不可全信";
+      $("outmeta").textContent = "最佳猜测";
       say(res.error, "warn");
     } else {
       output.value = "";
@@ -929,6 +985,7 @@ async function doDecodeOrEncode(dir) {
 }
 
 async function doBrute() {
+  showImage(null);
   const res = await call({ action: "brute", text: input.value });
   if (!res.ok) { say("失败：" + res.error, "err"); return; }
   const list = res.candidates || [];
@@ -972,6 +1029,7 @@ async function doRun() {
   renderCandidates([]);
   output.value = res.result || "";
   $("outmeta").textContent = "";
+  showImage(res.image_b64 || null, res.image_name);   // 非 spec 时这会把图清掉
   if (res.ok) {
     say((encSel.selectedOptions[0]?.textContent || encSel.value) + "　完成", "ok");
   } else {
