@@ -955,10 +955,15 @@ def main():
             die("缺少哈希")
         h = rest[0].strip()
         a, w = crack(h, algo, wordlist, rules)
+        # stdout 只留答案，识别出的算法等判断依据走 stderr（界面放底部提示条）
         if a:
-            print("破解成功：%s = %s" % (a, w))
+            if not quiet:
+                sys.stderr.write("算法：%s\n" % a)
+            print(w)
         else:
-            print("没在字典里找到（试过 %s）" % (algo or "自动识别的算法"))
+            if not quiet:
+                sys.stderr.write("试过：%s\n" % (algo or "自动识别的算法"))
+            print("没在字典里找到")
         return 0
 
     if cmd == "mask":
@@ -994,14 +999,21 @@ def main():
             print("失败：%s" % e)
             return 1
         if not hit:
-            print("没找到（掩码 %s，算法 %s，用时 %.1f 秒）" % (mask, algo, dt))
+            # 没找到也是「结果」，但参数和耗时是过程，别塞进结果框
+            if not quiet:
+                sys.stderr.write("没找到（掩码 %s，算法 %s，用时 %.1f 秒）\n"
+                                 % (mask, algo, dt))
+            print("没找到")
             return 1
         cand, full = hit
-        print("找到：%s" % cand)
-        print("  %s(%s) = %s" % (algo, cand, full))
-        if len(target) == 16:
-            print("  目标只有 16 位，比对的是中间 16 位：%s" % full[8:24])
-        print("  用时 %.2f 秒" % dt)
+        # 只留明文。哈希验证、截断说明、耗时全是过程信息，走 stderr。
+        if not quiet:
+            w = sys.stderr.write
+            w("%s(%s) = %s\n" % (algo, cand, full))
+            if len(target) == 16:
+                w("目标只有 16 位，比对的是中间 16 位：%s\n" % full[8:24])
+            w("用时 %.2f 秒\n" % dt)
+        print(cand)
         return 0
 
     if cmd == "xor":
@@ -1028,7 +1040,7 @@ def main():
         if quiet:
             print(rows[0][2].decode("utf-8", "replace"))
             return 0
-        print("单字节 XOR 前 10：")
+        sys.stderr.write("单字节 XOR 前 10\n")
         for sc, k, out in rows[:10]:
             print("  key=0x%02x %6.2f  %r" % (k, sc, out[:70]))
         # --help 里承诺了「多字节自动」，但这里原先直接 return 了，实际只做单字节。
@@ -1039,7 +1051,7 @@ def main():
         if best_single < 4.0 and len(data) >= 32:
             multi = xor_repeat_detect(data)
             if multi and multi[0][0] > best_single + 0.3:
-                print("\n多字节重复密钥 XOR（单字节解不成立，自动延伸）：")
+                sys.stderr.write("多字节重复密钥 XOR（单字节解不成立，自动延伸）\n")
                 for sc, k, out in multi[:5]:
                     print("  key=%-16r %6.2f" % (k, sc))
                     print("    %r" % out[:100])

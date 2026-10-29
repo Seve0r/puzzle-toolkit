@@ -317,6 +317,15 @@
     `stego.py grid x.png | codec.py dec bin -f /dev/stdin`（或 `codec.py auto`）。
   - 极性（`0`/`1` 对应深色还是浅色）仍在内部试一次，但只用来选默认、不输出文本；
     两种都解不出就按默认并在 stderr 提示可以加 `--invert`。
+- **继续收拢「只留答案」**：破解/爆破类命令的结果框里不再夹带验证信息。
+  - `hashcrypto mask` 找到时 stdout 只有明文本身（`41190183`），哈希验证、
+    16 位截断说明、耗时全走 stderr；没找到时 stdout 只说「没找到」，
+    掩码/算法/耗时走 stderr。
+  - `hashcrypto crack` 只输出明文，识别出的算法走 stderr。
+  - `hashcrypto xor`、`stego binwalk`、`stego zipinfo`，以及 `classic` 的
+    凯撒/仿射/栅栏爆破，把「单字节 XOR 前 10」「特征扫描（N 字节）」
+    「条目 N 个」「凯撒爆破（按契合度）」这类标题和统计挪到 stderr。
+    `binwalk` 没扫到特征时 stdout 不再空白一片，明说「没有识别到内嵌文件特征」。
 - mojibake 的输出排版：最佳猜测另起一行、逐行缩进四格，避免结果本身带换行时
   把缩进冲掉、和报错文字挤在一起；`--best` 的损失率提示改到结果之后，
   并 flush stdout 保证顺序。

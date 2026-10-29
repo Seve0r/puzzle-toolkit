@@ -1130,7 +1130,11 @@ def main():
                 for off, name in hits:
                     print("%d %s" % (off, name))
                 return 0
-            print("特征扫描（%d 字节）：" % len(data))
+            # 带字节数的标题是统计、不是结果，走 stderr（界面放底部提示条）
+            sys.stderr.write("特征扫描（%d 字节）\n" % len(data))
+            if not hits:
+                print("没有识别到内嵌文件特征")
+                return 0
             for off, name in hits:
                 print("  0x%08x  %s" % (off, name))
             return 0
@@ -1207,7 +1211,7 @@ def main():
         if cmd == "zipinfo":
             data = read(path)
             ents = zip_entries(data)
-            print("条目 %d 个：" % len(ents))
+            sys.stderr.write("条目 %d 个\n" % len(ents))
             for e in ents:
                 enc = "  加密" if e["encrypted"] else ""
                 print("  %-40s %8d → %8d  method=%d%s"

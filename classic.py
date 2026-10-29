@@ -1100,7 +1100,7 @@ def main():
                 for k, out in rows:
                     print(out)
             else:
-                print("凯撒爆破（按契合度）：")
+                sys.stderr.write("凯撒爆破（按契合度）\n")
                 for k, out in rows[:top]:
                     print("  k=%-2d  %s" % (k, out))
             return 0
@@ -1129,7 +1129,7 @@ def main():
                 for r in rows:
                     print(r[-1])
             elif brute:
-                print("仿射爆破：")
+                sys.stderr.write("仿射爆破\n")
                 for a, b, out in rows:
                     print("  a=%-2d b=%-2d  %s" % (a, b, out))
             else:
@@ -1167,7 +1167,7 @@ def main():
             elif rails:
                 print(rows[0][1])
             else:
-                print("栅栏爆破：")
+                sys.stderr.write("栅栏爆破\n")
                 for r, out in rows:
                     print("  %-2d 栏  %s" % (r, out))
             return 0
