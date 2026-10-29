@@ -16,7 +16,8 @@
   hexdump <file> [-l N]       十六进制查看
   qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试）
   spec <audio> [--out a.png]  ffmpeg 生成频谱图（看隐藏的摩斯/文字）
-  grid <image>                点阵图切成格子读 bit 流，自动拼字节并猜文本编码
+  grid <image>                点阵图切成格子，输出 0/1 点阵（网格参数等分析走 stderr）
+                              解码交给 codec：stego.py grid x.png | codec.py dec bin
                               （自动测格宽/相位/阈值；--cell/--off/--cols/--rows 可覆盖）
   meta <file>                 文件类型 + 尺寸 + 熵
 
@@ -1012,40 +1013,37 @@ def grid_read(path, channel=None, cols=None, rows=None, cell=None, off=None,
 
 
 def print_grid(res, quiet=False):
-    if not quiet:
-        print("图片 %dx%d，用 %s 通道" % (res["w"], res["h"], res["channel"].upper()))
-        for line in res["note"]:
-            print("  " + line)
-        print("格子 %d 列 x %d 行，阈值 %.0f，%s" % (
-            res["cols"], res["rows"], res["threshold"],
-            "深色=1" if res["invert"] else "亮色=1"))
+    """stdout 只给 0/1 点阵，分析全部走 stderr。
+
+    两条硬约束：
+    - **行号绝对不能加**。`codec.py dec bin` 用 `re.sub(r"[^01]", "", s)` 取位，
+      行号里的数字会被当成二进制位，整份数据从此错位。
+    - 解码不在这里做。0/1 原样交给 codec（`codec.py dec bin` 或 `auto`），
+      让「图 → 位流」和「位流 → 文本」各归各的，出问题也容易定位。
+    """
     nc = res["cols"]
-    print()
+    lines = []
     for r in range(res["rows"]):
-        line = "".join("#" if b else "." for b in res["bits"][r * nc:(r + 1) * nc])
-        print("  %2d %s" % (r, line))
-    print()
-    print("位流 %d 位 = %d 字节（按%s读取）" % (
-        res["nbits"], res["nbits"] // 8, "列" if res["order"] == "col" else "行"))
-    if res["nbits"] % 8:
-        print("  注意：%d 位凑不满整字节，末尾 %d 位被丢掉" % (
-            res["nbits"], res["nbits"] % 8))
-    raw = res["raw"]
-    if raw:
-        print()
-        for i in range(0, len(raw), 16):
-            chunk = raw[i:i + 16]
-            print("  %04x  %-47s  %s" % (
-                i, " ".join("%02x" % b for b in chunk),
-                "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)))
-    if res["decode"]:
-        enc, text = res["decode"]
-        print()
-        print("解出文本（%s）：" % enc)
-        print("  " + text)
-    elif raw:
-        print()
-        print("  （不像可读文本；再换 --order / 阈值 / 通道 试试）")
+        lines.append("".join("1" if b else "0"
+                             for b in res["bits"][r * nc:(r + 1) * nc]))
+    if not quiet:
+        w = sys.stderr.write
+        w("图片 %dx%d，用 %s 通道\n" % (res["w"], res["h"], res["channel"].upper()))
+        for line in res["note"]:
+            w("  " + line + "\n")
+        w("格子 %d 列 x %d 行，阈值 %.0f，极性：%s\n" % (
+            res["cols"], res["rows"], res["threshold"],
+            "深色=1" if res["invert"] else "浅色=1"))
+        w("位流 %d 位（按%s读取），整段复制给 codec：`codec.py dec bin` 或 `auto`\n" % (
+            res["nbits"], "列" if res["order"] == "col" else "行"))
+        if res["nbits"] % 8:
+            w("  注意：%d 位凑不满整字节，末尾 %d 位会被丢掉\n" % (
+                res["nbits"], res["nbits"] % 8))
+        if res["decode"]:
+            w("  极性是试出来的：反向的话解不出可读文本。想看解码结果直接用 codec。\n")
+        else:
+            w("  两种极性都解不出可读文本；解不动就加 --invert 再试一次。\n")
+    print("\n".join(lines))
 
 
 # ---------------------------------------------------------------- 杂项

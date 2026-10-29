@@ -164,25 +164,31 @@ def _run_subcommand(module, action, params, operand, extra=None):
     if extra:
         argv += list(extra)
 
-    buf = io.StringIO()
+    # stdout 和 stderr 分开收：脚本按约定「结果走 stdout、分析走 stderr」，
+    # 界面上前者进结果框、后者进底部提示条。混在一起收的话，用户对着结果框
+    # 里那堆网格参数/得分/路径，根本挑不出哪一行才是答案。
+    out_buf = io.StringIO()
+    err_buf = io.StringIO()
     old_argv = sys.argv
     code = 0
     try:
         sys.argv = [module.__name__ + ".py"] + argv
-        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
             try:
                 module.main()
             except SystemExit as e:
                 code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
             except Exception as e:          # 脚本没接住的异常，别让界面白屏
-                buf.write("\n执行出错：%s: %s" % (type(e).__name__, e))
+                err_buf.write("\n执行出错：%s: %s" % (type(e).__name__, e))
                 code = 1
     finally:
         sys.argv = old_argv
 
-    out = buf.getvalue().rstrip("\n")
-    return {"ok": code == 0, "result": out,
-            "error": "" if code == 0 else (out.splitlines()[-1] if out else "执行失败")}
+    out = out_buf.getvalue().rstrip("\n")
+    notes = err_buf.getvalue().rstrip("\n")
+    both = out or notes
+    return {"ok": code == 0, "result": out, "log": notes,
+            "error": "" if code == 0 else (both.splitlines()[-1] if both else "执行失败")}
 
 
 def _run_stego(action, params, payload):
@@ -1035,10 +1041,15 @@ async function doRun() {
   output.value = res.result || "";
   $("outmeta").textContent = "";
   showImage(res.image_b64 || null, res.image_name);   // 非 spec 时这会把图清掉
-  if (res.ok) {
-    say((encSel.selectedOptions[0]?.textContent || encSel.value) + "　完成", "ok");
+  // 脚本的分析走 stderr、被后端收进 res.log，显示在底部提示条，
+  // 结果框里只留结果。
+  const notes = (res.log || "").trim();
+  if (!res.ok) {
+    say(notes ? (res.error || "执行出错") + "\n\n" + notes : (res.error || "执行出错"), "err");
+  } else if (notes) {
+    say(notes);
   } else {
-    say(res.error || "执行出错", "err");
+    say((encSel.selectedOptions[0]?.textContent || encSel.value) + "　完成", "ok");
   }
 }
 

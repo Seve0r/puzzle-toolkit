@@ -1877,14 +1877,16 @@ def main():
         if quiet:
             print(final)
             return 0
-        print("原始：%s" % (text[:120] + ("…" if len(text) > 120 else "")))
+        # stdout 只放结果、stderr 放分析：界面上两者分处「结果」框和底部提示条，
+        # 命令行里看起来仍连在一起。
+        sys.stdout.flush()
+        sys.stderr.write("原始：%s\n" % (
+            text[:120] + ("…" if len(text) > 120 else "")))
         if path:
-            print("路径：%s" % " → ".join(path))
-            print("得分：%.1f" % sc)
-            print("结果：")
+            sys.stderr.write("路径：%s\n得分：%.1f\n" % (" → ".join(path), sc))
             print(final)
         else:
-            print("没有可靠的编码路径（原样输出）")
+            sys.stderr.write("没有可靠的编码路径（原样输出）\n")
             # 只说「没有可靠路径」等于什么都没说：用户分不清是「这压根不是编码」
             # 还是「是乱码但数据坏了」。这里再探一次 mojibake，把损失率亮出来。
             try:
@@ -1905,8 +1907,8 @@ def main():
                     "%s\n"
                     "  数据本身可能有损坏。使用 `dec mojibake --best` 查看完整信息。\n"
                     % (mb_enc, mb_ratio * 100, mb_bad, body))
-            # 失败时不再打印「结果：+原文」：上面「原始：」已经完整给过，
-            # 再打一遍完全重复，还容易让人以为「结果」里有什么新东西。
+            # 原文照样进 stdout：`auto x > out.txt` 不能产出空文件。
+            print(final)
         return 0
 
     if cmd == "blocks":

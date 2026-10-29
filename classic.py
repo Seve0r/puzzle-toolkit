@@ -1114,7 +1114,10 @@ def main():
 
         if cmd == "vigcrack":
             rows, ic = vigcrack(text, top=5)
-            print("整体 IC = %.4f（英语约 0.0667，越低越可能多表）\n" % ic)
+            # IC 是判断依据、不是答案，走 stderr：界面把它放进底部提示条，
+            # 结果框里只留候选。
+            sys.stderr.write(
+                "整体 IC = %.4f（英语约 0.0667，越低越可能多表）\n" % ic)
             for sc, k, out in rows:
                 print("  密钥 %-12s 得分 %7.1f" % (k, sc))
                 print("    %s" % out)
