@@ -87,6 +87,7 @@ TABS = [
             {"name": "hexdump", "label": "十六进制查看"},
             {"name": "qr", "label": "二维码 / 条码"},
             {"name": "spec", "label": "音频频谱图"},
+            {"name": "grid", "label": "点阵图读 bit 流"},
             {"name": "meta", "label": "文件类型与熵"},
         ],
     },
@@ -224,5 +225,22 @@ PARAMS = {
         {"key": "suffix", "type": "text", "label": "后缀", "placeholder": "可选"},
         {"key": "threads", "type": "int", "label": "进程数", "min": 1, "max": 64,
          "hint": "留空用满所有核心"},
+    ],
+    # ---------------- stego ----------------
+    # 全自动就能出结果；这几个是「自动没对上」时的手动钉住手段。
+    "stego/grid": [
+        {"key": "cols", "type": "int", "label": "列数", "min": 1, "max": 9999,
+         "hint": "自动把图边留白也数成一格时，用它钉住；留空即自动"},
+        {"key": "rows", "type": "int", "label": "行数", "min": 1, "max": 9999,
+         "hint": "同上"},
+        {"key": "channel", "type": "choice", "label": "取色通道", "default": "",
+         "choices": [("", "自动（对比度最大的）"), ("g", "绿"), ("r", "红"),
+                     ("b", "蓝")]},
+        {"key": "threshold", "type": "int", "label": "二值化阈值", "min": 0, "max": 255,
+         "hint": "留空用 Otsu 自动算"},
+        {"key": "order", "type": "choice", "label": "读取顺序", "default": "row",
+         "choices": [("row", "按行"), ("col", "按列")]},
+        {"key": "invert", "type": "check", "label": "强制深色=1",
+         "hint": "默认两个方向都试；勾上就只认深色"},
     ],
 }

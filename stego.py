@@ -16,6 +16,8 @@
   hexdump <file> [-l N]       十六进制查看
   qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试）
   spec <audio> [--out a.png]  ffmpeg 生成频谱图（看隐藏的摩斯/文字）
+  grid <image>                点阵图切成格子读 bit 流，自动拼字节并猜文本编码
+                              （自动测格宽/相位/阈值；--cell/--off/--cols/--rows 可覆盖）
   meta <file>                 文件类型 + 尺寸 + 熵
 
 通用：
@@ -525,6 +527,515 @@ def qr_scan(path, allres=False):
     return uniq
 
 
+# ---------------------------------------------------------------- 点阵网格（grid）
+#
+# 把「一格一色」的点阵图切成格子，读出 bit 流，再拼成字节。
+# 典型场景：ARG 里那种放大了是像素方块、每块代表 0/1 的图。
+# 纯标准库：PNG 自己解（非隔行），其它格式才退回 Pillow。
+
+_PNG_NCH = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+
+
+def _png_canvas(data):
+    """纯标准库解非隔行 PNG。返回 (w, h, [R, G, B, A])，平面都是 bytes(w*h)。"""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("不是 PNG")
+    pos, n = 8, len(data)
+    w = h = depth = ctype = interlace = None
+    idat, plte = [], b""
+    while pos + 8 <= n:
+        ln = struct.unpack(">I", data[pos:pos + 4])[0]
+        typ = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+        if typ == b"IHDR":
+            w, h, depth, ctype, _c, _f, interlace = struct.unpack(">IIBBBBB", body)
+        elif typ == b"PLTE":
+            plte = body
+        elif typ == b"IDAT":
+            idat.append(body)
+        elif typ == b"IEND":
+            break
+    if w is None:
+        raise ValueError("PNG 缺 IHDR")
+    if interlace:
+        raise ValueError("隔行(interlace)PNG 解不了，先转成非隔行")
+    nch = _PNG_NCH.get(ctype)
+    if nch is None:
+        raise ValueError("不支持的 PNG 颜色类型 %d" % ctype)
+    raw = zlib.decompress(b"".join(idat))
+    bits_pp = nch * depth
+    stride = (w * bits_pp + 7) // 8
+    bpp = max(1, (bits_pp + 7) // 8)
+    prev = bytes(stride)
+    rows = []
+    p = 0
+    for _y in range(h):
+        if p + 1 + stride > len(raw):
+            raise ValueError("PNG 像素数据被截断")
+        ft = raw[p]
+        cur = bytearray(raw[p + 1:p + 1 + stride])
+        p += 1 + stride
+        if ft == 1:
+            for i in range(bpp, stride):
+                cur[i] = (cur[i] + cur[i - bpp]) & 0xFF
+        elif ft == 2:
+            for i in range(stride):
+                cur[i] = (cur[i] + prev[i]) & 0xFF
+        elif ft == 3:
+            for i in range(stride):
+                a = cur[i - bpp] if i >= bpp else 0
+                cur[i] = (cur[i] + ((a + prev[i]) >> 1)) & 0xFF
+        elif ft == 4:
+            for i in range(stride):
+                a = cur[i - bpp] if i >= bpp else 0
+                b = prev[i]
+                c = prev[i - bpp] if i >= bpp else 0
+                pa = abs(b - c)
+                pb = abs(a - c)
+                pc = abs(a + b - 2 * c)
+                if pa <= pb and pa <= pc:
+                    pr = a
+                elif pb <= pc:
+                    pr = b
+                else:
+                    pr = c
+                cur[i] = (cur[i] + pr) & 0xFF
+        elif ft != 0:
+            raise ValueError("未知 PNG 滤波类型 %d" % ft)
+        rows.append(cur)
+        prev = cur
+
+    R = bytearray(w * h)
+    G = bytearray(w * h)
+    B = bytearray(w * h)
+    A = bytearray(b"\xff" * (w * h))
+    for y in range(h):
+        row = rows[y]
+        idx = y * w
+        if depth == 8:
+            vals = row
+        elif depth == 16:
+            vals = row[0:2 * w * nch:2]
+        else:
+            per = 8 // depth
+            maxv = (1 << depth) - 1
+            vals = bytearray(w * nch)
+            for i in range(w * nch):
+                vals[i] = (row[i // per] >> (8 - depth * (i % per + 1))) & maxv
+            if ctype in (0, 4):
+                vals = bytearray(v * 255 // maxv for v in vals)
+        if ctype == 2:
+            R[idx:idx + w] = vals[0:3 * w:3]
+            G[idx:idx + w] = vals[1:3 * w:3]
+            B[idx:idx + w] = vals[2:3 * w:3]
+        elif ctype == 6:
+            R[idx:idx + w] = vals[0:4 * w:4]
+            G[idx:idx + w] = vals[1:4 * w:4]
+            B[idx:idx + w] = vals[2:4 * w:4]
+            A[idx:idx + w] = vals[3:4 * w:4]
+        elif ctype == 0:
+            R[idx:idx + w] = vals[0:w]
+            G[idx:idx + w] = vals[0:w]
+            B[idx:idx + w] = vals[0:w]
+        elif ctype == 4:
+            R[idx:idx + w] = vals[0:2 * w:2]
+            G[idx:idx + w] = vals[0:2 * w:2]
+            B[idx:idx + w] = vals[0:2 * w:2]
+            A[idx:idx + w] = vals[1:2 * w:2]
+        elif ctype == 3:
+            for x in range(w):
+                k = vals[x] * 3
+                if k + 2 < len(plte):
+                    R[idx + x] = plte[k]
+                    G[idx + x] = plte[k + 1]
+                    B[idx + x] = plte[k + 2]
+    return w, h, [bytes(R), bytes(G), bytes(B), bytes(A)]
+
+
+def canvas_of(path):
+    """返回 (w, h, [R, G, B, A])。PNG 走内置解码，其它格式退回 Pillow。"""
+    data = read(path)
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        try:
+            return _png_canvas(data)
+        except Exception:
+            if not HAVE_PIL:
+                raise
+    if not HAVE_PIL:
+        raise RuntimeError("这张图不是 PNG，且没装 Pillow")
+    im = Image.open(path)
+    im.load()
+    im = im.convert("RGBA")
+    w, h = im.size
+    raw = im.tobytes()
+    return w, h, [raw[0::4], raw[1::4], raw[2::4], raw[3::4]]
+
+
+def _otsu_split(vals):
+    """一维 Otsu。返回 (阈值, 类间方差)。方差大 = 两色分得开。
+
+    两峰之间常常是空地，最佳阈值是一整段平台；取平台左端会把紧贴低峰的格子
+    判反（实测：低峰拖到 56、阈值落在 55，那格就翻面了）。所以取平台中点。
+    """
+    hist = [0] * 256
+    for v in vals:
+        hist[0 if v < 0 else (255 if v > 255 else int(v))] += 1
+    total = len(vals)
+    if not total:
+        return 128.0, 0.0
+    sum_all = sum(i * c for i, c in enumerate(hist))
+    w_b = 0
+    sum_b = 0
+    scores = [0.0] * 256
+    for t in range(256):
+        w_b += hist[t]
+        sum_b += t * hist[t]
+        w_f = total - w_b
+        if w_b == 0 or w_f == 0:
+            scores[t] = -1.0
+            continue
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        scores[t] = w_b * w_f * (m_b - m_f) ** 2
+    mx = max(scores)
+    if mx <= 0:
+        return 128.0, 0.0
+    plat = [t for t, s in enumerate(scores) if s >= mx * (1 - 1e-6)]
+    return float(sum(plat)) / len(plat), mx
+
+
+def _fit_axis(prof, min_cell=3):
+    """从「相邻像素差」曲线找格宽与相位。返回 (period, phase, score)。
+
+    打分 = (边界强度/全图平均强度) x (强峰覆盖率)。两处都是血的教训：
+    - 分母若用「内部平均」，遇到边缘锐利的图（内部差恒为 0）会除零爆炸，
+      挑出格宽 4.1 这种假周期；用全图均值就稳定。
+    - 只看强度比值会选到「格宽 117」：边界数一少，几个最陡的点就能把均值刷高。
+      强峰只可能来自格线（相邻同色时格线没有峰，所以反过来不成立），
+      拿覆盖率去卡，错误周期就露馅了。
+    （再乘一个「边界捕获的能量占比」试过，反而让格宽 3 这种过密周期赢，
+      因为边界越密捕获得越多——所以没有采用。）
+    """
+    n = len(prof)
+    if n < 12:
+        raise ValueError("图太小")
+    total = float(sum(prof))
+    if total <= 0:
+        raise ValueError("这张图几乎没对比度")
+    max_lag = max(min_cell + 3, n // 3)
+
+    # 纯色块图里绝大多数相邻差是 0，75 分位数会退化成 0，这时用最大值兜底
+    srt = sorted(prof)
+    q = srt[int(len(srt) * 0.75)]
+    if q <= 0:
+        q = 0.1 * srt[-1]
+    # 峰位置用连续坐标：prof[i] 描述的是 i 与 i+1 之间的那条边界，即 i+0.5
+    peaks = [i + 0.5 for i in range(1, n - 1)
+             if prof[i] >= q and prof[i] >= prof[i - 1] and prof[i] >= prof[i + 1]]
+    if not peaks:
+        peaks = [i + 0.5 for i in range(1, n - 1) if prof[i] >= q]
+    if not peaks:
+        raise ValueError("找不到格线峰")
+    gmean = total / n
+
+    def at(v):
+        """在连续坐标 v 处线性插值取边界强度（整数取样会把相位锁死到 1px）。"""
+        t = v - 0.5
+        if t <= 0.0:
+            return float(prof[0])
+        if t >= n - 1:
+            return float(prof[n - 1])
+        i = int(t)
+        f = t - i
+        return prof[i] * (1.0 - f) + prof[i + 1] * f
+
+    def evaluate(phase, period):
+        edge = []
+        k = 0
+        while True:
+            v = phase + k * period
+            if v >= n:
+                break
+            if v >= 0:
+                edge.append(v)
+            k += 1
+        m = len(edge)
+        if m < 5 or m > n - 3:
+            return -1.0
+        s = 0.0
+        for v in edge:
+            s += at(v)
+        j = 0
+        hit = 0
+        for pk in peaks:
+            while j < m and edge[j] < pk - 1.5:
+                j += 1
+            if j < m and abs(edge[j] - pk) <= 1.5:
+                hit += 1
+        cov = hit / float(len(peaks))
+        if cov <= 0:
+            return -1.0
+        return ((s / m) / gmean) * cov
+
+    # 粗搜必须带小数：图像缩放过以后格宽是 10.66 这种，整数周期会一路漂移、
+    # 得分被「格宽 32」这种侥幸对齐三个峰的错误周期反超，细化就再也回不去了。
+    cand = []
+    pstep = 0.25 if n <= 1500 else 0.5
+    p = float(min_cell)
+    while p <= max_lag:
+        ph = 0.0
+        phstep = 0.5 if p <= 20 else 1.0
+        while ph < p:
+            sc = evaluate(ph, p)
+            if sc > 0:
+                cand.append((sc, p, ph))
+            ph += phstep
+        p += pstep
+    if not cand:
+        raise ValueError("没找到周期性网格")
+    cand.sort(reverse=True)
+
+    # 留几个互相隔开的候选各自细化，别把鸡蛋放在一个篮子里
+    seeds = []
+    for sc, p, ph in cand:
+        if all(abs(p - q) >= 1.0 for _s, q, _pq in seeds):
+            seeds.append((sc, p, ph))
+        if len(seeds) >= 6:
+            break
+
+    best = (-1.0, None, 0.0)
+    for sc, p, ph in seeds:
+        st = 0.2
+        for _ in range(10):
+            improved = False
+            for dp in (-2 * st, -st, 0.0, st, 2 * st):
+                np_ = p + dp
+                if np_ < min_cell:
+                    continue
+                for dph in (-2 * st, -st, 0.0, st, 2 * st):
+                    rr = evaluate(ph + dph, np_)
+                    if rr > sc:
+                        sc, p, ph = rr, np_, ph + dph
+                        improved = True
+            if not improved:
+                st /= 2.0
+        if sc > best[0]:
+            best = (sc, p, ph)
+    sc, p, ph = best
+    # 相位只规范到 [0, p)。要不要再减一个周期，得看图像边缘是留白还是格子内容，
+    # 那是二维信息、一维的 prof 判断不了，交给 grid_read 用颜色方差定。
+    return p, ph % p, sc
+
+
+def _parse_pair(s, default=None):
+    """解析 "12.9" / "12.9x12.5" / "6.25,12.5"。"""
+    if s is None:
+        return default
+    for sep in ("x", "X", ",", " "):
+        if sep in s:
+            a, b = s.split(sep, 1)
+            return (float(a), float(b))
+    v = float(s)
+    return (v, v)
+
+
+def grid_read(path, channel=None, cols=None, rows=None, cell=None, off=None,
+              threshold=None, invert=None, order="row"):
+    """切格子 -> bit 流 -> 字节 -> 猜文本编码。返回 dict。"""
+    w, h, planes = canvas_of(path)
+    if w * h > 6000000:
+        raise ValueError("图太大（%dx%d），先裁小一点" % (w, h))
+
+    names = ["r", "g", "b"]
+    if channel:
+        ci = names.index(channel.lower())
+        tglob, vglob = _otsu_split(planes[ci])
+    else:
+        ci, vglob, tglob = 0, -1.0, 128
+        for i in range(3):
+            t, v = _otsu_split(planes[i])
+            if v > vglob:
+                ci, vglob, tglob = i, v, t
+    P = planes[ci]
+    chan = names[ci]
+
+    pw, ph_ = _parse_pair(cell, (None, None))
+    ox, oy = _parse_pair(off, (None, None))
+
+    note = []
+    if pw is None or ox is None:
+        colprof = [0.0] * (w - 1)
+        for y in range(h):
+            base = y * w
+            for x in range(w - 1):
+                d = P[base + x + 1] - P[base + x]
+                colprof[x] += d if d > 0 else -d
+        pw, ox, rx = _fit_axis(colprof)
+        note.append("横向从 x=%.2f 起，格宽 %.2f（得分 %.2f）" % (ox, pw, rx))
+    if ph_ is None or oy is None:
+        rowprof = [0.0] * (h - 1)
+        for y in range(h - 1):
+            base, base2 = y * w, (y + 1) * w
+            for x in range(w):
+                d = P[base2 + x] - P[base + x]
+                rowprof[y] += d if d > 0 else -d
+        ph_, oy, ry = _fit_axis(rowprof)
+        note.append("纵向从 y=%.2f 起，格高 %.2f（得分 %.2f）" % (oy, ph_, ry))
+
+    # 相位接近整周期时，「起点 p-ε」和「起点 -ε」是同一个网格，但格数差一整格。
+    # 光看相位分不出来：顶部留白 13px 的图，起点该是 12.5（留白不算格子）；
+    # 而紧贴图边缘的完整网格，起点该是 -0.5（否则少一列）。
+    # 区别只在于图边缘那一条到底是「均匀留白」还是「格子内容」，所以比颜色方差。
+    def _var(x0, x1, y0, y1):
+        s = 0
+        s2 = 0
+        c = 0
+        for yy in range(y0, y1):
+            base = yy * w
+            for xx in range(x0, x1):
+                v = P[base + xx]
+                s += v
+                s2 += v * v
+                c += 1
+        if not c:
+            return 0.0
+        m = s / float(c)
+        return s2 / float(c) - m * m
+
+    v_all = _var(0, w, 0, h)
+    if v_all > 0:
+        if ox > pw * 0.6 and _var(0, max(1, int(ox)), 0, h) > 0.4 * v_all:
+            ox -= pw
+        if oy > ph_ * 0.6 and _var(0, w, 0, max(1, int(oy))) > 0.4 * v_all:
+            oy -= ph_
+
+    # 末尾那格常常只剩大半个：留 15% 容差，别把整列/整行丢掉
+    ncol = cols if cols else int((w - ox + pw * 0.15) // pw)
+    nrow = rows if rows else int((h - oy + ph_ * 0.15) // ph_)
+    if ncol < 1 or nrow < 1:
+        raise ValueError("算出 %dx%d 格，检查 --cell / --off" % (ncol, nrow))
+
+    vals = []
+    for r in range(nrow):
+        ay = oy + r * ph_
+        for c in range(ncol):
+            ax = ox + c * pw
+            x0 = int(round(ax + pw * 0.25))
+            x1 = int(round(ax + pw * 0.75))
+            y0 = int(round(ay + ph_ * 0.25))
+            y1 = int(round(ay + ph_ * 0.75))
+            x0 = max(0, min(w - 1, x0))
+            y0 = max(0, min(h - 1, y0))
+            x1 = max(x0 + 1, min(w, x1))
+            y1 = max(y0 + 1, min(h, y1))
+            s = 0
+            nn = 0
+            for yy in range(y0, y1):
+                base = yy * w
+                for xx in range(x0, x1):
+                    s += P[base + xx]
+                    nn += 1
+            vals.append(s / nn if nn else 0.0)
+
+    thr = threshold if threshold is not None else _otsu_split(vals)[0]
+    bright = [1 if v > thr else 0 for v in vals]
+
+    def bits_of(rev):
+        out = []
+        if order == "col":
+            seq = [bright[r * ncol + c] for c in range(ncol) for r in range(nrow)]
+        else:
+            seq = list(bright)
+        for b in seq:
+            out.append(1 - b if rev else b)
+        return out
+
+    def to_bytes(bits):
+        bb = bytearray()
+        for i in range(0, len(bits) - 7, 8):
+            v = 0
+            for j in range(8):
+                v = (v << 1) | bits[i + j]
+            bb.append(v)
+        return bytes(bb)
+
+    def guess(raw):
+        raw = raw.rstrip(b"\x00")
+        if len(raw) < 2:
+            return None
+        for enc in ("utf-8", "gb18030"):
+            try:
+                s = raw.decode(enc)
+            except Exception:
+                continue
+            if all(ch.isprintable() or ch in "\n\r\t" for ch in s):
+                return enc, s
+        return None
+
+    # 极性：点阵图里「浅色=1」很常见，肉眼完全看不出来，所以默认两个方向都试；
+    # 但明确给了 --invert 就严格照它来，不偷偷翻回去。
+    if invert is None:
+        used = False
+        raw = to_bytes(bits_of(False))
+        dec = guess(raw)
+        if dec is None:
+            alt = to_bytes(bits_of(True))
+            g = guess(alt)
+            if g is not None:
+                used, raw, dec = True, alt, g
+    else:
+        used = invert
+        raw = to_bytes(bits_of(used))
+        dec = guess(raw)
+
+    bits = bits_of(used)
+    return {
+        "w": w, "h": h, "channel": chan, "note": note,
+        "cell": (pw, ph_), "off": (ox, oy),
+        "cols": ncol, "rows": nrow, "threshold": thr,
+        "vals": vals, "invert": used, "order": order,
+        "bits": bits, "raw": raw, "decode": dec, "nbits": len(bits),
+    }
+
+
+def print_grid(res, quiet=False):
+    if not quiet:
+        print("图片 %dx%d，用 %s 通道" % (res["w"], res["h"], res["channel"].upper()))
+        for line in res["note"]:
+            print("  " + line)
+        print("格子 %d 列 x %d 行，阈值 %.0f，%s" % (
+            res["cols"], res["rows"], res["threshold"],
+            "深色=1" if res["invert"] else "亮色=1"))
+    nc = res["cols"]
+    print()
+    for r in range(res["rows"]):
+        line = "".join("#" if b else "." for b in res["bits"][r * nc:(r + 1) * nc])
+        print("  %2d %s" % (r, line))
+    print()
+    print("位流 %d 位 = %d 字节（按%s读取）" % (
+        res["nbits"], res["nbits"] // 8, "列" if res["order"] == "col" else "行"))
+    if res["nbits"] % 8:
+        print("  注意：%d 位凑不满整字节，末尾 %d 位被丢掉" % (
+            res["nbits"], res["nbits"] % 8))
+    raw = res["raw"]
+    if raw:
+        print()
+        for i in range(0, len(raw), 16):
+            chunk = raw[i:i + 16]
+            print("  %04x  %-47s  %s" % (
+                i, " ".join("%02x" % b for b in chunk),
+                "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)))
+    if res["decode"]:
+        enc, text = res["decode"]
+        print()
+        print("解出文本（%s）：" % enc)
+        print("  " + text)
+    elif raw:
+        print()
+        print("  （不像可读文本；再换 --order / 阈值 / 通道 试试）")
+
+
 # ---------------------------------------------------------------- 杂项
 
 def entropy(b):
@@ -742,6 +1253,21 @@ def main():
         if cmd == "spec":
             p = spectrum(path, out)
             print(p)
+            return 0
+
+        if cmd == "grid":
+            res = grid_read(
+                path,
+                channel=opt("--channel", str, None),
+                cols=opt("--cols", int, None),
+                rows=opt("--rows", int, None),
+                cell=opt("--cell", str, None),
+                off=opt("--off", str, None),
+                threshold=opt("--threshold", int, None),
+                invert=True if "--invert" in argv else None,
+                order=opt("--order", str, "row"),
+            )
+            print_grid(res, quiet=quiet)
             return 0
 
         if cmd == "meta":

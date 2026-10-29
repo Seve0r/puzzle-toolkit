@@ -150,7 +150,10 @@ def _run_subcommand(module, action, params, operand, extra=None):
     `operand` 是主输入（文本，或 stego 的文件路径）；`extra` 是不带 flag 的
     附加位置参数（例如 stego 的 `-n 6` 这类用不到，留个口子）。
     """
-    argv = [action]
+    # 主输入必须紧跟子命令：三个脚本的 main() 都按「argv[0]=子命令、argv[1]=主输入」
+    # 取参数，而选项由各自的 opt() 按名字查找、吃掉，和位置无关。
+    # 原先拼成 [...选项..., 主输入]，于是 stego 把 `--cols` 当成了文件名。
+    argv = [action] + ([operand] if operand else [])
     for k, v in (params or {}).items():
         if v is True:
             argv.append("--" + k)          # check 类型：出现即为真
@@ -160,7 +163,6 @@ def _run_subcommand(module, action, params, operand, extra=None):
             argv += ["--" + k, str(v)]
     if extra:
         argv += list(extra)
-    argv.append(operand)
 
     buf = io.StringIO()
     old_argv = sys.argv
