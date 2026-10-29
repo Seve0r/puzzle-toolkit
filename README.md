@@ -150,7 +150,7 @@ python3 codec.py enc hex -f picture.png
 | 中文正常但读不通（`浜哄彧`） | `codec dec mojibake`，解完还乱就加 `--deep` |
 | 一堆生僻汉字但不像中文（`孨偼堦惗`） | `codec dec mojibake`（GBK 编的日文被当 GBK 读） |
 | 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
-| 32/40/64 位 hex | `hc identify` → `hc crack` |
+| 32/40/64 位 hex | `hc identify` → `hc crack`（字典）或 `hc mask`（纯数字/已知格式） |
 | 图片 / 音频 / 压缩包 | `stego binwalk` |
 | 疑似图片藏东西 | `stego lsbscan` |
 | 音频 | `stego spec` |
@@ -209,6 +209,7 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | `hc identify <哈希>` | 猜测哈希类型（长度 / 字符集 / 前缀） |
 | `hc hash <算法> <文本>` | 计算哈希 |
 | `hc crack <哈希> [--algo A] [--wordlist F] [--rules]` | 字典爆破，不给 algo 就自动识别 |
+| `hc mask <哈希> --len 8 --charset digits` | **按格式穷举**（掩码爆破），多进程；`--mask "?d?d?d?d"` 写法同 hashcat |
 | `hc xor <数据> [--key HEX \| --key-str TEXT]` | 单字节全试 / 指定 key 异或 / 多字节自动 |
 | `hc repeat-xor <文件>` | 检测重复密钥 XOR 并还原密钥 |
 | `hc aes --key HEX [--iv HEX] [--mode cbc\|ecb\|ctr\|gcm] <数据>` | AES 解密，`--enc` 加密 |

@@ -705,6 +705,148 @@ def die(msg, code=2):
     sys.exit(code)
 
 
+# ---------------------------------------------------------------- 按格式穷举
+
+# hashcat 风格的掩码字符集
+MASK_SETS = {
+    "?d": "0123456789",
+    "?l": "abcdefghijklmnopqrstuvwxyz",
+    "?u": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "?a": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "?h": "0123456789abcdef",
+    "?H": "0123456789ABCDEF",
+    "?s": " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+}
+
+CHARSET_ALIAS = {
+    "digits": "?d", "num": "?d", "数字": "?d",
+    "lower": "?l", "loweralpha": "?l", "小写": "?l",
+    "upper": "?u", "upperalpha": "?u", "大写": "?u",
+    "alnum": "?a", "alnumlower": "?l", "hex": "?h",
+    "汉字": "?d",
+}
+
+
+def parse_mask(mask):
+    """把 `?d?d?d?d` 解析成每个位置的字符集列表。`??` 是字面问号。"""
+    out = []
+    i = 0
+    while i < len(mask):
+        if mask[i] == "?" and i + 1 < len(mask):
+            nxt = mask[i + 1]
+            key = "?" + nxt
+            if key in MASK_SETS:
+                out.append(MASK_SETS[key])
+                i += 2
+                continue
+            if nxt == "?":                 # ?? -> 字面问号
+                out.append("?")
+                i += 2
+                continue
+        out.append(mask[i])                # 字面字符
+        i += 1
+    return out
+
+
+def chase_match(h, target):
+    """判断算出来的哈希是否命中目标。
+
+    ★ 目标可能只有 16 位 —— 那是老式「16 位 MD5」，实际是 32 位 MD5 的
+      第 9~24 个字符。穷举时照样算完整 MD5、只截中间比对，难度完全不变
+      （决定破解成本的是明文空间，不是哈希长度）。
+    """
+    t = target.strip().lower()
+    if len(t) == 16 and len(h) == 32:
+        return h[8:24] == t
+    if len(t) == len(h):
+        return h == t
+    return t in h
+
+
+def _brute_worker(job):
+    """扫一块 head，命中就返回 (明文, 完整哈希)，扫完没有返回 None。
+
+    ★ 这里不用 multiprocessing.Event 来「找到一个就通知大家停」：Event 不能
+      通过 Pool 的 pickle 传进子进程（会报 Condition objects should only be
+      shared between processes through inheritance）。改成主进程拿到第一个结果
+      后直接 pool.terminate() 杀掉其余进程，效果一样还更干脆。
+    """
+    heads, tails, prefix, suffix, algo, target = job
+    import hashlib as _h
+    import itertools as _it
+    for head in heads:
+        head_s = "".join(head)
+        if not tails:
+            cand = prefix + head_s + suffix
+            hs = _h.new(algo, cand.encode("utf-8", "surrogateescape")).hexdigest()
+            if chase_match(hs, target):
+                return cand, hs
+            continue
+        # ★ product() 返回的是一次性迭代器，必须**每个 head 重新创建**。
+        #   放到循环外的话只有第一个 head 能遍历完，其余全被跳过 ——
+        #   症状是「跑得飞快但什么都没找到」，非常容易误判成没命中。
+        for tail in _it.product(*tails):
+            cand = prefix + head_s + "".join(tail) + suffix
+            hs = _h.new(algo, cand.encode("utf-8", "surrogateescape")).hexdigest()
+            if chase_match(hs, target):
+                return cand, hs
+    return None
+
+
+def brute_force(target, mask, algo="md5", threads=None, prefix="", suffix=""):
+    """按掩码穷举。返回 (明文, 完整哈希) 或 None。
+
+    多进程：把掩码切成「前 k 位 × 后 n-k 位」，前 k 位的所有组合摊给各进程，
+    每个进程在自己那份里遍历后 n-k 位。这样避免了每个候选都做一次
+    「索引 → 字符串」的转换（那会让速度掉一半以上）。
+    """
+    import multiprocessing as mp
+    import itertools as _it
+
+    charsets = parse_mask(mask)
+    if not charsets:
+        raise ValueError("掩码为空")
+    total = 1
+    for cs in charsets:
+        total *= len(cs)
+    if threads is None:
+        threads = os.cpu_count() or 4
+    threads = max(1, min(threads, total))
+
+    # 选切分点：让每个进程分到几十份，负载才匀
+    split = 1
+    while split < len(charsets):
+        heads_n = 1
+        for cs in charsets[:split + 1]:
+            heads_n *= len(cs)
+        if heads_n >= threads * 4:
+            break
+        split += 1
+    head_space = list(_it.product(*charsets[:split]))
+    tails = charsets[split:]
+
+    # 把 head_space 均分成 threads 份
+    chunks = []
+    step = max(1, (len(head_space) + threads - 1) // threads)
+    for i in range(0, len(head_space), step):
+        chunks.append(head_space[i:i + step])
+
+    ctx = mp.get_context()
+    jobs = [(c, tails, prefix, suffix, algo, target) for c in chunks if c]
+
+    found = None
+    pool = ctx.Pool(len(jobs))
+    try:
+        for r in pool.imap_unordered(_brute_worker, jobs):
+            if r:
+                found = r
+                break
+    finally:
+        pool.terminate()      # 找到了就别让其余进程继续白跑
+        pool.join()
+    return found
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
@@ -724,6 +866,13 @@ def main():
             argv = argv[:i] + argv[i + 2:]
             return v
         return default
+
+    mask_opt = opt("--mask", str, None)
+    charset_opt = opt("--charset", str, None)
+    len_opt = opt("--len", int, None)
+    threads_opt = opt("--threads", int, None)
+    prefix_opt = opt("--prefix", str, "")
+    suffix_opt = opt("--suffix", str, "")
 
     mode = opt("--mode", str, "cbc")
     algo = opt("--algo", str, None)
@@ -794,6 +943,49 @@ def main():
             print("破解成功：%s = %s" % (a, w))
         else:
             print("没在字典里找到（试过 %s）" % (algo or "自动识别的算法"))
+        return 0
+
+    if cmd == "mask":
+        if len(argv) < 2 or "-h" in argv or "--help" in argv:
+            print("用法：hashcrypto.py mask <哈希> --mask \"?d?d?d?d\" [--algo md5]")
+            print("      或 mask <哈希> --len 8 --charset digits")
+            print()
+            print("掩码字符集：?d 数字  ?l 小写  ?u 大写  ?a 大小写+数字  ?h hex")
+            print("           ?? 字面问号，其它字符按字面算")
+            print("--prefix / --suffix  在候选前后追加固定串（如生日前缀 19）")
+            print("--threads N          进程数，默认用满所有核心")
+            return 2
+        target = argv[1]
+        mask = mask_opt
+        if mask is None:
+            if not len_opt:
+                print("要给出 --mask，或者同时给 --len（和可选的 --charset）")
+                return 2
+            key = CHARSET_ALIAS.get((charset_opt or "digits").lower(),
+                                    charset_opt or "?d")
+            mask = (key if key in MASK_SETS else key) * len_opt if key in MASK_SETS \
+                else (charset_opt or "0123456789") * len_opt
+        algo = opt("--algo", str, None)
+        if algo is None:
+            algo = {16: "md5", 32: "md5", 40: "sha1", 64: "sha256"}.get(len(target), "md5")
+        try:
+            import time as _t
+            t0 = _t.time()
+            hit = brute_force(target, mask, algo=algo, threads=threads_opt,
+                              prefix=prefix_opt, suffix=suffix_opt)
+            dt = _t.time() - t0
+        except Exception as e:
+            print("失败：%s" % e)
+            return 1
+        if not hit:
+            print("没找到（掩码 %s，算法 %s，用时 %.1f 秒）" % (mask, algo, dt))
+            return 1
+        cand, full = hit
+        print("找到：%s" % cand)
+        print("  %s(%s) = %s" % (algo, cand, full))
+        if len(target) == 16:
+            print("  目标只有 16 位，比对的是中间 16 位：%s" % full[8:24])
+        print("  用时 %.2f 秒" % dt)
         return 0
 
     if cmd == "xor":

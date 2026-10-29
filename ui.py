@@ -57,6 +57,17 @@ _UI_LABEL = {
 }
 
 
+# 「原文格式」预设 -> 真正的掩码参数。第一次用 Mask 的人不该被「掩码语法」挡住，
+# 选一个「8 位数字」就能直接跑。
+MASK_PRESETS = {
+    "d4":     {"len": 4,  "charset": "digits"},
+    "d6":     {"len": 6,  "charset": "digits"},
+    "d8":     {"len": 8,  "charset": "digits"},
+    "d10":    {"len": 10, "charset": "digits"},
+    "lower6": {"len": 6,  "charset": "lower"},
+}
+
+
 def _encoding_names():
     """所有编码，**按「同一个编码概念」去重**，一项只出现一次。
 
@@ -287,7 +298,15 @@ def run_action(payload):
     # classic / hashcrypto 走「跑子命令」这条路，输出和命令行一致
     if tab in ("classic", "hashcrypto"):
         module = {"classic": classic, "hashcrypto": hashcrypto}[tab]
-        return _run_subcommand(module, action, payload.get("params") or {}, text)
+        params = dict(payload.get("params") or {})
+        if tab == "hashcrypto" and action == "mask":
+            # 「原文格式」是界面上给人选的，先翻译成真正的掩码参数
+            preset = params.pop("preset", None)
+            if preset in MASK_PRESETS:
+                params.update(MASK_PRESETS[preset])
+            elif params.get("mask") and "len" in params:
+                params.pop("len")          # 两者都给了就让掩码优先
+        return _run_subcommand(module, action, params, text)
 
     # 解码器会往 stderr 写提示，stdout 偶尔也有 print；都接住交给前端显示。
     log = io.StringIO()

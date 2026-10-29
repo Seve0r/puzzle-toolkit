@@ -69,6 +69,7 @@ TABS = [
             {"name": "rc4", "label": "RC4"},
             {"name": "rsa", "label": "RSA 解密与攻击"},
             {"name": "jwt", "label": "JWT 解析 / 爆破"},
+            {"name": "mask", "label": "按格式穷举（掩码爆破）"},
         ],
     },
     {
@@ -133,7 +134,7 @@ PARAMS = {
     ],
     "classic/affine": [
         {"key": "a", "type": "int", "label": "a", "hint": "与 26 互质；不填就 312 种全爆破"},
-        {"key": "b", "type": "int", "label": "b"},
+        {"key": "b", "type": "int", "label": "b", "hint": "与 a 一起决定位移量"},
     ],
     "classic/bacon": [
         {"key": "old", "type": "check", "label": "旧式 24 字母（I/J、U/V 合并）"},
@@ -157,8 +158,8 @@ PARAMS = {
         {"key": "clean", "type": "check", "label": "去掉填充的 X"},
     ],
     "classic/adfgx": [
-        {"key": "key", "type": "text", "label": "方阵关键词"},
-        {"key": "trans", "type": "text", "label": "转置关键词"},
+        {"key": "key", "type": "text", "label": "方阵关键词", "placeholder": "如 BALLOON"},
+        {"key": "trans", "type": "text", "label": "转置关键词", "placeholder": "如 CIPHER"},
     ],
     "classic/keyboard": [
         {"key": "layout", "type": "choice", "label": "布局", "default": "qwerty",
@@ -177,8 +178,10 @@ PARAMS = {
          "hint": "留空则单字节全试并排序"},
     ],
     "hashcrypto/aes": [
-        {"key": "key", "type": "text", "label": "key (hex)"},
-        {"key": "iv", "type": "text", "label": "iv (hex)"},
+        {"key": "key", "type": "text", "label": "key (hex)",
+         "placeholder": "16 字节 = 32 位 hex", "hint": "AES-128 是 32 位 hex"},
+        {"key": "iv", "type": "text", "label": "iv (hex)",
+         "placeholder": "16 字节 = 32 位 hex", "hint": "ECB 模式不需要 IV"},
         {"key": "mode", "type": "choice", "label": "模式", "default": "cbc",
          "choices": [("cbc", "CBC"), ("ecb", "ECB"), ("ctr", "CTR"), ("gcm", "GCM")]},
         {"key": "enc", "type": "check", "label": "加密方向"},
@@ -187,11 +190,39 @@ PARAMS = {
         {"key": "key", "type": "text", "label": "密钥", "hint": "普通文本，不是 hex"},
     ],
     "hashcrypto/rsa": [
-        {"key": "n", "type": "text", "label": "n"},
-        {"key": "e", "type": "text", "label": "e"},
+        {"key": "n", "type": "text", "label": "n", "placeholder": "十进制大整数",
+         "hint": "模数；小到能分解才破得开"},
+        {"key": "e", "type": "text", "label": "e", "placeholder": "通常 65537 或 3"},
         {"key": "c", "type": "text", "label": "密文 c", "hint": "十进制；不填就只做分解攻击"},
     ],
     "hashcrypto/jwt": [
         {"key": "crack", "type": "check", "label": "尝试爆破 HS256 密钥"},
+    ],
+    # 默认只露一个「格式预设」，选「自定义」才展开那些掩码参数 ——
+    # 第一次用的人看到「掩码 ?d?d…」是不知所措的，先让他选「8 位数字」就能跑。
+    "hashcrypto/mask": [
+        {"key": "preset", "type": "choice", "label": "原文格式", "default": "d8",
+         "choices": [
+             ("d4", "4 位数字（0000-9999）"),
+             ("d6", "6 位数字"),
+             ("d8", "8 位数字（生日 / 日期最常见）"),
+             ("d10", "10 位数字"),
+             ("lower6", "6 位小写字母"),
+             ("custom", "自定义掩码…"),
+         ]},
+        {"key": "mask", "type": "text", "label": "掩码",
+         "placeholder": "如 ?d?d?d?d?d?d?d?d", "show_if": {"preset": "custom"},
+         "hint": "?d 数字 ?l 小写 ?u 大写 ?a 全字符 ?h hex；留空则用长度+字符集"},
+        {"key": "len", "type": "int", "label": "长度", "min": 1, "max": 12,
+         "show_if": {"preset": "custom"}, "hint": "配合右边的字符集，如 8 + 数字"},
+        {"key": "charset", "type": "choice", "label": "字符集", "default": "digits",
+         "show_if": {"preset": "custom"},
+         "choices": [("digits", "数字 0-9"), ("lower", "小写 a-z"),
+                     ("upper", "大写 A-Z"), ("alnum", "大小写+数字"),
+                     ("hex", "hex 0-9a-f")]},
+        {"key": "prefix", "type": "text", "label": "前缀", "placeholder": "如 19"},
+        {"key": "suffix", "type": "text", "label": "后缀", "placeholder": "可选"},
+        {"key": "threads", "type": "int", "label": "进程数", "min": 1, "max": 64,
+         "hint": "留空用满所有核心"},
     ],
 }
