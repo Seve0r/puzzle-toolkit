@@ -793,7 +793,10 @@ function paramKey() {
 
 function fillFuncs() {
   const t = tabDef();
-  const q = search.value.trim().toLowerCase();
+  // 搜索框只属于「编码」页。它虽然被 CSS 隐藏，value 却一直留着——在编码页
+  // 搜过 "atbash" 再切到古典密码，下面的过滤会把下拉吃成只剩 atbash；
+  // 哈希页没有匹配项，干脆空掉。所以非编码页一律忽略它。
+  const q = (t.kind === "encoding") ? search.value.trim().toLowerCase() : "";
   const items = funcList().filter(e =>
     !q || e.name.toLowerCase().includes(q) ||
     (e.label || "").toLowerCase().includes(q) ||
@@ -1086,6 +1089,7 @@ function switchTab(id) {
   for (const b of document.querySelectorAll("#tabs button"))
     b.classList.toggle("active", b.dataset.tab === id);
   encSel.innerHTML = "";          // 强制重新选第一项，避免残留上一个选项卡的值
+  if (tabDef().kind !== "encoding") search.value = "";   // 搜索词别跨选项卡残留
   fillFuncs();
   renderCandidates([]);
   const needFile = tabDef().input === "file";
