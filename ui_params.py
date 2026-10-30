@@ -158,13 +158,6 @@ PARAMS = {
     "classic/columnar": [
         {"key": "key", "type": "text", "label": "关键词", "hint": "不填就按长度爆破"},
     ],
-    "classic/a1z26": [
-        {"key": "dec", "type": "check", "label": "数字 → 字母", "default": True,
-         "hint": "取消勾选则是字母 → 数字"},
-    ],
-    "classic/polybius": [
-        {"key": "dec", "type": "check", "label": "坐标 → 字母", "default": True},
-    ],
     "classic/playfair": [
         {"key": "key", "type": "text", "label": "关键词", "placeholder": "如 MONARCHY"},
         {"key": "enc", "type": "check", "label": "加密方向"},
@@ -264,3 +257,25 @@ PARAMS = {
                  "原文是 12 进制这类就到这里选"},
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# 给 classic 里可逆的手法统一补一个「加密方向」开关。
+#
+# 脚本层面这些手法早就支持 `--enc` 了，但界面没暴露，于是在界面里永远只能走
+# 解码方向（bacon 更糟：main 里根本没接 enc，点编码会退化成解码返回一个字母）。
+# 逐个手写容易漏，这里按名单批量补；已有 enc 参数的（playfair）跳过。
+# 故意不含 sub / vigcrack / auto —— 它们是破解器，没有反方向。
+# ---------------------------------------------------------------------------
+_CLASSIC_REVERSIBLE = (
+    "caesar", "vigenere", "affine", "bacon", "railfence", "columnar",
+    "atbash", "a1z26", "polybius", "playfair", "adfgx", "keyboard", "t9",
+)
+
+for _name in _CLASSIC_REVERSIBLE:
+    _lst = PARAMS.setdefault("classic/" + _name, [])
+    if not any(p.get("key") == "enc" for p in _lst):
+        _lst.append({
+            "key": "enc", "type": "check", "label": "加密方向",
+            "hint": "不勾 = 解码/爆破",
+        })

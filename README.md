@@ -197,6 +197,9 @@ python3 codec.py enc hex -f picture.png
 
 支持的编码有四十多种（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、
 Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…），
+其中 **48 个是双向的**（`enc` 能编回去）；只有 `mojibake` 和 `braillebits` 是单向的。
+`utf16` / `utf32` / `uu` / `gzip` 的编码结果不是可读文本，用 latin-1 承载，
+接着套一层 `enc b64` 或 `enc hex` 就能复制走。
 完整列表用 `codec list`。
 
 ### classic.py —— 古典密码
@@ -213,12 +216,15 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | `classic railfence [--rails N] <文本>` | 栅栏；不给栏数就全爆破 |
 | `classic columnar [--key K] <文本>` | 列置换；不给 key 就按长度爆破 |
 | `classic atbash <文本>` | Atbash（反字母表） |
-| `classic a1z26 [--dec] <文本>` | A1Z26（1–26 ↔ a–z） |
-| `classic polybius [--dec] <文本>` | 波利比奥斯方阵（I/J 合并） |
+| `classic a1z26 <文本>` | A1Z26（1–26 ↔ a–z），`--enc` 反向 |
+| `classic polybius <文本>` | 波利比奥斯方阵（I/J 合并），`--enc` 反向 |
 | `classic playfair --key K <文本>` | 普莱菲尔方阵，`--enc` 加密，`--clean` 去掉填充 x |
 | `classic adfgx --key K [--trans K] <文本>` | ADFGX 方阵 |
 | `classic keyboard [--layout qwerty\|dvorak\|azerty] <文本>` | 键盘错位还原 |
-| `classic t9 <数字>` | 手机九宫格，列出所有可能 |
+| `classic t9 <文本>` | 手机九宫格；解码列候选，`--enc` 出数字串 |
+
+上表里除了 `auto` / `vigcrack` / `sub`（本身就是破解器），其余 **12 个都可逆**，
+加 `--enc` 就是加密方向。加密 `caesar` / `affine` 要显式给参数。
 
 ### hashcrypto.py —— 哈希与现代密码
 

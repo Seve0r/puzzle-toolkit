@@ -27,6 +27,32 @@ python3 $C <子命令> <文本>
 | `t9 <数字>` | 九宫格列出所有可能，按英文排序 |
 | `auto` | 全部跑一遍汇总排名 |
 
+## 编码方向（`--enc`）
+
+**可逆的 12 个手法都支持双向**，加 `--enc` 就是加密：
+
+```bash
+python3 classic.py caesar --key 3 hello        # khoor
+python3 classic.py caesar --key 3 --enc hello  # khoor（同上，加密方向）
+python3 classic.py a1z26 --enc test            # 20 5 19 20
+python3 classic.py keyboard --enc hello        # jrzzp
+```
+
+| 有编码方向 | `caesar` `vigenere` `affine` `bacon` `railfence` `columnar` `atbash` `a1z26` `polybius` `playfair` `adfgx` `keyboard` `t9` |
+|---|---|
+| **没有**（本身就是破解器） | `sub` `vigcrack` `auto` |
+
+几个注意点：
+
+- **`caesar` / `affine` 加密必须给参数**（`--key` / `--a --b`），不给会报错。
+  不带 `--enc` 时它们是爆破器，输出的是候选列表。
+- **`keyboard` 的 `--shift` 默认 `-1`**（往左还原，对应"手放错一格"）。
+  `--enc` 取反方向。
+- **`t9` 的输出有歧义**：`43556` 可以是 hello / hellm / …。短串靠 `t9` 穷举 +
+  英文契合度就能挑回来，长串组合数会爆炸（本来也不该用 T9）。
+- **`playfair` 有填充**：加密会补 `x`，解密需要 `--clean` 才去掉。这是设计，
+  因为 `taxa`、`exe` 这类词和"补的 x"完全同形，没法自动判断。
+
 ## 从文件读输入
 
 长密文不要往命令行里塞（尤其 `sub`，见下面的「长度红线」），用 `-f`：

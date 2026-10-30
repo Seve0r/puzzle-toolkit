@@ -1820,6 +1820,172 @@ def read_input(args, want_bytes=False):
     return " ".join(args), args
 
 
+# ------------------------------------------------- 只有解码方向的，补上 encoder
+#
+# 放在文件后部，确保依赖（WABUN / B91 / B62_SETS / _hira2kata …）都已定义。
+# 装饰器在模块加载时就注册，位置本身不影响功能。
+
+def _bin_str(b):
+    """把二进制塞进 str：1 字符 = 1 字节（latin-1 视角）。
+
+    codec 的 enc 一律返回 str。压缩流 / UTF-16 / uu 这类结果本质是二进制，
+    用 latin-1 承载才能让 `dec` 那边的 raw_bytes() 原样还原，也才能接着
+    `enc b64` 串成管道。直接看是乱码——这是设计，不是 bug。
+    """
+    return b.decode("latin-1")
+
+
+@enc_name("atbash")
+def _e_atbash(s):
+    return _d_atbash(s)              # 自反：解两次回到原文
+
+
+@enc_name("rot47")
+def _e_rot47(s):
+    return _d_rot47(s)               # 同上
+
+
+@enc_name("base32hex", "b32hex")
+def _e_b32hex(s):
+    return base64.b32hexencode(as_bytes(s)).decode()
+
+
+@enc_name("base62", "b62")
+def _e_b62(s):
+    # 解码端会拿三种字母表轮着试，编码固定用最常见的那种（0-9A-Za-z）
+    alpha = B62_SETS[0]
+    n = int.from_bytes(as_bytes(s), "big")
+    if n == 0:
+        return ""
+    out = []
+    while n:
+        n, r = divmod(n, 62)
+        out.append(alpha[r])
+    return "".join(reversed(out))
+
+
+@enc_name("ascii85", "a85")
+def _e_a85(s):
+    return base64.a85encode(as_bytes(s)).decode()
+
+
+@enc_name("base91", "b91")
+def _e_b91(s):
+    """base91 编码：每 13/14 位吐两个字符，是解码那段的反向。"""
+    data = as_bytes(s)
+    out = []
+    b = n = 0
+    for byte in data:
+        b |= byte << n
+        n += 8
+        if n > 13:
+            v = b & 8191
+            if v > 88:
+                b >>= 13
+                n -= 13
+            else:
+                v = b & 16383
+                b >>= 14
+                n -= 14
+            out.append(B91[v % 91])
+            out.append(B91[v // 91])
+    if n:
+        out.append(B91[b % 91])
+        if n > 7 or b > 90:
+            out.append(B91[b // 91])
+    return "".join(out)
+
+
+@enc_name("utf16")
+def _e_utf16(s):
+    return _bin_str(as_text(s).encode("utf-16"))      # 带 BOM
+
+
+@enc_name("utf16be")
+def _e_utf16be(s):
+    return _bin_str(as_text(s).encode("utf-16-be"))
+
+
+@enc_name("utf16le")
+def _e_utf16le(s):
+    return _bin_str(as_text(s).encode("utf-16-le"))
+
+
+@enc_name("utf32")
+def _e_utf32(s):
+    return _bin_str(as_text(s).encode("utf-32"))
+
+
+@enc_name("utf32be")
+def _e_utf32be(s):
+    return _bin_str(as_text(s).encode("utf-32-be"))
+
+
+@enc_name("utf32le")
+def _e_utf32le(s):
+    return _bin_str(as_text(s).encode("utf-32-le"))
+
+
+@enc_name("uu")
+def _e_uu(s):
+    """标准 uuencode：begin 头 + 每行 ≤45 字节 + 长度 0 行 + end。"""
+    data = as_bytes(s)
+    lines = ["begin 644 data"]
+    for i in range(0, len(data), 45):
+        lines.append(binascii.b2a_uu(data[i:i + 45]).decode("ascii").rstrip("\n"))
+    lines.append("`")
+    lines.append("end")
+    return "\n".join(lines)
+
+
+@enc_name("gzip", "zlib", "bz2", "deflate", "inflate")
+def _e_compress(s):
+    # 解码端会轮流试 gzip/zlib/raw-deflate/bz2，所以编 gzip 就能被解回来
+    return _bin_str(gzip.compress(as_bytes(s)))
+
+
+@enc_name("js", "jsescape")
+def _e_js(s):
+    return _e_unicode(s)
+
+
+# 和文モールス只有 48 个大假名符号，没有小假名（ャュョッ）和 ヵヶ 的独立码，
+# 一律按大假名送。所以 `ガッコウ` 编出来和 `ガツコウ` 一样，解回来也是后者——
+# 这是体系本身的限制，不是往返 bug。
+_WABUN_SMALL = {
+    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
+    "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ッ": "ツ", "ヮ": "ワ",
+    "ヵ": "カ", "ヶ": "ケ",
+}
+
+
+@enc_name("wabun", "wabunmorse")
+def _e_wabun(s):
+    """文字 → 和文モールス。平假名、片假名都收。
+
+    浊音/半浊音在摩斯里不是一个符号，而是「清音 + ゛/゜」两个符号，
+    所以编码时要反过来拆：ジ → シ + ゛。解码端再把它们粘回去。
+    """
+    rev_daku = {v: k for k, v in _WABUN_DAKU.items()}
+    rev_han = {v: k for k, v in _WABUN_HANDAKU.items()}
+    out = []
+    for ch in _hira2kata(s):
+        ch = _WABUN_SMALL.get(ch, ch)
+        if ch in rev_daku:
+            out.append(WABUN[rev_daku[ch]])
+            out.append(WABUN["゛"])
+        elif ch in rev_han:
+            out.append(WABUN[rev_han[ch]])
+            out.append(WABUN["゜"])
+        elif ch in WABUN:
+            out.append(WABUN[ch])
+        elif ch in " 　\n\t":
+            out.append("/")          # 词间分隔，解码端认
+        else:
+            raise ValueError("和文モールス表里没有这个字符：%r" % ch)
+    return "/".join(out)
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv

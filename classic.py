@@ -935,6 +935,24 @@ T9 = {
 }
 
 
+def t9_encode(text):
+    """文字 → 数字串。每个字母映射到它所在键的数字。
+
+    同一串数字能对应多种字母组合（`43556` 可以是 hello 也可以是 …），
+    这是 T9 本身的歧义，不是编码丢信息。短串靠 `t9` 穷举 + 英文契合度排序
+    就能挑回来；长串会爆炸，那种情况本来也不该用 T9。
+    """
+    rev = {ch: d for d, letters in T9.items() for ch in letters}
+    out = []
+    for c in text:
+        lc = c.lower()
+        if lc in rev:
+            out.append(rev[lc])
+        elif c in " \t":
+            out.append(" ")
+    return "".join(out)
+
+
 def t9(text, limit=200):
     groups = []
     for c in text:
@@ -1055,6 +1073,7 @@ def main():
     b_opt = opt("--b", int, None)
     rails = opt("--rails", int, None)
     layout = opt("--layout", str, "qwerty")
+    kb_shift = opt("--shift", int, -1)     # 原先根本没解析，界面传了也白传
     trans_key = opt("--trans", str, None)
     old = "--old" in argv
     argv = [x for x in argv if x != "--old"]
@@ -1095,6 +1114,17 @@ def main():
 
     try:
         if cmd == "caesar":
+            if enc:
+                if key is None:
+                    print("加密需要 --key")
+                    return 2
+                try:
+                    k = int(key)
+                except ValueError:
+                    print("凯撒的 --key 要是一个数字（位移量）")
+                    return 2
+                print(shift_alpha(text, k))
+                return 0
             rows = caesar(text, key, top)
             if quiet:
                 for k, out in rows:
@@ -1124,6 +1154,12 @@ def main():
             return 0
 
         if cmd == "affine":
+            if enc:
+                if a_opt is None or b_opt is None:
+                    print("加密需要 --a 和 --b")
+                    return 2
+                print(affine_enc(text, a_opt, b_opt))
+                return 0
             rows, brute = affine(text, a_opt, b_opt, top)
             if quiet:
                 for r in rows:
@@ -1153,7 +1189,10 @@ def main():
             return 0
 
         if cmd == "bacon":
-            print(bacon_decode(text, old))
+            # bacon_encode 早写好了，但 main 从来不看 enc —— 加 --enc 只会走到
+            # decode，而 decode 面对 "hello" 没有 A/B，会退化成大小写隐写、
+            # 返回第一个五位的 "a"。这就是「编码输出一个字母」的来历。
+            print(bacon_encode(text, old) if enc else bacon_decode(text, old))
             return 0
 
         if cmd == "railfence":
@@ -1212,10 +1251,16 @@ def main():
                 for name, out in keyboard_all(text):
                     print("  %-12s %s" % (name, out))
             else:
-                print(keyboard(text, layout, -1))
+                # 默认 -1 = 往左还原（手放错一格时最常见的修法）；
+                # 加密就是反方向，所以 --enc 取反。
+                sh = kb_shift
+                print(keyboard(text, layout, -sh if enc else sh))
             return 0
 
         if cmd == "t9":
+            if enc:
+                print(t9_encode(text))
+                return 0
             rows = t9(text, limit=500)
             for r in rows[:50]:
                 print("  " + r[0])

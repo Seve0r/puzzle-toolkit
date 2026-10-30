@@ -29,6 +29,42 @@ URL、HTML 实体、Unicode 转义（`\u`/`\U`/`\x`/`U+XXXX`）、Quoted-Printab
 UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GBK、
 **mojibake**（乱码还原：UTF-8 被误读成 GBK，以及中日韩编码互相误读，见下方第 ⑦ 条）。
 
+## 编码方向（`enc`）
+
+`dec <编码> <文本>` 是解码，`enc <编码> <文本>` 是编码，同一张表：
+
+```bash
+python3 codec.py enc b64 Hello       # SGVsbG8=
+python3 codec.py enc hex Hi          # 4869
+python3 codec.py enc wabun じんこう   # --.-./../.-.-./----/..-（和文摩尔斯）
+```
+
+**双向的 48 个**（其余只有解码，见下）：base16/32/32hex/58/62/64/64url/85/91、
+bin、dec、oct、url、html、unicode、qp、rot13/rot47、atbash、morse、**wabun**、
+braille、utf16/be/le、utf32/be/le、js、uu、gzip/zlib/bz2、punycode、gbk。
+
+### 有几种编码的输出是二进制
+
+`utf16` / `utf32` / `uu` / `gzip` 编码后的东西**不是可读文本**——codec 统一
+用 latin-1 承载（1 字符 = 1 字节），所以直接看是乱码。正常用法是接一层：
+
+```bash
+python3 codec.py enc gzip "要压缩的内容" | python3 codec.py enc b64    # 可复制
+python3 codec.py enc utf16be "Hello" | python3 codec.py enc hex        # 十六进制
+```
+
+反过来解码也认这两种：`dec gzip` 和 `dec utf16` 内部走 `raw_bytes()`，
+会先判断输入是不是 latin-1 承载的字节流。
+
+### 只有解码方向的
+
+`mojibake`（还原乱码——**故意没有反向**，"制造乱码"容易让人误用）、
+`braillebits`（8 点原始位串，输出是多视图，没有唯一反向）。
+
+### 自反的两个
+
+`atbash` 和 `rot47` 解两次回到原文，所以 `enc` 和 `dec` 是同一个函数。
+
 ## mojibake：`浜哄彧鑳界湅` → `人只能看`
 
 UTF-8 的中文被当成 GBK 读了一遍，是 ARG 里最常见的乱码。还原方向反直觉：
