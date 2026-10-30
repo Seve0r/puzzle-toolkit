@@ -13,7 +13,7 @@ python3 $H <子命令> ...
 | 子命令 | 用途 |
 |---|---|
 | `identify <hash>` | 猜哈希类型（长度 + 字符集 + `$1$`/`$6$`/`*XXXX` 前缀） |
-| `hash <algo> <text>` | 计算，支持 md5/sha*/sha3/blake2/ntlm/mysql |
+| `hash <algo> <text>` ／ `hash <text> --algo A` | 计算，支持 md5/sha*/sha3/blake2/ntlm/mysql |
 | `crack <hash> [--algo A] [--rules]` | 字典爆破（内置弱密码表 + 系统词表 + 变形规则） |
 | `xor <hex> [--key HEX \| --key-str TEXT]` | 单字节全试 / 指定 key 异或 |
 | `repeat-xor <file>` | **重复密钥 XOR**：汉明距离定长 + 逐列恢复 + 密钥修正 |

@@ -942,11 +942,20 @@ def main():
         return 0
 
     if cmd == "hash":
-        if len(rest) < 2:
-            die("用法：hash <algo> <text>")
-        h = compute(rest[0], " ".join(rest[1:]))
+        # 两种写法都收：`hash md5 hello`（算法在前）和 `hash hello --algo md5`。
+        # 后者是界面用的——界面统一把参数拼成 `--name value`，位置参数只有正文。
+        # 注意 rest 是 argv 的切片副本，opt() 消费 argv 不会影响它，得重取一次。
+        args = argv[1:]
+        if algo:
+            algo_use, payload = algo, " ".join(args)
+        else:
+            if len(args) < 2:
+                die("用法：hash <算法> <文本>　或　hash <文本> --algo md5")
+            algo_use, payload = args[0], " ".join(args[1:])
+        h = compute(algo_use, payload)
         if not h:
-            die("不支持的算法：%s\n可选：%s" % (rest[0], ", ".join(HASHLIB_ALGOS + ["ntlm", "mysql"])))
+            die("不支持的算法：%s\n可选：%s"
+                % (algo_use, ", ".join(HASHLIB_ALGOS + ["ntlm", "mysql"])))
         print(h)
         return 0
 

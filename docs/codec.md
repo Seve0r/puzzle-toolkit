@@ -39,7 +39,7 @@ python3 codec.py enc hex Hi          # 4869
 python3 codec.py enc wabun じんこう   # --.-./../.-.-./----/..-（和文摩尔斯）
 ```
 
-**双向的 48 个**（其余只有解码，见下）：base16/32/32hex/58/62/64/64url/85/91、
+**双向的 35 个**（共 37 个编码概念，其余只有解码，见下）：base16/32/32hex/58/62/64/64url/85/91、
 bin、dec、oct、url、html、unicode、qp、rot13/rot47、atbash、morse、**wabun**、
 braille、utf16/be/le、utf32/be/le、js、uu、gzip/zlib/bz2、punycode、gbk。
 

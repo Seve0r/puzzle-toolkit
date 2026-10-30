@@ -62,6 +62,7 @@ TABS = [
         "id": "hashcrypto", "label": "哈希 / 现代密码", "input": "text",
         "actions": [
             {"name": "identify", "label": "识别哈希类型"},
+            {"name": "hash", "label": "计算哈希（明文 → 哈希）"},
             {"name": "crack", "label": "字典爆破"},
             {"name": "xor", "label": "XOR（单字节 / 指定密钥）"},
             {"name": "repeat-xor", "label": "重复密钥 XOR 自动检测"},
@@ -175,6 +176,16 @@ PARAMS = {
     ],
 
     # ---------------- hashcrypto ----------------
+    # 正向算哈希：给明文，出 md5/sha*/ntlm…
+    "hashcrypto/hash": [
+        {"key": "algo", "type": "choice", "label": "算法", "default": "md5",
+         "choices": [
+             ("md5", "md5（32 位 hex）"), ("sha1", "sha1（40 位）"),
+             ("sha256", "sha256（64 位）"), ("sha512", "sha512"),
+             ("sha224", "sha224"), ("sha384", "sha384"),
+             ("ntlm", "NTLM（Windows）"), ("mysql", "MySQL PASSWORD()"),
+         ]},
+    ],
     "hashcrypto/crack": [
         {"key": "algo", "type": "text", "label": "算法", "placeholder": "不填自动识别"},
         {"key": "rules", "type": "check", "label": "启用变形规则（大小写/加数字后缀）"},

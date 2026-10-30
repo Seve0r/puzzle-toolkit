@@ -195,9 +195,10 @@ python3 codec.py enc hex -f picture.png
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
-支持的编码有四十多种（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、
-Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…），
-其中 **48 个是双向的**（`enc` 能编回去）；只有 `mojibake` 和 `braillebits` 是单向的。
+支持的编码（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、Unicode 转义、
+摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…）去重后
+共 **37 个编码概念**，其中 **35 个是双向的**（`enc` 能编回去）；
+只有 `mojibake`（还原乱码，故意不给逆）和 `braillebits`（8 点位串多视图）是单向的。
 `utf16` / `utf32` / `uu` / `gzip` 的编码结果不是可读文本，用 latin-1 承载，
 接着套一层 `enc b64` 或 `enc hex` 就能复制走。
 完整列表用 `codec list`。
@@ -231,7 +232,7 @@ Unicode 转义、摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GB
 | 命令 | 说明 |
 |---|---|
 | `hc identify <哈希>` | 猜测哈希类型（长度 / 字符集 / 前缀） |
-| `hc hash <算法> <文本>` | 计算哈希 |
+| `hc hash <算法> <文本>` | 计算哈希（也可 `hc hash <文本> --algo md5`） |
 | `hc crack <哈希> [--algo A] [--wordlist F] [--rules]` | 字典爆破，不给 algo 就自动识别 |
 | `hc mask <哈希> --len 8 --charset digits` | **按格式穷举**（掩码爆破），多进程；`--mask "?d?d?d?d"` 写法同 hashcat |
 | `hc xor <数据> [--key HEX \| --key-str TEXT]` | 单字节全试 / 指定 key 异或 / 多字节自动 |

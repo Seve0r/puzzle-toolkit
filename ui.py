@@ -592,6 +592,10 @@ PAGE = r"""<!DOCTYPE html>
     background:#171a20; color:var(--fg); border:1px solid var(--line);
     border-radius:5px; padding:6px 9px; font-family:inherit; font-size:13px;
   }
+  input[type=checkbox] {
+    width:15px; height:15px; margin:0 2px; accent-color:var(--accent);
+    cursor:pointer;
+  }
   input[type=text]:focus, textarea:focus, select:focus {
     outline:none; border-color:var(--accent);
   }
@@ -973,6 +977,12 @@ function renderParams() {
         ctl.appendChild(o);
       }
       ctl.value = (p.default !== undefined) ? p.default : p.choices[0][0];
+    } else if (p.type === "check") {
+      // ★ 这里原先没有 check 分支，checkbox 类型的参数全落到最后的文本分支，
+      //   于是「加密方向」「强制深色=1」这些开关在界面上都变成了输入框。
+      ctl = document.createElement("input");
+      ctl.type = "checkbox";
+      ctl.checked = !!p.default;
     } else if (p.type === "int") {
       ctl = document.createElement("input");
       ctl.type = "number";
@@ -1027,7 +1037,9 @@ function paramValues() {
   for (const p of (PARAMSPEC[paramKey()] || [])) {
     const ctl = $("p_" + p.key);
     if (!ctl) continue;
-    if (p.type === "int") {
+    if (p.type === "check") {
+      if (ctl.checked) out[p.key] = true;      // 只有勾上才作为开关发出
+    } else if (p.type === "int") {
       const n = parseInt(ctl.value, 10);
       if (!isNaN(n)) out[p.key] = n;
     } else {
