@@ -1436,6 +1436,16 @@ def auto_with_mojibake(text, depth=3):
     返回 (score, 结果, 路径, 无)。
     """
     sc, final, path = auto(text, depth)
+    # 零宽字符（U+200B/200C/200D/FEFF）从网页/文档复制时经常夹带进来，
+    # 对纯 ASCII 数据来说它们只是噪音，却足以让所有识别规则失配 ——
+    # 表现为「明明该是 base36/hex，auto 却说没有可靠路径，还给个 mojibake 提示」。
+    # 先按原串试（万一是真正的零宽隐写），不行再剥掉重试。
+    if not (path and final != text) and re.search(r"[\u200b\u200c\u200d\ufeff]", text):
+        stripped = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
+        if stripped != text:
+            sc2, final2, path2 = auto(stripped, depth)
+            if path2 and final2 != stripped:
+                sc, final, path = sc2, final2, path2
     if not _ENABLE_LATIN1_MOJIBAKE:
         return sc, final, path, None    # 关掉时就是纯 auto()，行为不变
     if path and final != text:
@@ -1743,6 +1753,18 @@ def structural_candidates(text):
         cands.append("base64")
     if re.fullmatch(r"[A-Za-z0-9_\-]+={0,2}", compact) and len(compact) % 4 == 0 and len(compact) >= 8:
         cands.append("base64url")
+    # 两位 base36 = 一字节：`6F 4M 57` → E7 A6 BB → "离"。
+    # 字符集是 0-9A-Za-z 全集，所以约束只能靠「偶数长度 + 每两位的值 ≤ 255」：
+    # `6F`=231 ✓ 而纯 hex 串（`48656c6c6f`）两位一组也都 ≤ 255，
+    # 所以必须排在 base16 之后——hex 能解出的东西会先被 hex 拿走。
+    if (len(compact) % 2 == 0 and len(compact) >= 8
+            and re.fullmatch(r"[0-9A-Za-z]+", compact)):
+        try:
+            if all(int(compact[i:i + 2], 36) <= 255
+                   for i in range(0, len(compact), 2)):
+                cands.append("block36")
+        except ValueError:
+            pass
     # base58 字符集排除了 0OIl，特征比较强
     if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{6,}", compact) and not re.fullmatch(r"[0-9a-fA-F]+", compact):
         cands.append("base58")
@@ -2000,6 +2022,28 @@ def _bin_str(b):
     `enc b64` 串成管道。直接看是乱码——这是设计，不是 bug。
     """
     return b.decode("latin-1")
+
+
+# 「两位 base36 = 一字节」。和 base36 是两回事：
+#   base36   把**整串**当一个大整数再转字节 → `6F4M57…` 解出来是垃圾
+#   block36  每**两位**独立转一个字节   → `6F`=231=`E7`、`4M`=166=`A6`…
+#            15 组正好 15 字节 → `离开的钥匙`
+# 谜题里那种「看起来像 hex 但掺了 M/K/O/W」的串多半是它。
+_B36_ALPHA = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+@dec_name("block36", "b36x2")
+def _d_block36(s):
+    raw = blocks_to_bytes(re.sub(r"\s+", "", s).upper(), 2, 36)
+    if raw is None:
+        raise ValueError("不是「两位 base36 = 一字节」的形式")
+    return as_text(raw)
+
+
+@enc_name("block36", "b36x2")
+def _e_block36(s):
+    return "".join(_B36_ALPHA[b // 36] + _B36_ALPHA[b % 36]
+                   for b in as_bytes(s))
 
 
 @enc_name("atbash")

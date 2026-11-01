@@ -195,6 +195,10 @@ python3 codec.py enc hex -f picture.png
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
+`base36` 和 `block36` 不是一回事：前者把**整串**当一个 base36 大整数，
+后者每**两位**转一个字节。`6F4M576D…` 这种「像 hex 但掺了 M/K/O/W」的用
+`block36`（→ `离开的钥匙`）。`auto` 都能自动认。
+
 支持的编码（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、Unicode 转义、
 摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…）去重后
 共 **37 个编码概念**，其中 **35 个是双向的**（`enc` 能编回去）；
