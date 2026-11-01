@@ -915,8 +915,31 @@ def _same_encoding_family(a, b):
     return any(a in fam and b in fam for fam in _MOJIBAKE_FAMILIES)
 
 
+# ---------------------------------------------------------------- 实验开关
+#
+# 「文件名乱码」那一类（`²âÊÔ` → 测试、`¼ªÏe` → 吉详）的自动还原还没定稿：
+# 用户反馈其它例子解不出来，怀疑有误伤，先整体关掉，等拿到确定的样本再开。
+#
+# 这个开关同时控制三处：
+#   1. mojibake_latin1()        —— 新增的「字节被当 Latin-1/CP1252」一类
+#   2. _encode_back() 里的 NFC  —— NFD 形式的文件名（I + U+0308 这种）
+#   3. auto_with_mojibake() 的兜底 —— 短串采信
+#
+# 代码全部保留，恢复只需把这个常量改成 True。
+_ENABLE_LATIN1_MOJIBAKE = False
+
+
 def _encode_back(s, enc):
-    """把乱码字符串按 enc 还原成原始字节（含 CP936 的 0x80 ↔ € 特例）。"""
+    """把乱码字符串按 enc 还原成原始字节（含 CP936 的 0x80 ↔ € 特例）。
+
+    ★ 先做 NFC 规范化，这不是洁癖：macOS 和不少工具按 **NFD** 存文件名，
+    把 `Ï`(U+00CF) 拆成 `I`(U+0049) + `\u0308`（组合分音符），视觉上一模一样，
+    但 `\u0308` 在任何单字节编码里都编不出来 —— 于是整个还原在第一步就报
+    「'latin-1' codec can't encode character '\u0308'」，一个字节都没处理。
+    实测文件名乱码 `¼ªÏê`（= 吉详）在 macOS 下就是这个形态。
+    """
+    if _ENABLE_LATIN1_MOJIBAKE:        # 见文件里的实验开关说明
+        s = unicodedata.normalize("NFC", s)
     if enc not in _GBK_FAMILY or "\u20ac" not in s:
         return s.encode(enc)
     out = bytearray()
@@ -1064,6 +1087,62 @@ def _common_ratio(s):
         elif o < 0x7F or 0x3000 <= o <= 0x303F:
             n += 1
     return n / len(s)
+
+
+def mojibake_latin1(s, min_plain=0.8):
+    """「每个字符就是一个字节」那类乱码：整串都是西欧字符。
+
+    文件名里最常见——Windows / 一些解压工具把 GBK 字节按西欧代码页显示，
+    于是「测试」变成 `²âÊÔ`、「文件」变成 `ÎÄ¼þ`。
+
+    和 mojibake_cross 互补，两者互不重叠：
+      · cross 要求原文**以汉字为主**（输入端是「汉字乱码」：浣犲ソ、孨偼堦惗）
+      · 这里要求原文**全在 Latin-1 范围**（输入端是「西欧字母乱码」：²âÊÔ）
+
+    以前只做了 cross，所以 `²âÊÔ` 这种一个汉字都没有的乱码连门都进不去，
+    自动识别直接报「数据可能损坏」——其实一个字节都没丢。
+
+    门槛只有三条，都很硬：
+      1. 所有字符 ≤ U+00FF（否则不可能是 latin-1 源）
+      2. 严格 decode 成功（0 损失）
+      3. 结果里**必须真的出现 CJK/假名**，否则只是把西欧字母换了个写法
+    """
+    if _ENABLE_LATIN1_MOJIBAKE:        # 同上，NFD 先合回预组合形式
+        s = unicodedata.normalize("NFC", s)
+    if len(s) < 2 or any(ord(c) > 0xFF for c in s):
+        return []
+    # ★ 这道门槛是防假阳性的关键：真正的「字节被当西欧代码页」是**成串**的
+    #   （GBK 一个汉字 = 两个高位字符），而正常西欧文本只有零星几个变音字母。
+    #   少了它，Müller → M黮ler、Señor → Se隳r、© 2026 → ｩ 2026 都会被"解"出来，
+    #   比原文更糟。实测这三个都是这么冒出来的。
+    high = sum(1 for c in s if ord(c) >= 0x80)
+    if high < max(2, len(s) * 0.5):
+        return []
+    rows = []
+    for src in ("cp1252", "latin-1"):
+        try:
+            raw = s.encode(src)
+        except UnicodeEncodeError:
+            continue
+        for tgt in ("utf-8", "gb18030", "big5", "shift_jis", "euc-kr"):
+            try:
+                out = raw.decode(tgt)
+            except (UnicodeDecodeError, LookupError):
+                continue
+            if out == s:
+                continue
+            # 结果至少要有 2 个 CJK/假名字符，否则只是换了个写法
+            if sum(1 for c in out if ord(c) > 0x2FF) < 2:
+                continue
+            # 判据必须用 _common_ratio 而不是 _plain：b'\xb2\xe2\xca\xd4' 按
+            # euc-kr 能解出 꿎桿，_plain 给满分 1.0（韩文都算可打印），
+            # 但 _common_ratio 是 0.00（不是 GB2312 常用字、也不是假名）。
+            # 用 _plain 排序会让韩文赢过正确的「测试」，实测就踩了这个坑。
+            p = _common_ratio(out)
+            if p >= min_plain:
+                rows.append((p, src, tgt, out))
+    rows.sort(key=lambda r: (-r[0], r[2]))
+    return rows
 
 
 def mojibake_cross(s, min_plain=0.85, min_gain=0.4, min_han=0.5, min_len=3):
@@ -1251,6 +1330,20 @@ def _d_mojibake(s):
             rejected = (enc, out)    # 无损但解得更差 → 巧合，不是真乱码
     else:
         ratio, bad, enc, out = 1.0, len(s), "?", s
+    # ---- 1.5 级：整串都是西欧字符 = 「字节被当 Latin-1」，此时上面两级
+    # 都接不住（rank 目标是 UTF-8、cross 要求原文以汉字为主），必须单独一条。
+    lat = mojibake_latin1(s) if _ENABLE_LATIN1_MOJIBAKE else []
+    if lat:
+        p, lsrc, ltgt, lout = lat[0]
+        others = ["%s→%s(%s)" % (r[1], r[2], r[3]) for r in lat[1:3]]
+        sys.stdout.flush()
+        sys.stderr.write(
+            "\n  [西欧字符] 按 %s 编回字节、按 %s 解（可读度 %.0f%%）%s\n"
+            % (lsrc, ltgt, p * 100,
+               "；另有 " + "、".join(others) if others else ""))
+        sys.stderr.flush()
+        return lout
+
     # ---- 二级：换成非 UTF-8 的目标编码再试
     cross = mojibake_cross(s)
     if cross:
@@ -1304,6 +1397,34 @@ def _d_mojibake(s):
             "  若你已知当初的编码对，直接指定：dec mojibake --from gbk --to shift_jis '...'"
             % (ratio * 100, bad, enc, body))
     return out
+
+
+def auto_with_mojibake(text, depth=3):
+    """auto 的完整版：没找到可靠路径时，再认真试一次 mojibake。
+
+    ★ 为什么单独包一层：`score()` 是为英文字母设计的，**中文越正常分越低**
+      —— 实测 `测试` 97.0 < `²âÊÔ` 102.5，于是短串会被判成「越解越差」，
+      auto 明明解出来了也不敢用。而文件名乱码普遍很短（`²âÊÔ`、`ÎÄ¼þ`），
+      正好全落在这个坑里。所以 mojibake 的采信改用「常用字比例」。
+
+    ★ 为什么必须共用：界面走的不是 `main()`，而是直接调 `auto()`。
+      只在 main 里加兜底的话，界面上点「自动识别」仍然解不出来——这是实测
+      踩过的，命令行能解、界面不能。
+
+    返回 (score, 结果, 路径, 无)。
+    """
+    sc, final, path = auto(text, depth)
+    if not _ENABLE_LATIN1_MOJIBAKE:
+        return sc, final, path, None    # 关掉时就是纯 auto()，行为不变
+    if path and final != text:
+        return sc, final, path, None
+    try:
+        mb = _d_mojibake(text)
+    except Exception:
+        mb = None
+    if mb and mb != text and _common_ratio(mb) >= 0.8:
+        return score(mb), mb, ["mojibake"], None
+    return sc, final, path, None
 
 
 def mojibake_best(s):
@@ -2041,7 +2162,7 @@ def main():
 
     if cmd == "auto":
         text, _ = read_input(argv[1:])
-        sc, final, path = auto(text, depth)
+        sc, final, path, _ = auto_with_mojibake(text, depth)
         if quiet:
             print(final)
             return 0
@@ -2054,6 +2175,7 @@ def main():
             sys.stderr.write("路径：%s\n得分：%.1f\n" % (" → ".join(path), sc))
             print(final)
         else:
+            # 还原尝试已经由 auto_with_mojibake 做过了，走到这里是真的没辙
             sys.stderr.write("没有可靠的编码路径（原样输出）\n")
             # 只说「没有可靠路径」等于什么都没说：用户分不清是「这压根不是编码」
             # 还是「是乱码但数据坏了」。这里再探一次 mojibake，把损失率亮出来。

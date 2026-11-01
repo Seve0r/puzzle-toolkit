@@ -377,7 +377,10 @@ def run_action(payload):
     try:
         with contextlib.redirect_stderr(log), contextlib.redirect_stdout(log):
             if action == "auto":
-                score, final, path = codec.auto(text, int(payload.get("depth") or 3))
+                # 走 auto_with_mojibake 而不是裸 auto()：后者用 score() 打分，
+                # 中文越正常分越低，短的文件名乱码（²âÊÔ）会被判「越解越差」。
+                score, final, path, _ = codec.auto_with_mojibake(
+                    text, int(payload.get("depth") or 3))
                 result = {
                     "ok": True,
                     "result": final,
