@@ -1671,6 +1671,16 @@ def structural_candidates(text):
     if re.fullmatch(r"[01\s]{16,}", t):
         # 纯 0/1 位流没有任何歧义，直接定死；否则 0/1 恰好是 base64 字符集子集，会被 base64 抢走
         return ["bin"]
+    # 十进制 ASCII：`65 32 87 …` → "A W…"。三个硬条件：
+    #   1. 数字之间**必须有分隔符** —— 裸数字串（`123456789`）是一个十进制数，
+    #      不是字节序列，不加这条整串都会被当 ASCII 解；
+    #   2. 每个数 ≤ 255 —— 日期 `2024 10 25` 第一个数就超了，自然被拒；
+    #   3. 至少 3 个 —— 太短的（`1 2 3`）解出来是控制字符，由 acceptable() 兜住。
+    _nums = re.findall(r"\d+", t)
+    if (len(_nums) >= 3 and re.search(r"\d[\s,]+\d", t)
+            and re.fullmatch(r"[\d\s,]+", t)
+            and all(int(x) <= 255 for x in _nums)):
+        cands.append("dec")
     if re.search(r"%[0-9A-Fa-f]{2}", t):
         cands.append("url")
     if re.search(r"&(#\d{1,7}|#x[0-9a-fA-F]{1,6}|[a-zA-Z]{2,8});", t):
