@@ -96,18 +96,9 @@ def _as_text(value):
 
 # 显示名微调：注册顺序里的第一个名字未必是最好认的。
 _UI_LABEL = {
-    # 只改**显示名**，注册名不动（命令行仍用 hex / bin / dec / oct）。
-    #
-    # 这四个光写「二进制 / 十进制」是不够的——真正决定选哪个的是**怎么切成
-    # 字节**，而这一点从进制名上看不出来：
-    #   · hex / bin 按**固定位宽**切（2 位 / 8 位一字节），空白可有可无
-    #   · dec / oct 是**一串独立的数**，每个数一字节，必须有分隔符
-    # 实测用户对着 `65 32 87` 和 `11100111…` 不知道这两个分别是哪个，
-    # 而 `bin` 在 num.py 里又指「一个数换成二进制写」，同一个词两种意思。
-    "base16": "hex · 两位一字节（可带空格）",
-    "bin": "binary · 八位一字节（位流）",
-    "dec": "decimal · 一个数一字节（要空格分隔）",
-    "oct": "octal · 一个数一字节（要空格分隔）",
+    # 只改显示名，注册名不动。下拉框保持简短（hex / bin / dec / oct）——
+    # 「这几种怎么选」的说明放在底部报告栏和文档里，不塞进选项名。
+    "base16": "hex",   # 十六进制，日常都叫 hex
 }
 
 
@@ -397,6 +388,10 @@ def run_action(payload):
                     "result": final,
                     "score": round(float(score), 1),
                     "path": path,
+                    # 路径说明「用什么编码解出来的」，这里补上「解出来的字节
+                    # 又按什么编码变成文本」——codec 统一用 UTF-8（非法序列
+                    # 替换成 U+FFFD），写出来省得用户猜。
+                    "encoding": "UTF-8",
                     "log": log.getvalue(),
                 }
                 if not path:
@@ -860,8 +855,12 @@ async function call(payload) {
 function showLog(res) {
   const parts = [];
   if (res.log && res.log.trim()) parts.push(res.log.trim());
-  if (res.ok && res.path && res.path.length)
-    parts.push("路径：" + res.path.join(" → ") + (res.score !== undefined ? `　得分 ${res.score}` : ""));
+  if (res.ok && res.path && res.path.length) {
+    const bits = ["路径 " + res.path.join(" → ")];
+    if (res.score !== undefined) bits.push("得分 " + res.score);
+    if (res.encoding) bits.push("输出编码 " + res.encoding);
+    parts.push(bits.join("　"));
+  }
   if (parts.length) say(parts.join("\n"));
 }
 

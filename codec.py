@@ -2196,7 +2196,10 @@ def main():
         sys.stderr.write("原始：%s\n" % (
             text[:120] + ("…" if len(text) > 120 else "")))
         if path:
-            sys.stderr.write("路径：%s\n得分：%.1f\n" % (" → ".join(path), sc))
+            # 路径 + 得分 + 输出编码：三样一起给，省得用户猜
+            #「这串到底是用什么解出来的、解出来又按什么编码变成的文本」。
+            sys.stderr.write("路径：%s\n得分：%.1f\n输出编码：UTF-8\n"
+                             % (" → ".join(path), sc))
             print(final)
         else:
             # 还原尝试已经由 auto_with_mojibake 做过了，走到这里是真的没辙
