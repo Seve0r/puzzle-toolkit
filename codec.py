@@ -1681,7 +1681,14 @@ def structural_candidates(text):
 
     # 进制/Base 系列靠"字符集 + 长度"约束，避免纯英文单词被误判
     body = compact.rstrip("=")
-    if re.fullmatch(r"[A-Z2-7]+=*", compact) and len(compact) >= 8 and len(compact) % 8 == 0:
+    # base32：字符集 A-Z2-7。长度校验**不能**要求「8 的倍数」——那是有 padding
+    # 才成立的约束。去 padding 后的合法余数只有 0/2/4/5/7（1/3/6 是不可能的
+    # 长度，对应字节数对不上）。实测 `MFXCAYLMORSXEIDFM5XQ`（20 字符 →
+    # "an alter ego"）就因为 20 % 8 == 4 被挡在候选外，表现为
+    # 「dec base32 能解、auto 却不行」。放宽后仍由 acceptable() 兜底，
+    # 纯英文单词按 base32 解出来是垃圾，会被拒。
+    if (re.fullmatch(r"[A-Z2-7]+=*", compact) and len(compact) >= 8
+            and len(body) % 8 in (0, 2, 4, 5, 7)):
         cands.append("base32")
     # UTF-32 hex：8 位一组、多数码点带前导零（00000023 00007ED9 ...）。
     # ★ 必须排在 base16 之前 —— 它同样合法 hex，但只有按 UTF-32 解才可读。
