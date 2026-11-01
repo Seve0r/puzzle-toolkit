@@ -1681,6 +1681,13 @@ def structural_candidates(text):
             and re.fullmatch(r"[\d\s,]+", t)
             and all(int(x) <= 255 for x in _nums)):
         cands.append("dec")
+        # 八进制 ASCII：同一串数字若只由 0-7 组成，也可能是八进制
+        # （`110 145 154 154 157` = Hello）。只含 0-7 时两个候选都放进去，
+        # 让 acceptable() 用「解出来是不是可读文本」来分——`72 101 108` 这种
+        # 含 8/9，进不了这条，只会是十进制。
+        if (re.fullmatch(r"[0-7\s,]+", t)
+                and all(int(x, 8) <= 255 for x in _nums)):
+            cands.append("oct")
     if re.search(r"%[0-9A-Fa-f]{2}", t):
         cands.append("url")
     if re.search(r"&(#\d{1,7}|#x[0-9a-fA-F]{1,6}|[a-zA-Z]{2,8});", t):
