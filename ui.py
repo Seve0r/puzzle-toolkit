@@ -437,7 +437,7 @@ def run_action(payload):
                     if r.get("bytes"):
                         notes.append("字节：%s" % r["bytes"][:32])
                     if r.get("ok"):
-                        notes.append("字符编码：%s" % r["encoding"])
+                        notes.append("字符编码：%s" % (r.get("how") or r["encoding"]))
                     if r.get("warning"):
                         notes.append("[提示] " + r["warning"])
                     if r.get("zw"):

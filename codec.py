@@ -11,6 +11,14 @@
   list                 列出所有支持的编码名
   grid   <text>        切矩阵枚举读法（行/列/蛇形/反转），--rows --cols --width
   blocks <text>        定长块按进制转字节，-w 块宽 -r 进制（如 -w 2 -r 36）
+  convert <text>       字节 = 进制 × 字符编码，两个维度分开指定
+                       -r 进制（2/8/10/16/36，默认 16）
+                       -e 编码（utf-8/gbk/gb18030/big5/shift_jis/ascii/
+                               latin-1/auto，默认 auto）
+                       ★ auto 只表示「我替你挑一个能解的」，不代表这批字节
+                         只有这一种读法。纯 ASCII 时任何 ASCII 兼容编码结果
+                         都相同，报告会写成「ASCII（与编码无关）」；真有歧义
+                         （能解出不同的通顺文字）时会把候选一并列出。
 
 通用选项：
   -f, --file <path>    从文件读输入（二进制安全，配合 enc hex/base64 很有用）
@@ -34,6 +42,10 @@
   codec.py dec mojibake --deep 80 --file cipher.txt
   codec.py dec mojibake '孨偼堦惗巹傪朰傟側偄'          # 自动认出 GBK→Shift_JIS
   codec.py dec mojibake --from gbk --to shift_jis '孨偼堦惗巹傪朰傟側偄'
+  codec.py convert '228 189 160' -r 10                 # 十进制字节 → UTF-8 → 你
+  codec.py convert 'C0EB' -r 16                        # → 离（auto 认出 GB 系）
+  codec.py convert 'C0EB' -r 16 -e big5                # 同一批字节换编码 → 燭
+  codec.py convert '2W33342T' -r 36                    # base36 每两位一字节 → hope
 """
 import sys
 import os
@@ -1408,16 +1420,23 @@ def text_encoding_name(s):
     UTF-8 / GBK 这类多字节编码。
 
     三种结果：
-      · 纯 ASCII                        → "ASCII"
+      · 纯 ASCII                        → "ASCII（与编码无关）"
       · 出现了 U+FFFD（非法序列被替换）  → "UTF-8（有乱码，字节非法）"
       · 其它                            → "UTF-8"
+
+    ★ 纯 ASCII 为什么必须写「与编码无关」而不是干巴巴一个 "ASCII"：实测
+      用户拿 `2W33342T` 问「convert 说 utf-8、auto 说 ASCII，可我当年是按
+      GB18030 解的」——这三种说法全都不算错，因为 104/111/112/101 在 utf-8、
+      gbk、gb18030、big5、shift_jis、ascii、latin-1 **七种编码下解出来一模
+      一样**，都是 `hope`。报告写成一个编码名会被读成「工具认定了它 = 这个
+      编码」，那是过度自信：纯 ASCII 时压根不存在「是哪种编码」这个问题。
     """
     if not s:
         return "UTF-8"
     if "\ufffd" in s:
         return "UTF-8（有替换符，字节非法）"
     if all(ord(c) < 128 for c in s):
-        return "ASCII"
+        return "ASCII（与编码无关）"
     return "UTF-8"
 
 
@@ -1972,8 +1991,32 @@ def radix_to_bytes(text, radix):
     return None, "不支持的进制：%s" % radix
 
 
+def encoding_candidates(raw):
+    """列出能**完整**解出这些字节的编码，按 CONVERT_ENCODINGS 的顺序。
+
+    ★ 为什么排除 latin-1：它对**任意**字节流都合法（逐字节映射到 U+0000–U+00FF），
+      恒真所以毫无信息量。放进候选里，任何乱码都会「同时合法于 latin-1」，
+      提示立刻变成噪音。它只在别的全失败时当兜底，见 bytes_to_text。
+    """
+    out = []
+    for enc in CONVERT_ENCODINGS:
+        if enc == "latin-1":
+            continue
+        try:
+            out.append((enc, raw.decode(enc)))
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return out
+
+
 def bytes_to_text(raw, encoding="auto"):
-    """bytes -> 文本。返回 (文本, 实际用的编码, 说明)。"""
+    """bytes -> 文本。返回 (文本, 实际用的编码, 说明)。
+
+    ★ encoding="auto" 的语义是「我替你挑一个」，**不是**「这批字节就是它」。
+      两者差别很大：同一串字节常常有多种编码都能完整解出（纯 ASCII 时七种
+      全行），甚至解出**不同**的话。所以这里不再闷头返回第一个成功的编码，
+      而是把所有候选扫一遍，能解出不同结果时把话说清楚，让用户自己定。
+    """
     if encoding and encoding != "auto":
         try:
             return raw.decode(encoding), encoding, None
@@ -1983,13 +2026,45 @@ def bytes_to_text(raw, encoding="auto"):
             return None, encoding, "不认识的编码名：%s" % encoding
     # auto：按常见程度依次试，要求**整个字节流合法**（不做 replace，
     # 否则任何字节都能"解出来"，等于没判断）
-    for enc in CONVERT_ENCODINGS:
+    cands = encoding_candidates(raw)
+    if not cands:
+        # 连 utf-8/gbk/gb18030/big5/shift_jis/ascii 全都不合法，只剩 latin-1
+        # 这个「什么都能装」的兜底。解得出字不代表对，必须说清。
         try:
-            return raw.decode(enc), enc, None
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return raw.decode("utf-8", "replace"), "utf-8(有替换符)", \
-        "没有任何一种常见编码能完整解出这些字节，结果里的 ? 是替换符"
+            return raw.decode("latin-1"), "latin-1", \
+                ("这些字节不是任何常见多字节编码的合法序列，只能按 Latin-1 "
+                 "逐字节映射——解出来多半是乱码，更可能是原始字节已经损坏")
+        except Exception:
+            return raw.decode("utf-8", "replace"), "utf-8(有替换符)", \
+                "没有任何一种常见编码能完整解出这些字节，结果里的 ? 是替换符"
+    if all(b < 128 for b in raw):
+        # 纯 ASCII：所有 ASCII 兼容编码逐字节相同，报哪个名字都没区别。
+        # 报 ascii（最精确的那个下界），并把「其实谁都能解」说出来。
+        also = [e for e, _ in cands if e != "ascii"]
+        note = None
+        if also:
+            note = ("字节全部 < 128，是纯 ASCII —— %s 解出来完全一样，"
+                    "「是哪种编码」在这里没有意义" % " / ".join(also))
+        return cands[0][1], "ascii", note
+    text, enc = cands[0][1], cands[0][0]
+    # 有非 ASCII 字节时，候选之间**解出不同文本**才有歧义（utf-8 与 gbk
+    # 对同一批中文通常互斥，真撞上了就必须让用户自己选）。
+    #
+    # ★ 但「能解出不同东西」不等于「值得摆出来」：GB 系的字节常常同时是合法
+    #   的 Big5，于是每段 GB 中文都会附赠一串纯属巧合的胡话（实测
+    #   `离开的钥匙跃迁的线索…` 用 big5 读成 `燭羲腔埥啻埲ヮ腔盄坰帤眭腔…`）。
+    #   把胡话当平等候选列出来，只会逼用户去做一次没有意义的判断。所以用
+    #   _common_ratio（像正常文字的字符占比）过滤，只留看着也像人话的替代。
+    base = _common_ratio(text)
+    floor = max(0.6 * base, 0.5)
+    diff = [(e, t) for e, t in cands[1:]
+            if t != text and _common_ratio(t) >= floor]
+    note = None
+    if diff:
+        note = ("这批字节也能完整解成别的东西，结果不同：%s —— 用 --encoding "
+                "指定当年用的那种" % "；".join(
+                    "%s → %s" % (e, t[:20]) for e, t in diff))
+    return text, enc, note
 
 
 def convert_decode(text, radix=16, encoding="auto"):
@@ -2009,7 +2084,11 @@ def convert_decode(text, radix=16, encoding="auto"):
     if out is None:
         return {"ok": False, "error": warn, "bytes": list(raw)}
     res = {"ok": True, "result": out, "encoding": enc, "bytes": list(raw),
-           "warning": warn}
+           "warning": warn,
+           # 「字符编码：utf-8」会被读成「这批字节就是 UTF-8」——auto 只是挑了个
+           # 能解的。把归属写进返回值，CLI 和界面共用一份措辞，免得两边各写一句
+           # 以后又对不上（这正是用户报「convert 说 utf-8、auto 说 ASCII」的成因）。
+           "how": ("auto → " if (encoding or "auto") == "auto" else "") + enc}
     if _zw:
         res["zw"] = ("原文含 %d 个零宽字符，已剥离——若是刻意藏的，请另行处理" % _zw)
     return res
@@ -2331,16 +2410,28 @@ def main():
             argv = argv[:i] + argv[i + 1:]
     # convert 用：--radix <2|8|10|16|36> / --encoding <utf-8|gbk|ascii…|auto>
     # codec 的 main 是手写解析（没有通用 opt），照 --depth 的模式来。
+    # 短选项和 `blocks` 对齐（那边一直是 -r）：同一个「块按进制转字节」的
+    # 概念用两套写法，从 blocks 挪过来的人必然踩空——实测我自己就先踩了。
     radix_opt = 16
-    if "--radix" in argv:
-        i = argv.index("--radix")
-        radix_opt = int(argv[i + 1])
-        argv = argv[:i] + argv[i + 2:]
+    for flag in ("--radix", "-r"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                print("%s 后面要跟一个进制（2/8/10/16/36）" % flag)
+                return 2
+            radix_opt = int(argv[i + 1])
+            argv = argv[:i] + argv[i + 2:]
+            break
     enc_opt = "auto"
-    if "--encoding" in argv:
-        i = argv.index("--encoding")
-        enc_opt = argv[i + 1]
-        argv = argv[:i] + argv[i + 2:]
+    for flag in ("--encoding", "-e"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                print("%s 后面要跟一个编码名（如 utf-8 / gbk / auto）" % flag)
+                return 2
+            enc_opt = argv[i + 1]
+            argv = argv[:i] + argv[i + 2:]
+            break
 
     depth = 3
     for flag in ("--depth", "-d"):
@@ -2434,8 +2525,10 @@ def main():
                 sys.stderr.write("  解析出的字节：%s\n" % res["bytes"][:32])
             return 1
         if not quiet:
+            # 「字符编码：utf-8」会被读成「这批字节就是 UTF-8」——而 auto 只是
+            # 挑了个能解的。措辞统一由 convert_decode 的 how 给出。
             sys.stderr.write("进制：%d　字符编码：%s　字节数：%d\n"
-                             % (radix, res["encoding"], len(res["bytes"])))
+                             % (radix, res["how"], len(res["bytes"])))
             if res.get("warning"):
                 sys.stderr.write("  [提示] %s\n" % res["warning"])
             if res.get("zw"):

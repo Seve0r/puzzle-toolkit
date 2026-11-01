@@ -148,12 +148,13 @@ def _enc_choices(names):
 _PARAMS_CONVERT = [
     {"key": "encoding", "type": "choice", "label": "字符编码", "default": "auto",
      "choices": [
-         ("auto", "自动（UTF-8 → GBK → Big5 → Shift_JIS 依次试）"),
+         ("auto", "自动（UTF-8 → GBK → GB18030 → Big5 → Shift_JIS 依次试）"),
          ("utf-8", "UTF-8"), ("gbk", "GBK"), ("gb18030", "GB18030"),
          ("big5", "Big5（繁体）"), ("shift_jis", "Shift_JIS（日文）"),
          ("ascii", "ASCII（只要 0–127）"), ("latin-1", "Latin-1（一字符一字节）"),
      ],
-     "hint": "字节怎么变成文字。改这个能看出「这批字节到底是哪种编码」"},
+     "hint": "字节按哪种编码变成文字。同一批字节换个编码可能是另一句话；"
+             "auto 只是「挑一个能解的」，不代表只有这一种读法"},
     {"key": "radix", "type": "choice", "label": "进制", "default": "16",
      "choices": [
          ("16", "十六进制 · 两位一字节（可带空格）"),

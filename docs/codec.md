@@ -38,30 +38,62 @@ UTF-16、**UTF-32**（`utf32` 自动判字节序 / `utf32be` / `utf32le`）、GB
 `convert` 把这两个维度拆开：
 
 ```bash
-codec convert '228 189 160' --radix 10          # 你（自动判字符编码）
-codec convert 'E4BDA0'      --radix 16          # 你
-codec convert '344 275 240'  --radix 8          # 你
-codec convert '11100100…'   --radix 2           # 你
-codec convert '6F4M576D583K6F4A3O6H424L6D3W49' --radix 36   # 离开的钥匙
+codec convert '228 189 160' -r 10          # 你（自动判字符编码）
+codec convert 'E4BDA0'      -r 16          # 你
+codec convert '344 275 240' -r 8           # 你
+codec convert '11100100…'   -r 2           # 你
+codec convert '6F4M576D583K6F4A3O6H424L6D3W49' -r 36   # 离开的钥匙
+
+# 同一批字节，换个字符编码就是另一句话
+codec convert 'C0EB' -r 16                 # 离（auto 试出 GB 系）
+codec convert 'C0EB' -r 16 -e big5         # 燭
 
 # 显式指定，失败会明说
-codec convert 'E4BDA0' --radix 16 --encoding gbk
+codec convert 'E4BDA0' -r 16 -e gbk
 # 失败：这些字节不是合法的 gbk：can't decode byte 0xa0 in position 2
 ```
 
 | 选项 | 取值 |
 |---|---|
-| `--encoding` | `auto` / `utf-8` / `gbk` / `gb18030` / `big5` / `shift_jis` / `ascii` / `latin-1` |
-| `--radix` | `16` / `10` / `8` / `2` / `36` |
+| `-e`, `--encoding` | `auto` / `utf-8` / `gbk` / `gb18030` / `big5` / `shift_jis` / `ascii` / `latin-1` |
+| `-r`, `--radix` | `16` / `10` / `8` / `2` / `36` |
+
+### `auto` 是「我挑一个」，不是「它就是这个」
+
+最容易被误读的一处，实测被你抓到过：`2W33342T` 用 `convert` 解，报告写
+`utf-8`；用 `auto` 解，报告写 `ASCII`——而这批字节当年是按 **GB18030** 读的。
+
+三种说法**全都不算错**：解出来是 `hope`，四个字节全 < 128，在 utf-8 / gbk /
+gb18030 / big5 / shift_jis / ascii / latin-1 **七种编码下逐字节相同**。纯
+ASCII 时压根不存在「是哪种编码」这个问题。
+
+所以报告现在分三种写法：
+
+| 情形 | 报告 |
+|---|---|
+| 纯 ASCII | `ASCII（与编码无关）`，并列出哪些编码解出来一样 |
+| 只有一种编码能完整解出 | 直接写那个编码名 |
+| 多种都能解，且**解出不同的通顺文字** | 主选照写，另附候选清单 |
+
+判断"通顺"用常用字占比（`_common_ratio`），低于主选六成的不列——GB 系的字节
+常常同时是合法 Big5，会附赠一串纯属巧合的胡话（`离` 的字节按 Big5 读成
+`燭`），把胡话摆成平等候选等于逼用户做一次无意义的判断。
+
+**已知当年用的编码时，永远优先 `-e` 显式指定。** 工具的"猜"原理只是「哪个能
+完整解出」，而 `latin-1` 恒真、GB 系覆盖极广——猜对不等于猜准。
 
 界面上它就是编码页下拉栏里的一项「编码×进制（自己指定）」，两个下拉框选完即可。
 
 **位宽是自动的**：定宽进制（16 两位、2 八位、36 两位）直接切，空格可有可无；
 变长进制（10 / 8）必须有分隔符，否则 `111` 分不清是一个数还是三个数。
 
-`--encoding auto` 会按 `utf-8 → gbk → gb18030 → big5 → shift_jis → ascii → latin-1`
-依次试，**要求整个字节流合法**（不做替换），全都不行才报"没有一种常见编码能
-完整解出"——比闷头猜结果强。
+`--encoding auto` 会按 `utf-8 → gbk → gb18030 → big5 → shift_jis → ascii`
+依次试，**要求整个字节流合法**（不做替换），全都不行才退到 `latin-1` 并明确
+警告「解出来多半是乱码，更可能是原始字节已经损坏」——比闷头猜结果强。
+
+`latin-1` 特意**不算候选**：它对任意字节流都合法（逐字节映射到 U+0000–U+00FF），
+恒真所以毫无信息量。放进候选里，任何乱码都会显示"同时合法于 latin-1"，提示
+立刻变噪音。
 
 ## 这四种「进制编码」怎么选
 

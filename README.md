@@ -193,7 +193,7 @@ python3 codec.py enc hex -f picture.png
 | `codec dec mojibake --best <文本>` | 数据本身残缺时强制输出最佳猜测，缺失处标 `?`，并给出损失率 |
 | `codec dec mojibake --from A --to B` | 显式指定乱码的编码对，不猜（如 `--from gbk --to shift_jis`） |
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
-| `codec convert <数据> --radix R [--encoding E]` | **自己指定「字符编码 + 进制」**。`--radix` 取 2/8/10/16/36，`--encoding` 取 auto/utf-8/gbk/gb18030/big5/shift_jis/ascii/latin-1 |
+| `codec convert <数据> -r R [-e E]` | **自己指定「字符编码 + 进制」**。`-r/--radix` 取 2/8/10/16/36，`-e/--encoding` 取 auto/utf-8/gbk/gb18030/big5/shift_jis/ascii/latin-1。`auto` 只表示「工具替你挑了一个能解的」，**不代表这批字节只有这一种读法** |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
 `base36` 和 `block36` 不是一回事：前者把**整串**当一个 base36 大整数，
