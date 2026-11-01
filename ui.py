@@ -391,7 +391,7 @@ def run_action(payload):
                     # 路径说明「用什么编码解出来的」，这里补上「解出来的字节
                     # 又按什么编码变成文本」——codec 统一用 UTF-8（非法序列
                     # 替换成 U+FFFD），写出来省得用户猜。
-                    "encoding": "UTF-8",
+                    "encoding": codec.text_encoding_name(final),
                     "log": log.getvalue(),
                 }
                 if not path:

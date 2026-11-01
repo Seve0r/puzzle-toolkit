@@ -1399,6 +1399,28 @@ def _d_mojibake(s):
     return out
 
 
+def text_encoding_name(s):
+    """给一段解出来的文本「贴个编码标签」，用于报告。
+
+    为什么不能一律写 UTF-8：ASCII（0–127）在 UTF-8 里就是单字节原样表示，
+    两者逐字节相同，`65 32 87` 解出的 `A W` 说 ASCII 更准确，说 UTF-8 也不算错
+    但没信息量。相反，含非 ASCII 的文本（`你好`）就一定不是 ASCII，只能是
+    UTF-8 / GBK 这类多字节编码。
+
+    三种结果：
+      · 纯 ASCII                        → "ASCII"
+      · 出现了 U+FFFD（非法序列被替换）  → "UTF-8（有乱码，字节非法）"
+      · 其它                            → "UTF-8"
+    """
+    if not s:
+        return "UTF-8"
+    if "\ufffd" in s:
+        return "UTF-8（有替换符，字节非法）"
+    if all(ord(c) < 128 for c in s):
+        return "ASCII"
+    return "UTF-8"
+
+
 def auto_with_mojibake(text, depth=3):
     """auto 的完整版：没找到可靠路径时，再认真试一次 mojibake。
 
@@ -2198,8 +2220,8 @@ def main():
         if path:
             # 路径 + 得分 + 输出编码：三样一起给，省得用户猜
             #「这串到底是用什么解出来的、解出来又按什么编码变成的文本」。
-            sys.stderr.write("路径：%s\n得分：%.1f\n输出编码：UTF-8\n"
-                             % (" → ".join(path), sc))
+            sys.stderr.write("路径：%s\n得分：%.1f\n输出编码：%s\n"
+                             % (" → ".join(path), sc, text_encoding_name(final)))
             print(final)
         else:
             # 还原尝试已经由 auto_with_mojibake 做过了，走到这里是真的没辙
