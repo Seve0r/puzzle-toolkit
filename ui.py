@@ -177,6 +177,13 @@ def _encoding_names():
         e["label"] = _UI_LABEL.get(e["name"], e["name"])
         if e["label"] in e["aliases"]:      # 显示名已经是它，别名里别重复列
             e["aliases"].remove(e["label"])
+    # 追加一个**虚拟项**：它不是注册在 DECODERS 里的编码，而是「自己指定
+    # 字符编码 + 进制」的组合入口。放进这个列表是为了让它出现在编码页那个
+    # 下拉栏里（和 base64 / mojibake / punycode 并列），而不是另开一栏。
+    out.append({
+        "name": "convert", "aliases": ["radix", "进制"],
+        "label": "编码×进制（自己指定）", "dec": True, "enc": False,
+    })
     return out
 
 
@@ -381,7 +388,7 @@ def run_action(payload):
             if action == "auto":
                 # 走 auto_with_mojibake 而不是裸 auto()：后者用 score() 打分，
                 # 中文越正常分越低，短的文件名乱码（²âÊÔ）会被判「越解越差」。
-                score, final, path, _ = codec.auto_with_mojibake(
+                score, final, path, auto_note = codec.auto_with_mojibake(
                     text, int(payload.get("depth") or 3))
                 result = {
                     "ok": True,
@@ -392,7 +399,7 @@ def run_action(payload):
                     # 又按什么编码变成文本」——codec 统一用 UTF-8（非法序列
                     # 替换成 U+FFFD），写出来省得用户猜。
                     "encoding": codec.text_encoding_name(final),
-                    "log": log.getvalue(),
+                    "log": log.getvalue() + (("\n[注意] " + auto_note) if auto_note else ""),
                 }
                 if not path:
                     # auto 没找到可靠路径时不该只回一句「原样输出」。
@@ -417,6 +424,29 @@ def run_action(payload):
                 return result
 
             if action in ("decode", "encode"):
+                # ★ convert 是**虚拟项**：它不在 DECODERS 里，只是借编码页那个
+                #   下拉栏出现。必须在 table.get() 之前处理，否则会被拦成
+                #   「这个方向不支持 convert」。
+                if action == "decode" and name == "convert":
+                    r = codec.convert_decode(
+                        text,
+                        int(payload.get("radix") or 16),
+                        (payload.get("encoding") or "auto").strip(),
+                    )
+                    notes = []
+                    if r.get("bytes"):
+                        notes.append("字节：%s" % r["bytes"][:32])
+                    if r.get("ok"):
+                        notes.append("字符编码：%s" % r["encoding"])
+                    if r.get("warning"):
+                        notes.append("[提示] " + r["warning"])
+                    if r.get("zw"):
+                        notes.append("[注意] " + r["zw"])
+                    if not r["ok"]:
+                        return {"ok": False, "error": r["error"],
+                                "log": "\n".join(notes)}
+                    return {"ok": True, "result": r["result"],
+                            "log": "\n".join(notes)}
                 table = codec.DECODERS if action == "decode" else codec.ENCODERS
                 fn = table.get(name)
                 if not fn:

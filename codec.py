@@ -1440,14 +1440,21 @@ def auto_with_mojibake(text, depth=3):
     # 对纯 ASCII 数据来说它们只是噪音，却足以让所有识别规则失配 ——
     # 表现为「明明该是 base36/hex，auto 却说没有可靠路径，还给个 mojibake 提示」。
     # 先按原串试（万一是真正的零宽隐写），不行再剥掉重试。
+    note = None
     if not (path and final != text) and re.search(r"[\u200b\u200c\u200d\ufeff]", text):
         stripped = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
         if stripped != text:
             sc2, final2, path2 = auto(stripped, depth)
             if path2 and final2 != stripped:
                 sc, final, path = sc2, final2, path2
+                # ★ 不静默剥离：零宽字符也可能是**真隐写**（把信息藏在不可见
+                #   字符里），闷头去掉就等于丢线索。B 站的富文本编辑器确实会
+                #   插入 U+200C 防断行，但那要靠用户自己判断，工具只负责报数。
+                note = ("原文含 %d 个零宽字符（U+200B/200C/200D/FEFF），"
+                        "已剥离后再解——若是刻意藏的，请另行处理"
+                        % (len(text) - len(stripped)))
     if not _ENABLE_LATIN1_MOJIBAKE:
-        return sc, final, path, None    # 关掉时就是纯 auto()，行为不变
+        return sc, final, path, note    # 关掉时就是纯 auto()，行为不变
     if path and final != text:
         return sc, final, path, None
     try:
@@ -1455,8 +1462,8 @@ def auto_with_mojibake(text, depth=3):
     except Exception:
         mb = None
     if mb and mb != text and _common_ratio(mb) >= 0.8:
-        return score(mb), mb, ["mojibake"], None
-    return sc, final, path, None
+        return score(mb), mb, ["mojibake"], note
+    return sc, final, path, note
 
 
 def mojibake_best(s):
@@ -1902,6 +1909,112 @@ def blocks_to_bytes(text, width=2, radix=36, alphabet=None):
     return bytes(out)
 
 
+# ------------------------------------------------- 编码 × 进制（convert）
+#
+# 把「字符编码」和「进制表示」当成两个正交的维度。现有的 hex/bin/dec/oct/block36
+# 其实都是「某个进制 + UTF-8」的特例，但编码名把它们压成了一维，于是同一批字节
+# 换个字符编码就得另想办法。这里把它拆开：
+#
+#   文本 ←字符编码→ 字节 ←进制表示→ "228 189 160" / "E4BDA0" / "11100100…"
+#
+# 定宽进制（2/16/36）直接按固定位宽切，分隔符可有可无；变长进制（8/10）必须
+# 有分隔符 —— 否则 `111` 分不清是一个数还是三个数。
+
+_RADIX_FIXED = {2: 8, 16: 2, 36: 2}     # 进制 -> 每字节占几个字符
+
+# 解码时按这个顺序试，前面的更常见；auto 只在这些里挑。
+CONVERT_ENCODINGS = ["utf-8", "gbk", "gb18030", "big5", "shift_jis", "ascii", "latin-1"]
+
+
+def radix_to_bytes(text, radix):
+    """把「按某个进制表示的字节」解析回 bytes。返回 (bytes, 错误说明)。"""
+    t = text.strip()
+    if not t:
+        return None, "没有输入"
+    if radix == 16:
+        s = re.sub(r"(0x|\\x|[\s:,])", "", t)
+        if len(s) % 2:
+            return None, "十六进制位数是奇数（%d），每两位表示一个字节" % len(s)
+        try:
+            return bytes.fromhex(s), None
+        except ValueError:
+            return None, "含十六进制以外的字符"
+    if radix == 2:
+        s = re.sub(r"[^01]", "", t)
+        if not s:
+            return None, "没有 0/1"
+        if len(s) % 8:
+            return None, "二进制位数 %d 不是 8 的倍数，每 8 位表示一个字节" % len(s)
+        return bytes(int(s[i:i + 8], 2) for i in range(0, len(s), 8)), None
+    if radix == 36:
+        s = re.sub(r"[\s,]", "", t).upper()
+        if len(s) % 2:
+            return None, "base36 位数是奇数（%d），每两位表示一个字节" % len(s)
+        try:
+            vals = [int(s[i:i + 2], 36) for i in range(0, len(s), 2)]
+        except ValueError:
+            return None, "含 base36 以外的字符（只允许 0-9 A-Z）"
+        if any(v > 255 for v in vals):
+            return None, "有两位组的值超过 255，不像是按字节分组的 base36"
+        return bytes(vals), None
+    if radix in (8, 10):
+        if not re.search(r"\d[\s,]+\d", t) and len(re.findall(r"\d+", t)) > 1:
+            return None, "%d 进制是变长的，多个数之间必须有空格或逗号" % radix
+        nums = re.findall(r"\d+", t)
+        try:
+            vals = [int(x, radix) for x in nums]
+        except ValueError:
+            return None, "含 %d 进制以外的数字" % radix
+        bad = [v for v in vals if v > 255]
+        if bad:
+            return None, "有数超过 255（如 %d），一个数只能表示一个字节" % bad[0]
+        return bytes(vals), None
+    return None, "不支持的进制：%s" % radix
+
+
+def bytes_to_text(raw, encoding="auto"):
+    """bytes -> 文本。返回 (文本, 实际用的编码, 说明)。"""
+    if encoding and encoding != "auto":
+        try:
+            return raw.decode(encoding), encoding, None
+        except UnicodeDecodeError as e:
+            return None, encoding, ("这些字节不是合法的 %s：%s" % (encoding, e))
+        except LookupError:
+            return None, encoding, "不认识的编码名：%s" % encoding
+    # auto：按常见程度依次试，要求**整个字节流合法**（不做 replace，
+    # 否则任何字节都能"解出来"，等于没判断）
+    for enc in CONVERT_ENCODINGS:
+        try:
+            return raw.decode(enc), enc, None
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", "replace"), "utf-8(有替换符)", \
+        "没有任何一种常见编码能完整解出这些字节，结果里的 ? 是替换符"
+
+
+def convert_decode(text, radix=16, encoding="auto"):
+    """编码 × 进制 组合解码。返回 dict（给 CLI 和界面共用）。"""
+    # 和 auto 一样，先剥零宽字符（U+200B/200C/200D/FEFF）。从网页/文档复制
+    # 带进来的这些字符肉眼不可见，但会直接让「按字符集解析」失败——实测用户
+    # 那段 base36 每行夹了 10 个 U+200C，`convert` 直接报「含 base36 以外的
+    # 字符」，而 auto 因为剥了零宽所以能解。
+    _zw = len(re.findall(r"[\u200b\u200c\u200d\ufeff]", text))
+    text = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
+    raw, err = radix_to_bytes(text, int(radix))
+    if raw is None:
+        return {"ok": False, "error": err}
+    if not raw:
+        return {"ok": False, "error": "解出来是空的"}
+    out, enc, warn = bytes_to_text(raw, encoding)
+    if out is None:
+        return {"ok": False, "error": warn, "bytes": list(raw)}
+    res = {"ok": True, "result": out, "encoding": enc, "bytes": list(raw),
+           "warning": warn}
+    if _zw:
+        res["zw"] = ("原文含 %d 个零宽字符，已剥离——若是刻意藏的，请另行处理" % _zw)
+    return res
+
+
 # 各编码的「合理最小输出长度比例」，供 auto 的长度骤减保护使用。
 # 默认 0.1（中文 base64 约 25%，安全）；位流类天生压缩得狠，必须单独放宽：
 #   bin: 8 位 → 1 字节，中文再 3 字节 → 1 字符，合计 24:1（4.2%），取 0.03 留余量
@@ -2216,6 +2329,19 @@ def main():
         else:
             deep = 50
             argv = argv[:i] + argv[i + 1:]
+    # convert 用：--radix <2|8|10|16|36> / --encoding <utf-8|gbk|ascii…|auto>
+    # codec 的 main 是手写解析（没有通用 opt），照 --depth 的模式来。
+    radix_opt = 16
+    if "--radix" in argv:
+        i = argv.index("--radix")
+        radix_opt = int(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    enc_opt = "auto"
+    if "--encoding" in argv:
+        i = argv.index("--encoding")
+        enc_opt = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
+
     depth = 3
     for flag in ("--depth", "-d"):
         if flag in argv:
@@ -2252,7 +2378,7 @@ def main():
 
     if cmd == "auto":
         text, _ = read_input(argv[1:])
-        sc, final, path, _ = auto_with_mojibake(text, depth)
+        sc, final, path, auto_note = auto_with_mojibake(text, depth)
         if quiet:
             print(final)
             return 0
@@ -2266,6 +2392,8 @@ def main():
             #「这串到底是用什么解出来的、解出来又按什么编码变成的文本」。
             sys.stderr.write("路径：%s\n得分：%.1f\n输出编码：%s\n"
                              % (" → ".join(path), sc, text_encoding_name(final)))
+            if auto_note:
+                sys.stderr.write("[注意] %s\n" % auto_note)
             print(final)
         else:
             # 还原尝试已经由 auto_with_mojibake 做过了，走到这里是真的没辙
@@ -2292,6 +2420,28 @@ def main():
                     % (mb_enc, mb_ratio * 100, mb_bad, body))
             # 原文照样进 stdout：`auto x > out.txt` 不能产出空文件。
             print(final)
+        return 0
+
+    if cmd == "convert":
+        # 编码 × 进制 组合解码。和 `dec hex` 那套的区别：那几个把字符编码
+        # 写死成 UTF-8，这里可以显式指定（同一批字节换 GBK 就是另一句话）。
+        radix, enc = radix_opt, enc_opt
+        text, _ = read_input(argv[1:])
+        res = convert_decode(text, radix, enc)
+        if not res["ok"]:
+            sys.stderr.write("失败：%s\n" % res["error"])
+            if res.get("bytes"):
+                sys.stderr.write("  解析出的字节：%s\n" % res["bytes"][:32])
+            return 1
+        if not quiet:
+            sys.stderr.write("进制：%d　字符编码：%s　字节数：%d\n"
+                             % (radix, res["encoding"], len(res["bytes"])))
+            if res.get("warning"):
+                sys.stderr.write("  [提示] %s\n" % res["warning"])
+            if res.get("zw"):
+                sys.stderr.write("  [注意] %s\n" % res["zw"])
+            sys.stdout.flush()
+        print(res["result"])
         return 0
 
     if cmd == "blocks":

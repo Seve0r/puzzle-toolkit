@@ -143,6 +143,28 @@ def _enc_choices(names):
 
 
 
+# convert：自己指定「字符编码 + 进制」。这两个维度是正交的——
+# 现有的 dec/bin/hex/oct/block36 其实都是「某进制 + UTF-8」的快捷方式。
+_PARAMS_CONVERT = [
+    {"key": "encoding", "type": "choice", "label": "字符编码", "default": "auto",
+     "choices": [
+         ("auto", "自动（UTF-8 → GBK → Big5 → Shift_JIS 依次试）"),
+         ("utf-8", "UTF-8"), ("gbk", "GBK"), ("gb18030", "GB18030"),
+         ("big5", "Big5（繁体）"), ("shift_jis", "Shift_JIS（日文）"),
+         ("ascii", "ASCII（只要 0–127）"), ("latin-1", "Latin-1（一字符一字节）"),
+     ],
+     "hint": "字节怎么变成文字。改这个能看出「这批字节到底是哪种编码」"},
+    {"key": "radix", "type": "choice", "label": "进制", "default": "16",
+     "choices": [
+         ("16", "十六进制 · 两位一字节（可带空格）"),
+         ("10", "十进制 · 一个数一字节（要空格分隔）"),
+         ("8", "八进制 · 一个数一字节（要空格分隔）"),
+         ("2", "二进制 · 八位一字节"),
+         ("36", "base36 · 两位一字节"),
+     ],
+     "hint": "字节怎么写出来的"},
+]
+
 _BASE_NAMES = {2: "二进制", 8: "八进制", 10: "十进制", 16: "十六进制"}
 _NUM_BASES = [("", "自动识别")] + [
     (str(b), _BASE_NAMES.get(b, "%d 进制" % b)) for b in range(2, 37)
@@ -299,6 +321,8 @@ PARAMS = {
     ],
     # ---------------- num ----------------
     # 只有一个选项：输入的那串数按什么进制读。输出固定是 2..36 全列。
+    # 编码页的虚拟项（不在 DECODERS 里）
+    "convert": _PARAMS_CONVERT,
     "num/convert": [
         {"key": "from", "type": "choice", "label": "按几进制读", "default": "",
          "choices": _NUM_BASES,
