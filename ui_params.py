@@ -105,6 +105,44 @@ TABS = [
 # 各功能的参数表，键是 "选项卡/功能"（codec 直接用编码名）。
 # ---------------------------------------------------------------------------
 
+# 乱码还原的「源编码 / 目标编码」清单直接取自 codec，不在这里再抄一份 ——
+# 抄一份的下场是两边慢慢分叉：codec 里加了 cp1251，界面下拉里没有，用户
+# 永远选不到，而且不会报错。
+try:
+    import codec as _codec
+    _MOJIBAKE_SRC = list(_codec.MOJIBAKE_ENCODINGS)
+    _MOJIBAKE_TGT = list(_codec.MOJIBAKE_TARGETS)
+except Exception:                       # codec 不在同目录时给个能跑的兜底
+    _MOJIBAKE_SRC = ["gb18030", "gbk", "shift_jis", "big5", "euc-kr"]
+    _MOJIBAKE_TGT = ["utf-8", "gb18030", "gbk", "shift_jis", "big5"]
+
+# 下拉里显示的友好名。没列到的就直接显示编码名本身。
+_ENC_LABEL = {
+    "gb18030": "gb18030（GBK 超集）",
+    "gbk": "gbk（简体中文）",
+    "cp932": "cp932（Windows 日文）",
+    "shift_jis": "shift_jis（日文）",
+    "shift_jis_2004": "shift_jis_2004（日文新字体）",
+    "shift_jisx0213": "shift_jisx0213",
+    "big5": "big5（繁体中文）",
+    "euc-kr": "euc-kr（韩文）",
+    "euc-jp": "euc-jp（日文）",
+    "iso2022_jp": "iso2022_jp（日文）",
+    "latin-1": "latin-1（西欧，一字符一字节）",
+    "cp1252": "cp1252（Windows 西欧）",
+    "cp1251": "cp1251（西里尔/俄文）",
+    "iso-8859-2": "iso-8859-2（中东欧）",
+    "utf-8": "utf-8",
+}
+
+
+def _enc_choices(names):
+    """第一项是空值 = 不指定（走自动/默认），其余按 codec 的顺序排。"""
+    return [("", "不指定（自动）")] + [
+        (n, _ENC_LABEL.get(n, n)) for n in names]
+
+
+
 _BASE_NAMES = {2: "二进制", 8: "八进制", 10: "十进制", 16: "十六进制"}
 _NUM_BASES = [("", "自动识别")] + [
     (str(b), _BASE_NAMES.get(b, "%d 进制" % b)) for b in range(2, 37)
@@ -128,14 +166,14 @@ PARAMS = {
             "hint": "反复剥皮直到正常文字占比达到这个值",
         },
         {
-            "key": "from", "type": "text", "label": "源编码",
-            "placeholder": "如 gbk / shift_jis",
-            "hint": "当初「把字节解成乱码」用的那个编码",
+            "key": "from", "type": "choice", "label": "源编码", "default": "",
+            "choices": _enc_choices(_MOJIBAKE_SRC),
+            "hint": "当初「把字节解成乱码」用的那个编码。留空则自动判断",
         },
         {
-            "key": "to", "type": "text", "label": "目标编码",
-            "placeholder": "如 utf-8 / gbk",
-            "hint": "当初「把文字编成字节」用的那个编码。两个都填就不猜了",
+            "key": "to", "type": "choice", "label": "目标编码", "default": "",
+            "choices": _enc_choices(_MOJIBAKE_TGT),
+            "hint": "当初应该用来解的那一个。两个都选就不猜了",
         },
     ],
     # ---------------- classic ----------------
