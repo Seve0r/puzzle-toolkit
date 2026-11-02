@@ -406,6 +406,7 @@ puzzle-toolkit/
     stego.md      ← stego.py
     num.md        ← num.py
     structure.md  ← 各脚本的代码结构图（维护者视角：改哪一段）
+    testdata-prompt.md ← 让 AI 生成测试数据集的提示词
   CHANGELOG.md    更新日志
 ```
 
