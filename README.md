@@ -400,11 +400,12 @@ puzzle-toolkit/
   num.py          进制转换（数值视角）
   data/words.txt  内置英语词表（约 1500 常用词）
   docs/
-    codec.md      ← codec.py 的详细说明
+    codec.md      ← codec.py 的详细说明（使用者视角：怎么用）
     classic.md    ← classic.py
     hashcrypto.md ← hashcrypto.py
     stego.md      ← stego.py
     num.md        ← num.py
+    codec-structure.md ← codec.py 的代码结构图（维护者视角：改哪一段）
   CHANGELOG.md    更新日志
 ```
 
