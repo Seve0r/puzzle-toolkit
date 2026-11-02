@@ -29,9 +29,7 @@ import json
 import base64
 import hashlib
 import hmac
-import binascii
 import struct
-import itertools
 import math
 
 # ------------------------------------------------------------------ 哈希识别

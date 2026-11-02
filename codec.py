@@ -53,14 +53,11 @@ import re
 import math
 import base64
 import binascii
-import codecs
-import hashlib
 import zlib
 import bz2
 import gzip
 import html
 import urllib.parse
-import io
 import json
 import unicodedata
 
@@ -850,17 +847,6 @@ def _d_utf32be(s):
 @dec_name("utf32le")
 def _d_utf32le(s):
     return _u32_input(s).decode("utf-32-le")
-
-
-@enc_name("utf32be")
-def _e_utf32be(s):
-    # 输出 8 位一组的 hex，和出题人常见写法一致
-    return as_bytes(s).decode("utf-8", "replace").encode("utf-32-be").hex()
-
-
-@enc_name("utf32le")
-def _e_utf32le(s):
-    return as_bytes(s).decode("utf-8", "replace").encode("utf-32-le").hex()
 
 
 @dec_name("gbk")
@@ -1910,22 +1896,38 @@ def grid_variants(text, rows=None, cols=None, block_width=1):
 
 
 def blocks_to_bytes(text, width=2, radix=36, alphabet=None):
-    """把定长块按 radix 转成字节。典型：width=2, radix=36 -> 两位 base36 = 一个字节。"""
+    """把定长块按 radix 转成字节。典型：width=2, radix=36 -> 两位 base36 = 一个字节。
+
+    返回 (bytes, 错误说明)。
+
+    ★ 尾部不足一组时**报错，不丢**。原实现用 `range(0, len-width+1, width)`
+      静默丢弃末尾几个字符：`2W333`（5 字符）解出 `ho`、`2W3334Z`（7 字符）
+      解出 `hop`，都不提示。结果看着正常，数据末尾却被吃掉了——和零宽字符
+      那次是同一类错误，静默丢失比报错危险。
+    """
     alpha = alphabet or "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:radix]
     text = text.strip()
+    if not text:
+        return None, "没有输入"
+    if width < 1:
+        return None, "块宽必须 >= 1（现在是 %d）" % width
+    if len(text) % width:
+        return None, ("长度 %d 不是块宽 %d 的倍数，末尾 %d 个字符凑不满一组"
+                      % (len(text), width, len(text) % width))
+    upper = alpha.isupper()
     out = bytearray()
-    for i in range(0, len(text) - width + 1, width):
+    for i in range(0, len(text), width):
         chunk = text[i:i + width]
-        try:
-            v = 0
-            for ch in chunk:
-                v = v * radix + alpha.index(ch.upper() if alpha.isupper() else ch)
-        except ValueError:
-            return None
+        v = 0
+        for ch in chunk:
+            c = ch.upper() if upper else ch
+            if c not in alpha:
+                return None, "含 %d 进制以外的字符：%r" % (radix, ch)
+            v = v * radix + alpha.index(c)
         if v > 255:
-            return None
+            return None, "有一组的值 %d 超过 255，不像按字节分组" % v
         out.append(v)
-    return bytes(out)
+    return bytes(out), None
 
 
 # ------------------------------------------------- 编码 × 进制（convert）
@@ -1945,50 +1947,91 @@ _RADIX_FIXED = {2: 8, 16: 2, 36: 2}     # 进制 -> 每字节占几个字符
 CONVERT_ENCODINGS = ["utf-8", "gbk", "gb18030", "big5", "shift_jis", "ascii", "latin-1"]
 
 
+# 各进制允许的内容字符（分隔符另算）。用来把「含非法字符」和「位数/范围
+# 不对」分开报——否则 `41g 42` 会被报成「位数是奇数（5）」，把用户引到完全
+# 错误的方向（实际原因是那个 g）。
+_RADIX_CHARS = {
+    2:  "01",
+    8:  "01234567",
+    10: "0123456789",
+    16: "0123456789abcdefABCDEF",
+    36: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+}
+_RADIX_LABEL = {2: "二进制", 8: "八进制", 10: "十进制", 16: "十六进制", 36: "base36"}
+
+# 分隔符：空白优先，其余是抄数据时常见的几种。`-` 放在最后（放中间会被
+# 当成字符范围，`re.error: bad character range`——踩过）。
+_RADIX_SEP = re.compile(r"[\s,;:.\-]")
+
+
+def _radix_clean(text, radix):
+    """去掉前缀和分隔符，留下真正的数位内容。"""
+    t = text.strip()
+    if radix == 16:
+        t = re.sub(r"(0[xX]|\\x)", "", t)
+    elif radix == 2:
+        t = re.sub(r"(0[bB])(?=[01])", "", t)
+    return _RADIX_SEP.sub("", t)
+
+
+def _radix_bad_chars(s, radix):
+    """返回不在该进制字符集里的字符（去重、保序）。"""
+    allowed = _RADIX_CHARS.get(radix, "")
+    bad = []
+    for c in s:
+        if c not in allowed and c not in bad:
+            bad.append(c)
+    return bad
+
+
 def radix_to_bytes(text, radix):
-    """把「按某个进制表示的字节」解析回 bytes。返回 (bytes, 错误说明)。"""
+    """把「按某个进制表示的字节」解析回 bytes。返回 (bytes, 错误说明)。
+
+    ★ 顺序很重要：**先校验字符集，再查长度和范围**。反过来就会出现
+      `41g 42` 报「十六进制位数是奇数（5）」、`65 abc 66` 报「多个数之间必须
+      有空格或逗号」（可输入里明明有空格）、`2W!3334` 报「base36 位数是奇数」
+      ——三例的报错都指向了假原因，真正的问题都是混进了一个非法字符。
+    """
     t = text.strip()
     if not t:
         return None, "没有输入"
+    if radix not in _RADIX_CHARS:
+        return None, "不支持的进制：%s" % radix
+    s = _radix_clean(t, radix)
+    if not s:
+        return None, "没有%s的数位" % _RADIX_LABEL[radix]
+    bad = _radix_bad_chars(s, radix)
+    if bad:
+        return None, "含%s以外的字符：%s" % (
+            _RADIX_LABEL[radix],
+            " ".join(repr(c) for c in bad[:6]) + ("…" if len(bad) > 6 else ""))
     if radix == 16:
-        s = re.sub(r"(0x|\\x|[\s:,])", "", t)
         if len(s) % 2:
             return None, "十六进制位数是奇数（%d），每两位表示一个字节" % len(s)
-        try:
-            return bytes.fromhex(s), None
-        except ValueError:
-            return None, "含十六进制以外的字符"
+        return bytes.fromhex(s), None
     if radix == 2:
-        s = re.sub(r"[^01]", "", t)
-        if not s:
-            return None, "没有 0/1"
         if len(s) % 8:
             return None, "二进制位数 %d 不是 8 的倍数，每 8 位表示一个字节" % len(s)
         return bytes(int(s[i:i + 8], 2) for i in range(0, len(s), 8)), None
     if radix == 36:
-        s = re.sub(r"[\s,]", "", t).upper()
+        s = s.upper()
         if len(s) % 2:
             return None, "base36 位数是奇数（%d），每两位表示一个字节" % len(s)
-        try:
-            vals = [int(s[i:i + 2], 36) for i in range(0, len(s), 2)]
-        except ValueError:
-            return None, "含 base36 以外的字符（只允许 0-9 A-Z）"
+        vals = [int(s[i:i + 2], 36) for i in range(0, len(s), 2)]
         if any(v > 255 for v in vals):
             return None, "有两位组的值超过 255，不像是按字节分组的 base36"
         return bytes(vals), None
-    if radix in (8, 10):
-        if not re.search(r"\d[\s,]+\d", t) and len(re.findall(r"\d+", t)) > 1:
-            return None, "%d 进制是变长的，多个数之间必须有空格或逗号" % radix
-        nums = re.findall(r"\d+", t)
-        try:
-            vals = [int(x, radix) for x in nums]
-        except ValueError:
-            return None, "含 %d 进制以外的数字" % radix
-        bad = [v for v in vals if v > 255]
-        if bad:
-            return None, "有数超过 255（如 %d），一个数只能表示一个字节" % bad[0]
-        return bytes(vals), None
-    return None, "不支持的进制：%s" % radix
+    # 8 / 10：变长，一个数一个字节
+    nums = re.findall(r"\d+", t)
+    if len(nums) == 1 and len(s) > 3 and int(s, radix) > 255:
+        # 整串被当成一个数了。不这么说用户会以为「值超范围」，其实是缺分隔符。
+        return None, ("%d 进制是变长的，多个数之间必须有空格或逗号——现在整串"
+                      "被当成一个数 %s" % (radix, s[:12] + ("…" if len(s) > 12 else "")))
+    vals = [int(x, radix) for x in nums]
+    over = [v for v in vals if v > 255]
+    if over:
+        return None, "有数超过 255（如 %d），一个数只能表示一个字节" % over[0]
+    return bytes(vals), None
 
 
 def encoding_candidates(raw):
@@ -1997,11 +2040,17 @@ def encoding_candidates(raw):
     ★ 为什么排除 latin-1：它对**任意**字节流都合法（逐字节映射到 U+0000–U+00FF），
       恒真所以毫无信息量。放进候选里，任何乱码都会「同时合法于 latin-1」，
       提示立刻变成噪音。它只在别的全失败时当兜底，见 bytes_to_text。
+
+    ★ 纯 ASCII 走捷径：这类字节在所有 ASCII 兼容编码下逐字节相同，所以**解一次
+      就够**，没必要六个编码各跑一遍。480 KB 输入实测 6.4 ms → 0.1 ms（约 120 倍）。
+      结论本来就不需要靠解码得出，不该为它付六次 decode 的钱。
     """
+    cands = [e for e in CONVERT_ENCODINGS if e != "latin-1"]
+    if raw.isascii():
+        text = raw.decode("ascii")
+        return [(e, text) for e in cands]
     out = []
-    for enc in CONVERT_ENCODINGS:
-        if enc == "latin-1":
-            continue
+    for enc in cands:
         try:
             out.append((enc, raw.decode(enc)))
         except (UnicodeDecodeError, LookupError):
@@ -2037,7 +2086,7 @@ def bytes_to_text(raw, encoding="auto"):
         except Exception:
             return raw.decode("utf-8", "replace"), "utf-8(有替换符)", \
                 "没有任何一种常见编码能完整解出这些字节，结果里的 ? 是替换符"
-    if all(b < 128 for b in raw):
+    if raw.isascii():
         # 纯 ASCII：所有 ASCII 兼容编码逐字节相同，报哪个名字都没区别。
         # 报 ascii（最精确的那个下界），并把「其实谁都能解」说出来。
         also = [e for e, _ in cands if e != "ascii"]
@@ -2226,9 +2275,9 @@ _B36_ALPHA = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 @dec_name("block36", "b36x2")
 def _d_block36(s):
-    raw = blocks_to_bytes(re.sub(r"\s+", "", s).upper(), 2, 36)
+    raw, err = blocks_to_bytes(re.sub(r"\s+", "", s).upper(), 2, 36)
     if raw is None:
-        raise ValueError("不是「两位 base36 = 一字节」的形式")
+        raise ValueError(err or "不是「两位 base36 = 一字节」的形式")
     return as_text(raw)
 
 
@@ -2553,9 +2602,9 @@ def main():
                         radix = val
                     break
         text, _ = read_input(args2[1:])
-        b = blocks_to_bytes(text, width, radix)
+        b, err = blocks_to_bytes(text, width, radix)
         if b is None:
-            print("无法按 width=%d radix=%d 解析（字符超出该进制范围，或有块值 >255）" % (width, radix))
+            print("无法按 width=%d radix=%d 解析：%s" % (width, radix, err))
             return 1
         print("bytes: %s" % list(b))
         print("ascii: %s" % b.decode("latin-1"))

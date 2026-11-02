@@ -36,7 +36,6 @@ import zlib
 import struct
 import subprocess
 import math
-import json
 import shutil
 import tempfile
 

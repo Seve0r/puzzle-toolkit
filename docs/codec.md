@@ -51,6 +51,14 @@ codec convert 'C0EB' -r 16 -e big5         # 燭
 # 显式指定，失败会明说
 codec convert 'E4BDA0' -r 16 -e gbk
 # 失败：这些字节不是合法的 gbk：can't decode byte 0xa0 in position 2
+
+# 解析阶段的报错会点名具体字符，不是含糊地说「位数不对」
+codec convert '41g 42' -r 16
+# 失败：含十六进制以外的字符：'g'
+codec convert '01000001x01000010' -r 2
+# 失败：含二进制以外的字符：'x'      （不会静默吞掉 x 就解出 AB）
+codec convert '2W333' -r 36
+# 失败：base36 位数是奇数（5），每两位表示一个字节
 ```
 
 | 选项 | 取值 |
