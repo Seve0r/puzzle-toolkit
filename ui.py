@@ -293,9 +293,24 @@ def _run_mojibake(text, payload, log):
       （"最佳猜测（? = 缺失处，不可全信）：…"）。只把它当错误塞进提示区的话，
       结果区一片空白，用户还得去提示里手抄。所以这里额外解析出猜测，作为
       `partial` 字段交给前端填进结果区。
+
+    ★ 参数全在 `payload["params"]` 里 —— 前端 doRun() 是那么发的：
+        const payload = { tab, action, text, params: paramValues() };
+      原来这里读的是顶层 payload["from"]/["to"]/["deep"]/["best"]，一个都拿不到，
+      于是界面上「还原模式 / 可读率阈值 / 源编码 / 目标编码」**四个控件全部无效**，
+      永远只走普通模式。另外参数表里开关叫 `mode`（normal/best/deep），
+      根本没有 `best` 这个 key，所以原来连 --best 都触发不了。
+      顶层也读一份，只为兼容直接 POST /api/run 的写法。
     """
-    src = (payload.get("from") or "").strip()
-    tgt = (payload.get("to") or "").strip()
+    p = payload.get("params") or {}
+
+    def pick(key):
+        v = p.get(key)
+        return payload.get(key) if v in (None, "") else v
+
+    src = str(pick("from") or "").strip()
+    tgt = str(pick("to") or "").strip()
+    mode = str(pick("mode") or "normal").strip()
     if src or tgt:
         s = src or "gb18030"
         t = tgt or "utf-8"
@@ -314,8 +329,10 @@ def _run_mojibake(text, payload, log):
         return {"ok": True, "result": out.replace("\ufffd", "?"),
                 "log": log.getvalue()}
 
-    deep = payload.get("deep")
-    if payload.get("best"):
+    # `deep` 是 int 控件且默认 50，paramValues() 对 int 会**无条件**传值，
+    # 所以不能靠「deep 有没有值」判断要不要走多层还原——那样普通模式也会被
+    # 拖进 --deep。必须看 mode。
+    if mode == "best" or pick("best"):
         out, ratio, bad, enc = codec.mojibake_best(text)
         if ratio > 0:
             log.write("损失 %.1f%%（%d 处缺失，假设 %s）"
@@ -325,15 +342,17 @@ def _run_mojibake(text, payload, log):
         return {"ok": True, "result": out.replace("\ufffd", "?"),
                 "log": log.getvalue()}
 
-    if deep is not None:
-        out, layers, used = codec.mojibake_deep(text, int(deep))
+    if mode == "deep":
+        deep = pick("deep")
+        deep = 50 if deep in (None, "") else int(deep)
+        out, layers, used = codec.mojibake_deep(text, deep)
         lines = []
         for n, (enc, ratio, rd) in enumerate(layers, 1):
             lines.append("第 %d 层  %-12s 损失 %5.1f%%  可读率 %3.0f%%%s"
                          % (n, enc, ratio * 100, rd * 100,
                             "  ←采信" if n == used else ""))
         lines.append("采信第 %d 层（可读率 %.0f%%，阈值 %d%%）"
-                     % (used, codec.readability(out) * 100, int(deep)))
+                     % (used, codec.readability(out) * 100, deep))
         log.write("\n".join(lines))
         return {"ok": True, "result": out.replace("\ufffd", "?"),
                 "log": log.getvalue()}
@@ -428,11 +447,17 @@ def run_action(payload):
                 #   下拉栏出现。必须在 table.get() 之前处理，否则会被拦成
                 #   「这个方向不支持 convert」。
                 if action == "decode" and name == "convert":
-                    r = codec.convert_decode(
-                        text,
-                        int(payload.get("radix") or 16),
-                        (payload.get("encoding") or "auto").strip(),
-                    )
+                    # ★ 参数在 payload["params"] 里 —— 前端 doRun() 就是那么发的：
+                    #     const payload = { tab, action, text, params: paramValues() };
+                    #   原来这里读的是顶层 payload["radix"]，永远拿不到，于是
+                    #   radix 恒为 16、encoding 恒为 auto：**界面上那两个下拉框
+                    #   选什么都没用**，`2W33342T` 选 base36 也照样按 hex 解然后
+                    #   失败。顶层也读一次只为兼容直接调 API 的写法。
+                    _p = payload.get("params") or {}
+                    _radix = _p.get("radix") or payload.get("radix") or 16
+                    _enc = (_p.get("encoding") or payload.get("encoding")
+                            or "auto").strip()
+                    r = codec.convert_decode(text, int(_radix), _enc)
                     notes = []
                     if r.get("bytes"):
                         notes.append("字节：%s" % r["bytes"][:32])
