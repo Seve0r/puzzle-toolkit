@@ -383,6 +383,41 @@ def exif_info(path):
     return info
 
 
+def qr_scan(path, allres=False):
+    # 不能写死 /usr/bin/zbarimg：macOS 的 Homebrew 装在 /opt/homebrew/bin，
+    # Windows 上是 zbarimg.exe，写死路径会误判成"没装"。
+    zbar = shutil.which("zbarimg")
+    if not zbar:
+        raise RuntimeError("需要 zbarimg（apt install zbar-tools / brew install zbar）")
+    outs = []
+    r = subprocess.run([zbar, "--raw", "-q", path], capture_output=True)
+    if r.stdout.strip():
+        outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
+    if allres and HAVE_PIL:
+        # 放大后再试一次，小二维码原图识别不出
+        im = open_img(path).convert("L")
+        w, h = im.size
+        for scale in (2, 4):
+            fd, tmp = tempfile.mkstemp(suffix=".png", prefix="_qr_%dx_" % scale)
+            os.close(fd)
+            try:
+                im.resize((w * scale, h * scale), Image.LANCZOS).save(tmp)
+                r = subprocess.run([zbar, "--raw", "-q", tmp], capture_output=True)
+                if r.stdout.strip():
+                    outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
+            finally:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+    seen, uniq = set(), []
+    for o in outs:
+        if o not in seen:
+            seen.add(o)
+            uniq.append(o)
+    return uniq
+
+
 # ---------------------------------------------------------------- ZIP
 
 def zip_entries(data):
@@ -490,41 +525,6 @@ def spectrum(path, out=None):
     if r.returncode != 0:
         raise RuntimeError(r.stderr.decode("utf-8", "replace")[:400])
     return out
-
-
-def qr_scan(path, allres=False):
-    # 不能写死 /usr/bin/zbarimg：macOS 的 Homebrew 装在 /opt/homebrew/bin，
-    # Windows 上是 zbarimg.exe，写死路径会误判成"没装"。
-    zbar = shutil.which("zbarimg")
-    if not zbar:
-        raise RuntimeError("需要 zbarimg（apt install zbar-tools / brew install zbar）")
-    outs = []
-    r = subprocess.run([zbar, "--raw", "-q", path], capture_output=True)
-    if r.stdout.strip():
-        outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
-    if allres and HAVE_PIL:
-        # 放大后再试一次，小二维码原图识别不出
-        im = open_img(path).convert("L")
-        w, h = im.size
-        for scale in (2, 4):
-            fd, tmp = tempfile.mkstemp(suffix=".png", prefix="_qr_%dx_" % scale)
-            os.close(fd)
-            try:
-                im.resize((w * scale, h * scale), Image.LANCZOS).save(tmp)
-                r = subprocess.run([zbar, "--raw", "-q", tmp], capture_output=True)
-                if r.stdout.strip():
-                    outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
-            finally:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-    seen, uniq = set(), []
-    for o in outs:
-        if o not in seen:
-            seen.add(o)
-            uniq.append(o)
-    return uniq
 
 
 # ---------------------------------------------------------------- 点阵网格（grid）

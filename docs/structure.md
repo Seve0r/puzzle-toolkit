@@ -1,18 +1,26 @@
-# `codec.py` 结构图
+# 脚本结构图
 
-> **本文只描述 `codec.py` 这一个脚本的代码布局。**
-> 其他脚本（`classic` / `hashcrypto` / `stego` / `num` / `ui`）的用法见各自的
-> `docs/<脚本>.md`；本文件不讲怎么用，只讲代码长在哪。
+> **维护者视角**：代码长在哪、改哪里该动哪一段。
+> 用法（怎么用这些命令）看 `README.md` 和 `docs/<脚本>.md`，本文件不讲用法。
 >
-> 使用者要的是命令手册 → 看 `README.md` 和 `docs/codec.md`。
-> 维护者要的是"改这东西该动哪一段" → 就是这个文件。
+> 分区行号会随改动漂移，**区名是稳定的**。核对办法：
+> `grep -n "^# ---" <脚本>.py`
 
-规模：**2745 行 / 156 个顶层对象 / 72 个注册名**（`DECODERS` 72、`ENCODERS` 68，
-差的 4 个是只解不编的 `braillebits` / `mojibake` 这类）。
+| 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
+|---|---:|---:|---:|---|---|
+| `codec.py` | 2745 | 156 | 16 | `main` | 编码识别与解码 |
+| `classic.py` | 1285 | 71 | 17 | `main` 237 行 | 古典密码 |
+| `hashcrypto.py` | 1154 | 38 | 8 | `main` 283 行 | 哈希与现代密码 |
+| `stego.py` | 1307 | 38 | 7 | `main` 209 行 | 文件隐写 |
+| `num.py` | 227 | 10 | 0 | `main` 96 行 | 进制转换（数值视角） |
+| `ui.py` | 1357 | 13 | — | `run_action` | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui_params.py` | 355 | 8 | — | — | 界面参数表（纯数据，不 import codec） |
 
 ---
 
-## 一、分层总览
+## 一、`codec.py`
+
+### 1. 分层总览
 
 | 区 | 行范围 | 行数 | 对象 | 干什么 |
 |---|---|---:|---:|---|
@@ -40,7 +48,7 @@
 
 ---
 
-## 二、逐区
+### 2. 逐区
 
 ```
 【基础设施】L64-121
@@ -103,13 +111,13 @@
 
 ---
 
-## 三、乱码还原（`mojibake`）：唯一需要拆层看的区
+### 3. 乱码还原（`mojibake`）：唯一需要拆层看的区
 
 **为什么单独展开**：文件里别处都是「一个编码 = 一对函数」，看一眼就知道在干什么。
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-### 3.1 调度顺序（`_d_mojibake`, L1513）
+#### 3.1 调度顺序（`_d_mojibake`, L1513）
 
 ```
 _d_mojibake(s)
@@ -133,7 +141,7 @@ _d_mojibake(s)
 无歧义的显式路径 `mojibake_explicit`（`--from A --to B`）不走上面任何一级，
 直接照办。
 
-### 3.2 判据层（只打分，不下结论）
+#### 3.2 判据层（只打分，不下结论）
 
 | 函数 | 量什么 | 分母 | 用在哪 |
 |---|---|---|---|
@@ -154,7 +162,7 @@ _d_mojibake(s)
 - **`readability`** 分母**只算中日韩**，ASCII 不计入。否则解过头变成 `?1?7?1?7`
   这种 ASCII 噪音时反而得高分，`--deep` 会一路解到烂。它服务于「迭代到什么时候停」。
 
-### 3.3 每层的假设
+#### 3.3 每层的假设
 
 | 层 | 假设 | 典型输入 | 判据 |
 |---|---|---|---|
@@ -169,7 +177,7 @@ _d_mojibake(s)
 「必须变好」——`浣犲ソ → 你好` 里原文含一个假名 ソ，`_plain` 本来就是 1.0，
 要求严格提升会把正确解判掉。
 
-### 3.4 上层封装
+#### 3.4 上层封装
 
 | 函数 | 职责 |
 |---|---|
@@ -178,7 +186,7 @@ _d_mojibake(s)
 | `mojibake_best(text)` | 宽松还原：不管损失多大都返回最佳假设，缺失处标 `?` |
 | `mojibake_deep(text, threshold)` | 反复还原直到 `readability` 达标（`--deep`） |
 
-### 3.5 模块级常量
+#### 3.5 模块级常量
 
 ```
 MOJIBAKE_ENCODINGS   「把字节解成乱码」的候选编码（cp932 排在 shift_jis 前）
@@ -187,7 +195,7 @@ MOJIBAKE_TARGETS     「把文字编成字节」的候选编码
 _MOJIBAKE_FAMILIES   上两者的族分组
 ```
 
-### 3.6 实验开关
+#### 3.6 实验开关
 
 ```python
 _ENABLE_LATIN1_MOJIBAKE = False   # L1148
@@ -199,7 +207,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 
 ---
 
-## 四、改代码时从哪下手
+### 4. 改代码时从哪下手
 
 | 想做什么 | 去哪 |
 |---|---|
@@ -214,7 +222,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 
 ---
 
-## 五、两个已知的"不对称"
+### 5. 两个已知的不对称
 
 不是 bug，是历史决定的，改之前要知道：
 
@@ -246,3 +254,204 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 
 维护提示：本文的行号会随代码变动而漂移。核对办法是 `grep -n "^# ---" codec.py`
 看区标题的当前位置；区名是稳定的，行号不是。
+
+
+---
+
+## 二、`classic.py`
+
+1285 行 / 71 个顶层对象 / 17 个分区。
+
+**结构特点：一个密码一个区，`xxx_dec` 和 `xxx_enc` 相邻。** 这点和 `codec.py`
+相反——codec 曾经把编码器全堆在文件末尾（2026-11 才归位），classic 从一开始
+就是配对的，9 组编解码全部紧挨。
+
+| 区 | 行范围 | 行数 | 内容 |
+|---|---:|---:|---|
+| 基础 | 63–152 | 90 | `is_az` / `only_letters` / `chi_squared` / `english_score` |
+| 词表打分 | 153–257 | 105 | `_load_wordlist` / `word_coverage` / `nonletters_ok` / `modinv` |
+| 凯撒 | 258–275 | 18 | `caesar_dec` / `caesar` |
+| 维吉尼亚 | 276–408 | 133 | `index_of_coincidence` / `_best_caesar` / `_refine_key` / `vigcrack` |
+| 仿射 | 409–449 | 41 | `affine_dec` / `affine_enc` / `affine`（312 种全爆破） |
+| 单表替换（爬山） | 450–514 | 65 | `sub_hillclimb` |
+| 培根 | 515–551 | 37 | 26 字母 / 24 字母两套表 |
+| 栅栏 | 552–586 | 35 | `rail_dec` / `rail_enc` / `railfence` |
+| 列置换 | 587–651 | 65 | `columnar_dec` / `_enc` / `_brute` |
+| Atbash / A1Z26 | 652–722 | 71 | `atbash` 自反、`a1z26_decode` / `_encode` |
+| 波利比奥斯 | 723–751 | 29 | 5×5 表 + 双向 |
+| 普莱菲尔 | 752–841 | 90 | `playfair_square` / `_pf_pos` / `_pf_strip_pad` / `playfair` |
+| ADFGX | 842–893 | 52 | 方阵 + 双向 |
+| 键盘错位 | 894–928 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
+| T9 九宫格 | 929–978 | 50 | `t9_encode` / `t9` |
+| auto | 979–1031 | 53 | `auto` + `affine_enc_free` |
+| CLI | 1032–1285 | 254 | `show_list` / `main` |
+
+### 改代码时从哪下手
+
+| 想做什么 | 去哪 |
+|---|---|
+| 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
+| 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
+| 加进 auto | `auto`（L981 附近），把新密码接进它的候选循环 |
+| 加子命令 | `main`（L1045，237 行，手写参数解析） |
+
+### 注意
+
+- **词表加载顺序**：`$PUZZLE_WORDLIST` → `data/words.txt`（1582 词）→
+  `../data/words.txt` → 系统词典（`/usr/share/dict/words` 等）。
+  `_NO_WORDLIST_WARNED` 保证"没有词表"的警告只打一次。
+- `sub_hillclimb` 是单表替换爬山破解，辅助函数是它的**嵌套函数**，所以
+  "区里只有一个函数"是正常的，不是漏了。
+- `playfair` 的 `_pf_strip_pad`：末尾填充的 x 无法自动判定（`taxa` / `exe`
+  这类原文和填充同形），默认不清理，`--clean` 才去掉。
+
+---
+
+## 三、`hashcrypto.py`
+
+1154 行 / 38 个顶层对象 / 8 个分区。
+
+| 区 | 行范围 | 行数 | 内容 |
+|---|---:|---:|---|
+| 哈希识别 | 35–103 | 69 | `HASH_SIGNS` / `HASHLIB_ALGOS` / `identify` |
+| 弱密码表 | 104–311 | 208 | `COMMON_PASSWORDS` / `candidates` / `md4` / `compute` / `crack` |
+| XOR | 312–428 | 117 | `xor_single` / `xor_key` / `xor_repeat_detect` / 密钥推断 |
+| AES / RC4 | 429–505 | 77 | `_pad` / `_unpad` / `aes_run` / `rc4` |
+| RSA | 506–673 | 168 | `pollard_rho` / `factor` / `rsa_attack` / `_iroot` / `rsa_wiener` |
+| JWT | 674–714 | 41 | `b64u_*` / `jwt_parse` / `jwt_crack` |
+| CLI | 715–1006 | 292 | `die` / `main`（283 行） |
+| 按格式穷举 | 1007–1154 | 148 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
+
+### 改代码时从哪下手
+
+| 想做什么 | 去哪 |
+|---|---|
+| 加一种哈希算法 | `HASHLIB_ALGOS`（能用 hashlib 的）+ `HASH_SIGNS`（靠长度/前缀识别的） |
+| 破解慢 | `brute_force` / `_brute_worker`（多进程），掩码字符集在 `MASK_SETS` |
+| 加 RSA 攻击 | `RSA` 区；`_iroot` 用二分 + `isqrt`，**别用 `x ** (1/k)`**（浮点精度不够） |
+| 加子命令 | `main`（L722），283 行手写解析 |
+
+### 注意
+
+- **「弱密码表」这个区名偏窄**：它装的是完整的弱口令爆破流程（候选生成 →
+  哈希计算 → 比对），不是只有一张表。`md4` 在这里是因为 OpenSSL 3 移除了
+  md4，而 NTLM 破解需要它，只能自己实现。
+- **「按格式穷举」是后加的功能**（hashcat 风格掩码）。它当初追加在文件末尾，
+  把 `main` 挤进了自己区里（CLI 区只剩一个 `die`）；2026-11 已把 `main`
+  移回 CLI 区，现在 CLI 是连续的 292 行。
+- `crack` / `mask` / `xor` / `binwalk` 这些命令**只把答案留在 stdout**，
+  进度和统计走 stderr——`hc crack xxx > out.txt` 才能拿到干净结果。
+
+---
+
+## 四、`stego.py`
+
+1307 行 / 38 个顶层对象 / 7 个分区。
+
+| 区 | 行范围 | 行数 | 内容 |
+|---|---:|---:|---|
+| 魔数 | 48–219 | 172 | `MAGIC` / `binwalk` / `_gif_end` / `tail_data` / `strings` / `mark_suspect` |
+| 图片 | 220–420 | 201 | `lsb_extract` / `lsb_scan` / `png_chunks` / `png_text` / `exif_info` / `qr_scan` |
+| ZIP | 421–503 | 83 | `zip_entries` / `zip_comment` / `zip_fake_encrypt` / `zip_extract` |
+| 音频 | 504–529 | 26 | `spectrum`（要 `ffmpeg`） |
+| 点阵网格（grid） | 530–1047 | **518** | `_png_canvas` / `canvas_of` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
+| 杂项 | 1048–1092 | 45 | `entropy` / `meta` / `hexdump` |
+| CLI | 1093–1307 | 215 | `main`（209 行） |
+
+### 改代码时从哪下手
+
+| 想做什么 | 去哪 |
+|---|---|
+| 加一种容器格式的解析 | 照 `ZIP` 区那样，`xxx_entries` / `xxx_extract` 成对写 |
+| grid 读错格子 | `_otsu_split`（阈值）+ `_fit_axis`（格宽）；两个都有实测依据，改动前先看注释 |
+| LSB 看不出东西 | `lsb_scan`（按通道/位序枚举）+ `longest_printable`（挑最像人话的） |
+| 加子命令 | `main`（L1095） |
+
+### 注意
+
+- **grid 区 518 行、8 个函数是一条完整链路**：纯标准库解 PNG → 二值化 →
+  测格宽 → 读 0/1。`_png_canvas` / `canvas_of` **只被 `grid_read` 调用**，
+  所以放在 grid 区是对的，不要因为"它解的是图片"就挪去「图片」区。
+- `qr_scan` 原来误放在「音频」区（大概和 `spectrum` 一起加的），2026-11
+  已归入「图片」。
+- **纯标准库解 PNG**：位深 1/2/4/8/16，颜色类型 0/2/3/4/6，非隔行；
+  装了 Pillow 才能读 JPEG/WebP/GIF。
+- `_otsu_split` 的阈值取**平台中点**而不是左端——取左端会让紧贴低峰的格子
+  翻面（实测 56 被阈值 55 判反，整串文字错一个字）。
+
+---
+
+## 五、`num.py`
+
+227 行 / 10 个顶层对象 / **无分区**。
+
+小文件，7 个函数线性排列，没到需要分区的规模：
+
+| 函数 | 行 | 职责 |
+|---|---:|---|
+| `die` | 49 | 报错退出 |
+| `to_base` | 54 | 整数 → 指定进制的字符串（2..36） |
+| `fmt_num` | 69 | 加分组分隔符 / 前缀 |
+| `parse_num` | 80 | 解析一个数，返回 `(值, 实际进制, 是否自动判定)` |
+| `check_base` | 108 | 校验进制范围 |
+| `show_all` | 118 | 一次列出 dec / hex / bin / oct |
+| `main` | 128 | CLI（96 行） |
+
+### 注意
+
+- 这个脚本只做「**一个数换个写法**」（`ff` → 255），**不碰字节流**。
+  `codec dec hex 48656c6c6f` → `Hello` 是 codec 的活。
+- Python 的 `int(s, base)` 原生只支持 **2–36**。超过 36 的进制（base58 / base62）
+  是编码不是进制，走 codec。
+- 进制上限由 `check_base` 卡；`--pad` 补零用于点阵位流。
+
+---
+
+## 六、`ui.py` / `ui_params.py`
+
+### `ui.py`（1357 行）
+
+本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
+
+| 部分 | 位置 | 职责 |
+|---|---|---|
+| `run_action(payload)` | L375 | 唯一后端入口，按 `tab` 分发到各页 |
+| `_encoding_names()` | L116 | 把注册表按「同一概念」去重（并查集），下拉框用 |
+| `_run_mojibake` | L284 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
+| 内嵌 JS `doRun()` | ~L1161 | 收集控件值 → POST `/api/run` |
+
+### `ui_params.py`（355 行）
+
+纯数据：`TABS`（5 个页签）+ `PARAMS`（每页每个动作的参数表）。
+
+**不 import codec**——编码下拉的候选由调用方传进来（`_enc_choices(names)`），
+`ui_params.py` 自己只负责排版。
+
+### ★ 最容易踩的坑：参数在 `params` 里
+
+前端收集控件值时是**包一层**再发的：
+
+```js
+const payload = { tab, action, text, params: paramValues() };
+```
+
+所以后端必须从 `payload["params"]` 取。曾经有两处直接读顶层
+（`payload["radix"]`、`payload["from"]`/`["to"]`/`["deep"]`/`["best"]`），
+导致 `convert` 和 `mojibake` 的控件**选了等于没选**——这是 2026-11 才修的。
+
+另一个坑：`paramValues()` 对 int 控件**无条件传值**（`deep` 默认 50 也会发），
+所以判断"要不要走 `--deep`"只能看 `mode`，不能看 `deep` 有没有值。
+
+### 改了内嵌 JS 之后
+
+界面没有构建步骤，JS 是拼进 `ui.PAGE`（一个 `r"""…"""` 大字符串）的。
+改完先把它抠出来再 check：
+
+```bash
+python3 -c "import re,ui;open('/tmp/_ui.js','w',encoding='utf-8').write(re.search(r'<script>(.*?)</script>',ui.PAGE,re.S).group(1))"
+node --check /tmp/_ui.js
+```
+
+**整个 script 块 SyntaxError 时一个函数都不会执行**，症状往往是"按钮不见了"
+而不是报错。

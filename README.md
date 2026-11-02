@@ -405,7 +405,7 @@ puzzle-toolkit/
     hashcrypto.md ← hashcrypto.py
     stego.md      ← stego.py
     num.md        ← num.py
-    codec-structure.md ← codec.py 的代码结构图（维护者视角：改哪一段）
+    structure.md  ← 各脚本的代码结构图（维护者视角：改哪一段）
   CHANGELOG.md    更新日志
 ```
 
