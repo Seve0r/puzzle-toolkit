@@ -61,7 +61,7 @@ import urllib.parse
 import json
 import unicodedata
 
-# ---------------------------------------------------------------- 注册表
+# ---------------------------------------------------------------- 基础设施：注册表 / 装饰器 / str↔bytes
 
 ENCODERS = {}
 DECODERS = {}
@@ -109,6 +109,16 @@ def as_text(b):
     return b.decode("utf-8", "replace") if isinstance(b, (bytes, bytearray)) else b
 
 
+def _bin_str(b):
+    """把二进制塞进 str：1 字符 = 1 字节（latin-1 视角）。
+
+    codec 的 enc 一律返回 str。压缩流 / UTF-16 / uu 这类结果本质是二进制，
+    用 latin-1 承载才能让 `dec` 那边的 raw_bytes() 原样还原，也才能接着
+    `enc b64` 串成管道。直接看是乱码——这是设计，不是 bug。
+    """
+    return b.decode("latin-1")
+
+
 # ---------------------------------------------------------------- Base 系列
 
 @dec_name("base64", "b64")
@@ -152,6 +162,11 @@ def _d_b32hex(s):
     s = re.sub(r"\s+", "", s).upper()
     s += "=" * (-len(s) % 8)
     return as_text(base64.b32hexdecode(s))
+
+
+@enc_name("base32hex", "b32hex")
+def _e_b32hex(s):
+    return base64.b32hexencode(as_bytes(s)).decode()
 
 
 @dec_name("base16", "hex")
@@ -217,6 +232,20 @@ def _d_b62(s):
     return best
 
 
+@enc_name("base62", "b62")
+def _e_b62(s):
+    # 解码端会拿三种字母表轮着试，编码固定用最常见的那种（0-9A-Za-z）
+    alpha = B62_SETS[0]
+    n = int.from_bytes(as_bytes(s), "big")
+    if n == 0:
+        return ""
+    out = []
+    while n:
+        n, r = divmod(n, 62)
+        out.append(alpha[r])
+    return "".join(reversed(out))
+
+
 @dec_name("base85", "b85")
 def _d_b85(s):
     return as_text(base64.b85decode(s))
@@ -233,6 +262,11 @@ def _d_a85(s):
     if s.startswith("<~") and s.endswith("~>"):
         s = s[2:-2]
     return as_text(base64.a85decode(s))
+
+
+@enc_name("ascii85", "a85")
+def _e_a85(s):
+    return base64.a85encode(as_bytes(s)).decode()
 
 
 B91 = ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -263,6 +297,33 @@ def _d_b91(s):
     if v + 1:
         out.append((b | v << n) & 255)
     return as_text(bytes(out))
+
+
+@enc_name("base91", "b91")
+def _e_b91(s):
+    """base91 编码：每 13/14 位吐两个字符，是解码那段的反向。"""
+    data = as_bytes(s)
+    out = []
+    b = n = 0
+    for byte in data:
+        b |= byte << n
+        n += 8
+        if n > 13:
+            v = b & 8191
+            if v > 88:
+                b >>= 13
+                n -= 13
+            else:
+                v = b & 16383
+                b >>= 14
+                n -= 14
+            out.append(B91[v % 91])
+            out.append(B91[v // 91])
+    if n:
+        out.append(B91[b % 91])
+        if n > 7 or b > 90:
+            out.append(B91[b // 91])
+    return "".join(out)
 
 
 @dec_name("base36", "b36")
@@ -330,6 +391,63 @@ def _e_oct(s):
     return " ".join(format(b, "o") for b in as_bytes(s))
 
 
+def blocks_to_bytes(text, width=2, radix=36, alphabet=None):
+    """把定长块按 radix 转成字节。典型：width=2, radix=36 -> 两位 base36 = 一个字节。
+
+    返回 (bytes, 错误说明)。
+
+    ★ 尾部不足一组时**报错，不丢**。原实现用 `range(0, len-width+1, width)`
+      静默丢弃末尾几个字符：`2W333`（5 字符）解出 `ho`、`2W3334Z`（7 字符）
+      解出 `hop`，都不提示。结果看着正常，数据末尾却被吃掉了——和零宽字符
+      那次是同一类错误，静默丢失比报错危险。
+    """
+    alpha = alphabet or "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:radix]
+    text = text.strip()
+    if not text:
+        return None, "没有输入"
+    if width < 1:
+        return None, "块宽必须 >= 1（现在是 %d）" % width
+    if len(text) % width:
+        return None, ("长度 %d 不是块宽 %d 的倍数，末尾 %d 个字符凑不满一组"
+                      % (len(text), width, len(text) % width))
+    upper = alpha.isupper()
+    out = bytearray()
+    for i in range(0, len(text), width):
+        chunk = text[i:i + width]
+        v = 0
+        for ch in chunk:
+            c = ch.upper() if upper else ch
+            if c not in alpha:
+                return None, "含 %d 进制以外的字符：%r" % (radix, ch)
+            v = v * radix + alpha.index(c)
+        if v > 255:
+            return None, "有一组的值 %d 超过 255，不像按字节分组" % v
+        out.append(v)
+    return bytes(out), None
+
+
+# 「两位 base36 = 一字节」。和 base36 是两回事：
+#   base36   把**整串**当一个大整数再转字节 → `6F4M57…` 解出来是垃圾
+#   block36  每**两位**独立转一个字节   → `6F`=231=`E7`、`4M`=166=`A6`…
+#            15 组正好 15 字节 → `离开的钥匙`
+# 谜题里那种「看起来像 hex 但掺了 M/K/O/W」的串多半是它。
+_B36_ALPHA = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+@dec_name("block36", "b36x2")
+def _d_block36(s):
+    raw, err = blocks_to_bytes(re.sub(r"\s+", "", s).upper(), 2, 36)
+    if raw is None:
+        raise ValueError(err or "不是「两位 base36 = 一字节」的形式")
+    return as_text(raw)
+
+
+@enc_name("block36", "b36x2")
+def _e_block36(s):
+    return "".join(_B36_ALPHA[b // 36] + _B36_ALPHA[b % 36]
+                   for b in as_bytes(s))
+
+
 # ---------------------------------------------------------------- Punycode
 
 # 把非 ASCII 文本塞进纯 ASCII 域名的编码，IDN（如 .jp 的日文域名）就用它，
@@ -379,7 +497,7 @@ def _e_punycode(s):
     return "\n".join(out)
 
 
-# ---------------------------------------------------------------- 转义类
+# ---------------------------------------------------------------- 文本转义（url / html / unicode / quoted-printable）
 
 @dec_name("url", "urlenc", "percent")
 def _d_url(s):
@@ -441,6 +559,11 @@ def _d_js(s):
     return _d_unicode(s)
 
 
+@enc_name("js", "jsescape")
+def _e_js(s):
+    return _e_unicode(s)
+
+
 @dec_name("qp", "quotedprintable")
 def _d_qp(s):
     import quopri
@@ -452,6 +575,8 @@ def _e_qp(s):
     import quopri
     return as_text(quopri.encodestring(as_bytes(s)))
 
+
+# ------------------------------------------------- 字符替换（rot13 / rot47 / atbash）
 
 def _rot_n(s, n):
     out = []
@@ -480,6 +605,11 @@ def _d_rot47(s):
     return "".join(chr(33 + (ord(c) - 33 + 47) % 94) if 33 <= ord(c) <= 126 else c for c in s)
 
 
+@enc_name("rot47")
+def _e_rot47(s):
+    return _d_rot47(s)               # 同上
+
+
 @dec_name("atbash")
 def _d_atbash(s):
     out = []
@@ -491,6 +621,11 @@ def _d_atbash(s):
         else:
             out.append(c)
     return "".join(out)
+
+
+@enc_name("atbash")
+def _e_atbash(s):
+    return _d_atbash(s)              # 自反：解两次回到原文
 
 
 # ---------------------------------------------------------------- 摩斯
@@ -658,6 +793,43 @@ def _d_wabun(s):
     return _kata2hira("".join(merged))
 
 
+# 和文モールス只有 48 个大假名符号，没有小假名（ャュョッ）和 ヵヶ 的独立码，
+# 一律按大假名送。所以 `ガッコウ` 编出来和 `ガツコウ` 一样，解回来也是后者——
+# 这是体系本身的限制，不是往返 bug。
+_WABUN_SMALL = {
+    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
+    "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ッ": "ツ", "ヮ": "ワ",
+    "ヵ": "カ", "ヶ": "ケ",
+}
+
+
+@enc_name("wabun", "wabunmorse")
+def _e_wabun(s):
+    """文字 → 和文モールス。平假名、片假名都收。
+
+    浊音/半浊音在摩斯里不是一个符号，而是「清音 + ゛/゜」两个符号，
+    所以编码时要反过来拆：ジ → シ + ゛。解码端再把它们粘回去。
+    """
+    rev_daku = {v: k for k, v in _WABUN_DAKU.items()}
+    rev_han = {v: k for k, v in _WABUN_HANDAKU.items()}
+    out = []
+    for ch in _hira2kata(s):
+        ch = _WABUN_SMALL.get(ch, ch)
+        if ch in rev_daku:
+            out.append(WABUN[rev_daku[ch]])
+            out.append(WABUN["゛"])
+        elif ch in rev_han:
+            out.append(WABUN[rev_han[ch]])
+            out.append(WABUN["゜"])
+        elif ch in WABUN:
+            out.append(WABUN[ch])
+        elif ch in " 　\n\t":
+            out.append("/")          # 词间分隔，解码端认
+        else:
+            raise ValueError("和文モールス表里没有这个字符：%r" % ch)
+    return "/".join(out)
+
+
 # ---------------------------------------------------------------- 盲文
 
 BRAILLE_BASE = 0x2800
@@ -746,7 +918,7 @@ def _e_braille(s):
     return "".join(out)
 
 
-# ---------------------------------------------------------------- 压缩流 / 其他
+# ---------------------------------------------------------------- 压缩流与字符编码（zlib / uu / utf16 / utf32 / gbk）
 
 @dec_name("gzip", "zlib", "bz2", "deflate", "inflate")
 def _d_compress(s):
@@ -760,6 +932,12 @@ def _d_compress(s):
         except Exception:
             continue
     raise ValueError("解压失败")
+
+
+@enc_name("gzip", "zlib", "bz2", "deflate", "inflate")
+def _e_compress(s):
+    # 解码端会轮流试 gzip/zlib/raw-deflate/bz2，所以编 gzip 就能被解回来
+    return _bin_str(gzip.compress(as_bytes(s)))
 
 
 @dec_name("uu")
@@ -792,6 +970,18 @@ def _d_uu(s):
     return as_text(b"".join(out))
 
 
+@enc_name("uu")
+def _e_uu(s):
+    """标准 uuencode：begin 头 + 每行 ≤45 字节 + 长度 0 行 + end。"""
+    data = as_bytes(s)
+    lines = ["begin 644 data"]
+    for i in range(0, len(data), 45):
+        lines.append(binascii.b2a_uu(data[i:i + 45]).decode("ascii").rstrip("\n"))
+    lines.append("`")
+    lines.append("end")
+    return "\n".join(lines)
+
+
 @dec_name("utf16")
 def _d_utf16(s):
     raw = raw_bytes(s)
@@ -800,10 +990,20 @@ def _d_utf16(s):
     raise ValueError("没有 BOM，不能确定字节序")
 
 
+@enc_name("utf16")
+def _e_utf16(s):
+    return _bin_str(as_text(s).encode("utf-16"))      # 带 BOM
+
+
 @dec_name("utf16be")
 def _d_utf16be(s):
     raw = raw_bytes(s)
     return raw.decode("utf-16-be")
+
+
+@enc_name("utf16be")
+def _e_utf16be(s):
+    return _bin_str(as_text(s).encode("utf-16-be"))
 
 
 @dec_name("utf16le")
@@ -812,7 +1012,22 @@ def _d_utf16le(s):
     return raw.decode("utf-16-le")
 
 
-# ---- UTF-32：每码点 4 字节。CTF 里常见形态是「每码点 8 位 hex」：
+@enc_name("utf16le")
+def _e_utf16le(s):
+    return _bin_str(as_text(s).encode("utf-16-le"))
+
+
+@dec_name("gbk")
+def _d_gbk(s):
+    return as_bytes(s).decode("gbk")
+
+
+@enc_name("gbk")
+def _e_gbk(s):
+    return as_bytes(s).decode("gbk", "replace")
+
+
+# ---------------------------------------------------------------- UTF-32
 #      00000023 = '#'、00007ED9 = '给'、00004E86 = '了'
 #      判别要点：hex 长度是 8 的倍数，且多数码点带大片前导零。
 def _u32_input(s):
@@ -839,9 +1054,19 @@ def _d_utf32(s):
     raise ValueError("没有 BOM 且猜不出字节序，请显式用 utf32be / utf32le")
 
 
+@enc_name("utf32")
+def _e_utf32(s):
+    return _bin_str(as_text(s).encode("utf-32"))
+
+
 @dec_name("utf32be")
 def _d_utf32be(s):
     return _u32_input(s).decode("utf-32-be")
+
+
+@enc_name("utf32be")
+def _e_utf32be(s):
+    return _bin_str(as_text(s).encode("utf-32-be"))
 
 
 @dec_name("utf32le")
@@ -849,16 +1074,22 @@ def _d_utf32le(s):
     return _u32_input(s).decode("utf-32-le")
 
 
-@dec_name("gbk")
-def _d_gbk(s):
-    return as_bytes(s).decode("gbk")
+@enc_name("utf32le")
+def _e_utf32le(s):
+    return _bin_str(as_text(s).encode("utf-32-le"))
 
 
-@enc_name("gbk")
-def _e_gbk(s):
-    return as_bytes(s).decode("gbk", "replace")
-
-
+# ---------------------------------------------------------------- 乱码还原（mojibake）
+#
+# 「文件名乱码」那一类（`²âÊÔ` → 测试、`¼ªÏe` → 吉详）的自动还原还没定稿：
+# 用户反馈其它例子解不出来，怀疑有误伤，先整体关掉，等拿到确定的样本再开。
+#
+# 这个开关同时控制三处：
+#   1. mojibake_latin1()        —— 新增的「字节被当 Latin-1/CP1252」一类
+#   2. _encode_back() 里的 NFC  —— NFD 形式的文件名（I + U+0308 这种）
+#   3. auto_with_mojibake() 的兜底 —— 短串采信
+#
+# 代码全部保留，恢复只需把这个常量改成 True。
 # 顺序有讲究：cp932 放在 shift_jis 前面，因为 cp932（Windows-31J）是
 # Shift_JIS 的超集，能覆盖 ㈹ / 半角片假名这类「机种依存文字」，
 # 而严格的 shift_jis 遇到它们会直接 encode 失败、整个假设被跳过。
@@ -895,6 +1126,7 @@ MOJIBAKE_TARGETS = [
     "latin-1", "cp1252",
 ]
 
+
 # 同族编码互相转码是恒等变换（gb18030 是 gbk 的超集，cp932 是 shift_jis 的
 # 超集），「按 A 编回字节再按 B 解」得到的还是原文自己。不排除的话它们会以
 # 0% 损失永远霸占第一名，把真正有用的假设全挤掉。
@@ -913,17 +1145,6 @@ def _same_encoding_family(a, b):
     return any(a in fam and b in fam for fam in _MOJIBAKE_FAMILIES)
 
 
-# ---------------------------------------------------------------- 实验开关
-#
-# 「文件名乱码」那一类（`²âÊÔ` → 测试、`¼ªÏe` → 吉详）的自动还原还没定稿：
-# 用户反馈其它例子解不出来，怀疑有误伤，先整体关掉，等拿到确定的样本再开。
-#
-# 这个开关同时控制三处：
-#   1. mojibake_latin1()        —— 新增的「字节被当 Latin-1/CP1252」一类
-#   2. _encode_back() 里的 NFC  —— NFD 形式的文件名（I + U+0308 这种）
-#   3. auto_with_mojibake() 的兜底 —— 短串采信
-#
-# 代码全部保留，恢复只需把这个常量改成 True。
 _ENABLE_LATIN1_MOJIBAKE = False
 
 
@@ -1829,6 +2050,63 @@ def brute(text, top=15):
     return uniq[:top]
 
 
+# 各编码的「合理最小输出长度比例」，供 auto 的长度骤减保护使用。
+# 默认 0.1（中文 base64 约 25%，安全）；位流类天生压缩得狠，必须单独放宽：
+#   bin: 8 位 → 1 字节，中文再 3 字节 → 1 字符，合计 24:1（4.2%），取 0.03 留余量
+MIN_OUT_RATIO = {
+    "bin": 0.03,
+}
+
+
+def auto(text, depth=3, _memo=None):
+    """递归剥皮：每一步在所有编码里挑"得分 + 结构奖励"最高的分支"""
+    if _memo is None:
+        _memo = {}
+    # key 直接用完整文本：hash() 有碰撞风险，而且早期版本只取 text[:200]，
+    # 导致前 200 字符相同的两个长文本会共享缓存、拿到对方的结果。
+    key = (text, depth)
+    if key in _memo:
+        return _memo[key]
+
+    best = (score(text), text, [])
+    if depth <= 0:
+        _memo[key] = best
+        return best
+
+    struct = structural_candidates(text)
+    proven = [(n, STRUCT_BONUS) for n in struct]
+    if not proven:
+        proven = [(n, -0.5 * i) for i, n in enumerate(LOOSE_ORDER)]
+
+    seen = set()
+    for name, bonus in proven:
+        if name in seen:
+            continue
+        seen.add(name)
+        out = try_decode(text, name)
+        if out is None or not acceptable(out) or len(out) > 200000:
+            continue
+        # 解码后长度骤减 = 信息被丢掉了，不算有效解码。
+        # 实例：四行 punycode 解出的日文再被 base91「解」成单个 "G"，
+        # 而 score() 算的全是比例，一字符输出各项都是 100%，得分反而
+        # 高过正确的日文，导致 auto 选错路径。阈值取 10%：中文 base64
+        # 的压缩比约 25%（4 字符→1 汉字），不会被误伤。
+        #
+        # ★ 但阈值不能一刀切：位流类天生压缩得狠。bin 是 8 位→1 字节，
+        #   再叠加 UTF-8 中文 3 字节→1 字符，合起来是 24:1（4.2%）。
+        #   实测一道 363 字符的 0/1 流正确解出 16 个汉字，却因为 4.4% < 10%
+        #   被当成「信息丢失」丢掉，auto 报「没有可靠的编码路径」。
+        min_ratio = MIN_OUT_RATIO.get(name, 0.1)
+        if len(text) >= 8 and len(out) < max(2, len(text) * min_ratio):
+            continue
+        sub_sc, final, path = auto(out, depth - 1, _memo)
+        cand = sub_sc + bonus
+        if cand > best[0] + 1e-9:
+            best = (cand, final, [name] + path)
+    _memo[key] = best
+    return best
+
+
 # ---------------------------------------------------------------- 矩阵重排
 # 常见手法：文本切成定长块 → 排成矩阵 → 换一种读法。
 # 典型链路：base64 → 每 2 字符是 base36 的一个字节 → 3x3 转置 → "nevermore"
@@ -1893,41 +2171,6 @@ def grid_variants(text, rows=None, cols=None, block_width=1):
             seen.add(v)
             out.append(("%dx%d %s" % (r, c, mode), v))
     return out
-
-
-def blocks_to_bytes(text, width=2, radix=36, alphabet=None):
-    """把定长块按 radix 转成字节。典型：width=2, radix=36 -> 两位 base36 = 一个字节。
-
-    返回 (bytes, 错误说明)。
-
-    ★ 尾部不足一组时**报错，不丢**。原实现用 `range(0, len-width+1, width)`
-      静默丢弃末尾几个字符：`2W333`（5 字符）解出 `ho`、`2W3334Z`（7 字符）
-      解出 `hop`，都不提示。结果看着正常，数据末尾却被吃掉了——和零宽字符
-      那次是同一类错误，静默丢失比报错危险。
-    """
-    alpha = alphabet or "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:radix]
-    text = text.strip()
-    if not text:
-        return None, "没有输入"
-    if width < 1:
-        return None, "块宽必须 >= 1（现在是 %d）" % width
-    if len(text) % width:
-        return None, ("长度 %d 不是块宽 %d 的倍数，末尾 %d 个字符凑不满一组"
-                      % (len(text), width, len(text) % width))
-    upper = alpha.isupper()
-    out = bytearray()
-    for i in range(0, len(text), width):
-        chunk = text[i:i + width]
-        v = 0
-        for ch in chunk:
-            c = ch.upper() if upper else ch
-            if c not in alpha:
-                return None, "含 %d 进制以外的字符：%r" % (radix, ch)
-            v = v * radix + alpha.index(c)
-        if v > 255:
-            return None, "有一组的值 %d 超过 255，不像按字节分组" % v
-        out.append(v)
-    return bytes(out), None
 
 
 # ------------------------------------------------- 编码 × 进制（convert）
@@ -2143,63 +2386,6 @@ def convert_decode(text, radix=16, encoding="auto"):
     return res
 
 
-# 各编码的「合理最小输出长度比例」，供 auto 的长度骤减保护使用。
-# 默认 0.1（中文 base64 约 25%，安全）；位流类天生压缩得狠，必须单独放宽：
-#   bin: 8 位 → 1 字节，中文再 3 字节 → 1 字符，合计 24:1（4.2%），取 0.03 留余量
-MIN_OUT_RATIO = {
-    "bin": 0.03,
-}
-
-
-def auto(text, depth=3, _memo=None):
-    """递归剥皮：每一步在所有编码里挑"得分 + 结构奖励"最高的分支"""
-    if _memo is None:
-        _memo = {}
-    # key 直接用完整文本：hash() 有碰撞风险，而且早期版本只取 text[:200]，
-    # 导致前 200 字符相同的两个长文本会共享缓存、拿到对方的结果。
-    key = (text, depth)
-    if key in _memo:
-        return _memo[key]
-
-    best = (score(text), text, [])
-    if depth <= 0:
-        _memo[key] = best
-        return best
-
-    struct = structural_candidates(text)
-    proven = [(n, STRUCT_BONUS) for n in struct]
-    if not proven:
-        proven = [(n, -0.5 * i) for i, n in enumerate(LOOSE_ORDER)]
-
-    seen = set()
-    for name, bonus in proven:
-        if name in seen:
-            continue
-        seen.add(name)
-        out = try_decode(text, name)
-        if out is None or not acceptable(out) or len(out) > 200000:
-            continue
-        # 解码后长度骤减 = 信息被丢掉了，不算有效解码。
-        # 实例：四行 punycode 解出的日文再被 base91「解」成单个 "G"，
-        # 而 score() 算的全是比例，一字符输出各项都是 100%，得分反而
-        # 高过正确的日文，导致 auto 选错路径。阈值取 10%：中文 base64
-        # 的压缩比约 25%（4 字符→1 汉字），不会被误伤。
-        #
-        # ★ 但阈值不能一刀切：位流类天生压缩得狠。bin 是 8 位→1 字节，
-        #   再叠加 UTF-8 中文 3 字节→1 字符，合起来是 24:1（4.2%）。
-        #   实测一道 363 字符的 0/1 流正确解出 16 个汉字，却因为 4.4% < 10%
-        #   被当成「信息丢失」丢掉，auto 报「没有可靠的编码路径」。
-        min_ratio = MIN_OUT_RATIO.get(name, 0.1)
-        if len(text) >= 8 and len(out) < max(2, len(text) * min_ratio):
-            continue
-        sub_sc, final, path = auto(out, depth - 1, _memo)
-        cand = sub_sc + bonus
-        if cand > best[0] + 1e-9:
-            best = (cand, final, [name] + path)
-    _memo[key] = best
-    return best
-
-
 # ---------------------------------------------------------------- CLI
 
 def read_input(args, want_bytes=False):
@@ -2248,194 +2434,6 @@ def read_input(args, want_bytes=False):
     # 一过滤整段输入就没了，表现为莫名其妙的「空输入」。已知选项
     # （-q / --best / --deep / --depth）在 main() 里都已消费，这里直接拼接。
     return " ".join(args), args
-
-
-# ------------------------------------------------- 只有解码方向的，补上 encoder
-#
-# 放在文件后部，确保依赖（WABUN / B91 / B62_SETS / _hira2kata …）都已定义。
-# 装饰器在模块加载时就注册，位置本身不影响功能。
-
-def _bin_str(b):
-    """把二进制塞进 str：1 字符 = 1 字节（latin-1 视角）。
-
-    codec 的 enc 一律返回 str。压缩流 / UTF-16 / uu 这类结果本质是二进制，
-    用 latin-1 承载才能让 `dec` 那边的 raw_bytes() 原样还原，也才能接着
-    `enc b64` 串成管道。直接看是乱码——这是设计，不是 bug。
-    """
-    return b.decode("latin-1")
-
-
-# 「两位 base36 = 一字节」。和 base36 是两回事：
-#   base36   把**整串**当一个大整数再转字节 → `6F4M57…` 解出来是垃圾
-#   block36  每**两位**独立转一个字节   → `6F`=231=`E7`、`4M`=166=`A6`…
-#            15 组正好 15 字节 → `离开的钥匙`
-# 谜题里那种「看起来像 hex 但掺了 M/K/O/W」的串多半是它。
-_B36_ALPHA = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-
-@dec_name("block36", "b36x2")
-def _d_block36(s):
-    raw, err = blocks_to_bytes(re.sub(r"\s+", "", s).upper(), 2, 36)
-    if raw is None:
-        raise ValueError(err or "不是「两位 base36 = 一字节」的形式")
-    return as_text(raw)
-
-
-@enc_name("block36", "b36x2")
-def _e_block36(s):
-    return "".join(_B36_ALPHA[b // 36] + _B36_ALPHA[b % 36]
-                   for b in as_bytes(s))
-
-
-@enc_name("atbash")
-def _e_atbash(s):
-    return _d_atbash(s)              # 自反：解两次回到原文
-
-
-@enc_name("rot47")
-def _e_rot47(s):
-    return _d_rot47(s)               # 同上
-
-
-@enc_name("base32hex", "b32hex")
-def _e_b32hex(s):
-    return base64.b32hexencode(as_bytes(s)).decode()
-
-
-@enc_name("base62", "b62")
-def _e_b62(s):
-    # 解码端会拿三种字母表轮着试，编码固定用最常见的那种（0-9A-Za-z）
-    alpha = B62_SETS[0]
-    n = int.from_bytes(as_bytes(s), "big")
-    if n == 0:
-        return ""
-    out = []
-    while n:
-        n, r = divmod(n, 62)
-        out.append(alpha[r])
-    return "".join(reversed(out))
-
-
-@enc_name("ascii85", "a85")
-def _e_a85(s):
-    return base64.a85encode(as_bytes(s)).decode()
-
-
-@enc_name("base91", "b91")
-def _e_b91(s):
-    """base91 编码：每 13/14 位吐两个字符，是解码那段的反向。"""
-    data = as_bytes(s)
-    out = []
-    b = n = 0
-    for byte in data:
-        b |= byte << n
-        n += 8
-        if n > 13:
-            v = b & 8191
-            if v > 88:
-                b >>= 13
-                n -= 13
-            else:
-                v = b & 16383
-                b >>= 14
-                n -= 14
-            out.append(B91[v % 91])
-            out.append(B91[v // 91])
-    if n:
-        out.append(B91[b % 91])
-        if n > 7 or b > 90:
-            out.append(B91[b // 91])
-    return "".join(out)
-
-
-@enc_name("utf16")
-def _e_utf16(s):
-    return _bin_str(as_text(s).encode("utf-16"))      # 带 BOM
-
-
-@enc_name("utf16be")
-def _e_utf16be(s):
-    return _bin_str(as_text(s).encode("utf-16-be"))
-
-
-@enc_name("utf16le")
-def _e_utf16le(s):
-    return _bin_str(as_text(s).encode("utf-16-le"))
-
-
-@enc_name("utf32")
-def _e_utf32(s):
-    return _bin_str(as_text(s).encode("utf-32"))
-
-
-@enc_name("utf32be")
-def _e_utf32be(s):
-    return _bin_str(as_text(s).encode("utf-32-be"))
-
-
-@enc_name("utf32le")
-def _e_utf32le(s):
-    return _bin_str(as_text(s).encode("utf-32-le"))
-
-
-@enc_name("uu")
-def _e_uu(s):
-    """标准 uuencode：begin 头 + 每行 ≤45 字节 + 长度 0 行 + end。"""
-    data = as_bytes(s)
-    lines = ["begin 644 data"]
-    for i in range(0, len(data), 45):
-        lines.append(binascii.b2a_uu(data[i:i + 45]).decode("ascii").rstrip("\n"))
-    lines.append("`")
-    lines.append("end")
-    return "\n".join(lines)
-
-
-@enc_name("gzip", "zlib", "bz2", "deflate", "inflate")
-def _e_compress(s):
-    # 解码端会轮流试 gzip/zlib/raw-deflate/bz2，所以编 gzip 就能被解回来
-    return _bin_str(gzip.compress(as_bytes(s)))
-
-
-@enc_name("js", "jsescape")
-def _e_js(s):
-    return _e_unicode(s)
-
-
-# 和文モールス只有 48 个大假名符号，没有小假名（ャュョッ）和 ヵヶ 的独立码，
-# 一律按大假名送。所以 `ガッコウ` 编出来和 `ガツコウ` 一样，解回来也是后者——
-# 这是体系本身的限制，不是往返 bug。
-_WABUN_SMALL = {
-    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
-    "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ッ": "ツ", "ヮ": "ワ",
-    "ヵ": "カ", "ヶ": "ケ",
-}
-
-
-@enc_name("wabun", "wabunmorse")
-def _e_wabun(s):
-    """文字 → 和文モールス。平假名、片假名都收。
-
-    浊音/半浊音在摩斯里不是一个符号，而是「清音 + ゛/゜」两个符号，
-    所以编码时要反过来拆：ジ → シ + ゛。解码端再把它们粘回去。
-    """
-    rev_daku = {v: k for k, v in _WABUN_DAKU.items()}
-    rev_han = {v: k for k, v in _WABUN_HANDAKU.items()}
-    out = []
-    for ch in _hira2kata(s):
-        ch = _WABUN_SMALL.get(ch, ch)
-        if ch in rev_daku:
-            out.append(WABUN[rev_daku[ch]])
-            out.append(WABUN["゛"])
-        elif ch in rev_han:
-            out.append(WABUN[rev_han[ch]])
-            out.append(WABUN["゜"])
-        elif ch in WABUN:
-            out.append(WABUN[ch])
-        elif ch in " 　\n\t":
-            out.append("/")          # 词间分隔，解码端认
-        else:
-            raise ValueError("和文モールス表里没有这个字符：%r" % ch)
-    return "/".join(out)
 
 
 def main():
