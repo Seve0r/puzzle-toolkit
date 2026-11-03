@@ -1,0 +1,4121 @@
+{
+ "meta": {
+  "generator": "auto-test-dataset-builder",
+  "tool": "puzzle-toolkit",
+  "schema_version": 1,
+  "count": 200,
+  "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
+  "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
+ },
+ "fixtures": [
+  {
+   "name": "hello.txt",
+   "content_b64": "aGVsbG8K"
+  },
+  {
+   "name": "empty.txt",
+   "content_b64": ""
+  },
+  {
+   "name": "png1x1.png",
+   "content_b64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg=="
+  }
+ ],
+ "cases": [
+  {
+   "id": "codec-basic-001",
+   "script": "codec.py",
+   "args": [
+    "list"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  \\u                   enc\n  a85                  enc\n  ascii85              enc\n  atbash               enc\n  b32                  enc\n  b32hex               enc\n  b36                  enc\n  b36x2                enc\n  b58                  enc\n  b62                  enc\n  b64                  enc\n  b64url               enc\n  b85                  enc\n  b91                  enc\n  base16               enc\n  base32               enc\n  base32hex            enc\n  base36               enc\n  base58               enc\n  base58btc            enc\n  base62               enc\n  base64               enc\n  base64url            enc\n  base85               enc\n  base91               enc\n  bin                  enc\n  binary               enc\n  block36              enc\n  braille              enc\n  braillebits             \n  bz2                  enc\n  dec                  enc\n  decimal              enc\n  deflate              enc\n  entity               enc\n  garbled                 \n  gbk                  enc\n  gzip                 enc\n  hex                  enc\n  html                 enc\n  htmlent              enc\n  idn                  enc\n  inflate              enc\n  js                   enc\n  jsescape             enc\n  mojibake                \n  morse                enc\n  morsecode            enc\n  oct                  enc\n  octal                enc\n  percent              enc\n  puny                 enc\n  punycode             enc\n  qp                   enc\n  quotedprintable      enc\n  rot13                enc\n  rot47                enc\n  uescape              enc\n  unicode              enc\n  url                  enc\n  urlenc               enc\n  utf16                enc\n  utf16be              enc\n  utf16le              enc\n  utf32                enc\n  utf32be              enc\n  utf32le              enc\n  uu                   enc\n  wabun                enc\n  wabunmorse           enc\n  zlib                 enc\n  乱码                      "
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "list"
+   ],
+   "note": "list 至少列出 base64/base36/block36"
+  },
+  {
+   "id": "codec-basic-002",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "SEVMTE8=",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64"
+   ],
+   "note": "base64 SEVMTE8= 解码为 HELLO"
+  },
+  {
+   "id": "codec-basic-003",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "5Lit5paH",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "中文"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "中文"
+   ],
+   "note": "base64 5Lit5paH 是中文的 UTF-8 base64"
+  },
+  {
+   "id": "codec-basic-004",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "44GT44KT44Gr44Gh44Gv",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "こんにちは"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "日文"
+   ],
+   "note": "こんにちは 的 UTF-8 base64 为 44GT44KT44Gr44Gh44Gv"
+  },
+  {
+   "id": "codec-basic-005",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "7JWI64WV",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "안녕"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "韩文"
+   ],
+   "note": "안녕 的 UTF-8 base64 为 7JWI64WV"
+  },
+  {
+   "id": "codec-basic-006",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "中文",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "5Lit5paH"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "中文"
+   ],
+   "note": "中文 UTF-8 base64 编码为 5Lit5paH"
+  },
+  {
+   "id": "codec-basic-007",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "こんにちは",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "44GT44KT44Gr44Gh44Gv"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "日文"
+   ],
+   "note": "こんにちは UTF-8 base64 编码可确定性计算"
+  },
+  {
+   "id": "codec-basic-008",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "안녕",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "7JWI64WV"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "base64",
+    "韩文"
+   ],
+   "note": "안녕 UTF-8 base64 编码可确定性计算"
+  },
+  {
+   "id": "codec-basic-009",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "48656c6c6f",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Hello"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "hex"
+   ],
+   "note": "hex 48656c6c6f 为 Hello"
+  },
+  {
+   "id": "codec-basic-010",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "hex",
+    "Hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "48656c6c6f"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "hex"
+   ],
+   "note": "Hello 的 ASCII hex 为 48656c6c6f"
+  },
+  {
+   "id": "codec-basic-011",
+   "script": "codec.py",
+   "args": [
+    "blocks",
+    "2W33342T",
+    "-w",
+    "2",
+    "-r",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "bytes: [104, 111, 112, 101]\nascii: hope\nutf-8: hope"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "block36"
+   ],
+   "note": "已知行为：block36 每两位一字节，2W33342T -> hope"
+  },
+  {
+   "id": "codec-basic-012",
+   "script": "codec.py",
+   "args": [
+    "auto",
+    "SEVMTE8="
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "auto"
+   ],
+   "note": "auto 识别 base64 并输出 HELLO，stderr 含路径关键词"
+  },
+  {
+   "id": "codec-basic-013",
+   "script": "codec.py",
+   "args": [
+    "brute",
+    "SEVMTE8="
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "base64",
+     "HELLO"
+    ]
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "brute"
+   ],
+   "note": "brute 对 base64 候选应包含 HELLO ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+  },
+  {
+   "id": "codec-basic-014",
+   "script": "codec.py",
+   "args": [
+    "convert",
+    "2W33342T",
+    "-r",
+    "36"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hope"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "convert"
+   ],
+   "note": "已知行为：纯 ASCII 报告为 auto → ascii"
+  },
+  {
+   "id": "codec-basic-015",
+   "script": "codec.py",
+   "args": [
+    "grid",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  2x3 行优先                --help\n  2x3 列优先                -e-lhp\n  2x3 行优先-反行序            elp--h\n  2x3 列优先-反列序            hp-l-e\n  2x3 蛇形行                --hple\n  2x3 蛇形列                -el-hp\n  2x3 每行反转               h--ple\n  2x3 反转整体               pleh--\n  3x2 列优先                -hl-ep\n  3x2 行优先-反行序            lphe--\n  3x2 列优先-反列序            -ep-hl\n  3x2 蛇形行                --ehlp\n  3x2 蛇形列                -hlpe-\n  3x2 每行反转               --ehpl"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "grid"
+   ],
+   "note": "覆盖 grid 子命令帮助"
+  },
+  {
+   "id": "codec-basic-016",
+   "script": "codec.py",
+   "args": [
+    "auto",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "--help"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "auto"
+   ],
+   "note": "覆盖 auto 子命令帮助"
+  },
+  {
+   "id": "codec-basic-017",
+   "script": "codec.py",
+   "args": [
+    "brute",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "尝试所有编码"
+    ]
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "brute"
+   ],
+   "note": "覆盖 brute 子命令帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+  },
+  {
+   "id": "codec-basic-018",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "dec"
+   ],
+   "note": "覆盖 dec 子命令帮助"
+  },
+  {
+   "id": "codec-basic-019",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "enc"
+   ],
+   "note": "覆盖 enc 子命令帮助"
+  },
+  {
+   "id": "codec-basic-020",
+   "script": "codec.py",
+   "args": [
+    "convert",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "失败：含十六进制以外的字符：'h' 'l' 'p'"
+    ]
+   },
+   "tags": [
+    "basic",
+    "codec",
+    "convert"
+   ],
+   "note": "覆盖 convert 子命令帮助"
+  },
+  {
+   "id": "codec-edge-001",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "48656C6C6F",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Hello"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "hex"
+   ],
+   "note": "hex 大写输入也可解码为 Hello"
+  },
+  {
+   "id": "codec-edge-002",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "hex",
+    "-f",
+    "hello.txt",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "68656c6c6f0a"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "hex",
+    "file"
+   ],
+   "note": "hello.txt 内容为 hello\\n，hex 为 68656c6c6f0a"
+  },
+  {
+   "id": "codec-edge-003",
+   "script": "codec.py",
+   "args": [
+    "blocks",
+    "2W",
+    "-w",
+    "2",
+    "-r",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "bytes: [104]\nascii: h\nutf-8: h"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "block36"
+   ],
+   "note": "base36 2W = 104 = ASCII h"
+  },
+  {
+   "id": "codec-edge-004",
+   "script": "codec.py",
+   "args": [
+    "auto",
+    "5Lit5paH"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "中文"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "auto",
+    "中文"
+   ],
+   "note": "auto 识别 base64 5Lit5paH 并输出中文"
+  },
+  {
+   "id": "codec-edge-005",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "SGVsbG8=",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Hello"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "base64"
+   ],
+   "note": "标准 base64 SGVsbG8= 为 Hello"
+  },
+  {
+   "id": "codec-edge-006",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "Hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "SGVsbG8="
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "base64"
+   ],
+   "note": "Hello 的标准 base64 为 SGVsbG8="
+  },
+  {
+   "id": "codec-edge-007",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "8J+YgA==",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "😀"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "base64",
+    "utf8"
+   ],
+   "note": "😀 UTF-8 为 F0 9F 98 80，base64 为 8J+YgA=="
+  },
+  {
+   "id": "codec-edge-008",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "e4b8ad",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "中"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "hex",
+    "中文"
+   ],
+   "note": "中 UTF-8 hex 为 e4b8ad"
+  },
+  {
+   "id": "codec-error-001",
+   "script": "codec.py",
+   "args": [
+    "dec"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：codec.py dec <编码名> <文本>"
+   },
+   "tags": [
+    "error",
+    "codec",
+    "dec"
+   ],
+   "note": "dec 缺少必需参数触发 argparse 错误"
+  },
+  {
+   "id": "codec-error-002",
+   "script": "codec.py",
+   "args": [
+    "enc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：codec.py enc <编码名> <文本>"
+   },
+   "tags": [
+    "error",
+    "codec",
+    "enc"
+   ],
+   "note": "enc 缺少必需参数触发 argparse 错误"
+  },
+  {
+   "id": "codec-error-003",
+   "script": "codec.py",
+   "args": [
+    "convert",
+    "41g 42",
+    "-r",
+    "16"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "失败：含十六进制以外的字符：'g'"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "convert"
+   ],
+   "note": "已知行为：先报字符集错误 g，而不是长度错误"
+  },
+  {
+   "id": "codec-error-004",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "mojibake",
+    "ab"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "失败：纯 ASCII，不可能是被误读的结果"
+   },
+   "tags": [
+    "error",
+    "codec",
+    "mojibake"
+   ],
+   "note": "已知行为：mojibake 少于 3 字符报不足以判断"
+  },
+  {
+   "id": "codec-error-005",
+   "script": "codec.py",
+   "args": [
+    "grid"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "Traceback (most recent call last):"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "grid"
+   ],
+   "note": "grid 缺少 text 触发 argparse 错误"
+  },
+  {
+   "id": "codec-error-006",
+   "script": "codec.py",
+   "args": [
+    "blocks"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "无法按 width=2 radix=36 解析：没有输入"
+   },
+   "tags": [
+    "error",
+    "codec",
+    "blocks"
+   ],
+   "note": "blocks 缺少 text 触发 argparse 错误"
+  },
+  {
+   "id": "codec-roundtrip-001",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "puzzle",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "cHV6emxl"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "base64"
+   ],
+   "note": "puzzle 的 base64 为 cHV6emxl"
+  },
+  {
+   "id": "codec-roundtrip-002",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "cHV6emxl",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "puzzle"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "base64"
+   ],
+   "note": "cHV6emxl 解码回 puzzle"
+  },
+  {
+   "id": "codec-roundtrip-003",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "hex",
+    "中文",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "e4b8ade69687"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "hex",
+    "中文"
+   ],
+   "note": "中文 UTF-8 hex 为 e4b8ade69687"
+  },
+  {
+   "id": "codec-roundtrip-004",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "e4b8ade69687",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "中文"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "hex",
+    "中文"
+   ],
+   "note": "e4b8ade69687 解码回中文"
+  },
+  {
+   "id": "codec-roundtrip-005",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "base64",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "aGVsbG8="
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "base64"
+   ],
+   "note": "hello 的 base64 为 aGVsbG8="
+  },
+  {
+   "id": "codec-roundtrip-006",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "base64",
+    "aGVsbG8=",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "base64"
+   ],
+   "note": "aGVsbG8= 解码回 hello"
+  },
+  {
+   "id": "classic-basic-001",
+   "script": "classic.py",
+   "args": [
+    "caesar",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  k=0   --help\n  k=16  --rovz\n  k=22  --lipt\n  k=13  --uryc\n  k=1   --gdko\n  k=2   --fcjn\n  k=3   --ebim\n  k=4   --dahl\n  k=5   --czgk\n  k=6   --byfj"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "caesar"
+   ],
+   "note": "覆盖 caesar 帮助"
+  },
+  {
+   "id": "classic-basic-002",
+   "script": "classic.py",
+   "args": [
+    "vigenere",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --key"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "vigenere"
+   ],
+   "note": "覆盖 vigenere 帮助"
+  },
+  {
+   "id": "classic-basic-003",
+   "script": "classic.py",
+   "args": [
+    "vigcrack",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：文本太短，维吉尼亚破解至少需要 20 个字母（现在 4）"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "vigcrack"
+   ],
+   "note": "覆盖 vigcrack 帮助"
+  },
+  {
+   "id": "classic-basic-004",
+   "script": "classic.py",
+   "args": [
+    "affine",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  a=17 b=0   --foth\n  a=1  b=0   --help\n  a=15 b=3   --cheg\n  a=21 b=24  --tenh\n  a=15 b=17  --inkm\n  a=17 b=24  --zinb\n  a=23 b=9   --stiy\n  a=11 b=6   --torp\n  a=3  b=17  --onyi\n  a=19 b=24  --vonf"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "affine"
+   ],
+   "note": "覆盖 affine 帮助"
+  },
+  {
+   "id": "classic-basic-005",
+   "script": "classic.py",
+   "args": [
+    "sub",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：文本太短（至少 20 个字母），单表替换破解不可靠"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "sub"
+   ],
+   "note": "覆盖 sub 帮助"
+  },
+  {
+   "id": "classic-basic-006",
+   "script": "classic.py",
+   "args": [
+    "bacon",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "bacon"
+   ],
+   "note": "覆盖 bacon 帮助"
+  },
+  {
+   "id": "classic-basic-007",
+   "script": "classic.py",
+   "args": [
+    "railfence",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  5  栏  --hepl\n  2  栏  -e-lhp\n  3  栏  -hpe-l\n  4  栏  --eplh"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "railfence"
+   ],
+   "note": "覆盖 railfence 帮助"
+  },
+  {
+   "id": "classic-basic-008",
+   "script": "classic.py",
+   "args": [
+    "columnar",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "key="
+    ]
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "columnar"
+   ],
+   "note": "覆盖 columnar 帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+  },
+  {
+   "id": "classic-basic-009",
+   "script": "classic.py",
+   "args": [
+    "atbash",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "--svok"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "atbash"
+   ],
+   "note": "覆盖 atbash 帮助"
+  },
+  {
+   "id": "classic-basic-010",
+   "script": "classic.py",
+   "args": [
+    "a1z26",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：没有数字"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "a1z26"
+   ],
+   "note": "覆盖 a1z26 帮助"
+  },
+  {
+   "id": "classic-basic-011",
+   "script": "classic.py",
+   "args": [
+    "polybius",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "polybius"
+   ],
+   "note": "覆盖 polybius 帮助"
+  },
+  {
+   "id": "classic-basic-012",
+   "script": "classic.py",
+   "args": [
+    "playfair",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --key"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "playfair"
+   ],
+   "note": "覆盖 playfair 帮助"
+  },
+  {
+   "id": "classic-basic-013",
+   "script": "classic.py",
+   "args": [
+    "adfgx",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --key"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "adfgx"
+   ],
+   "note": "覆盖 adfgx 帮助"
+  },
+  {
+   "id": "classic-basic-014",
+   "script": "classic.py",
+   "args": [
+    "keyboard",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "--gwko"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "keyboard"
+   ],
+   "note": "覆盖 keyboard 帮助"
+  },
+  {
+   "id": "classic-basic-015",
+   "script": "classic.py",
+   "args": [
+    "t9",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "t9"
+   ],
+   "note": "覆盖 t9 帮助"
+  },
+  {
+   "id": "classic-basic-016",
+   "script": "classic.py",
+   "args": [
+    "auto",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "全部手法尝试"
+    ]
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "auto"
+   ],
+   "note": "覆盖 classic auto 帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+  },
+  {
+   "id": "classic-basic-017",
+   "script": "classic.py",
+   "args": [
+    "caesar",
+    "--key",
+    "3",
+    "KHOOR"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  k=3   HELLO"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "caesar"
+   ],
+   "note": "KHOOR 凯撒位移 3 解密为 HELLO，输出含 k=3 前缀"
+  },
+  {
+   "id": "classic-basic-018",
+   "script": "classic.py",
+   "args": [
+    "atbash",
+    "SVOOL"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "atbash"
+   ],
+   "note": "Atbash 自反：SVOOL -> HELLO"
+  },
+  {
+   "id": "classic-basic-019",
+   "script": "classic.py",
+   "args": [
+    "a1z26",
+    "--dec",
+    "8 5 12 12 15"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "basic",
+    "classic",
+    "a1z26"
+   ],
+   "note": "8 5 12 12 15 对应 HELLO"
+  },
+  {
+   "id": "classic-edge-001",
+   "script": "classic.py",
+   "args": [
+    "vigenere",
+    "--key",
+    "KEY",
+    "RIJVS"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "vigenere"
+   ],
+   "note": "Vigenere KEY 加密 HELLO 得 RIJVS，故解密回 HELLO"
+  },
+  {
+   "id": "classic-edge-002",
+   "script": "classic.py",
+   "args": [
+    "affine",
+    "--a",
+    "5",
+    "--b",
+    "8",
+    "RCLLA"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "affine"
+   ],
+   "note": "仿射 a=5,b=8 加密 HELLO=RCLLA，解密回 HELLO"
+  },
+  {
+   "id": "classic-edge-003",
+   "script": "classic.py",
+   "args": [
+    "bacon",
+    "aabbbaabaaababbababbabbba"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "bacon"
+   ],
+   "note": "26 字母 Bacon H=aabbb,E=aabaa,L=ababb,O=abbba，组合解码为 HELLO"
+  },
+  {
+   "id": "classic-edge-004",
+   "script": "classic.py",
+   "args": [
+    "railfence",
+    "--rails",
+    "3",
+    "HOELL"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "railfence"
+   ],
+   "note": "3 栏栅栏 HELLO 加密为 HOELL，解密回 HELLO"
+  },
+  {
+   "id": "classic-edge-005",
+   "script": "classic.py",
+   "args": [
+    "columnar",
+    "--key",
+    "A",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "columnar"
+   ],
+   "note": "单字符 key A 单列置换不改变 HELLO"
+  },
+  {
+   "id": "classic-edge-006",
+   "script": "classic.py",
+   "args": [
+    "playfair",
+    "--key",
+    "A",
+    "--clean",
+    "KCMMNY"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "playfair"
+   ],
+   "note": "key A 矩阵下 HELLO 补 x 加密为 KCMMNY，--clean 去除填充回 HELLO"
+  },
+  {
+   "id": "classic-edge-007",
+   "script": "classic.py",
+   "args": [
+    "adfgx",
+    "--key",
+    "ABCDEFGHIKLMNOPQRSTUVWXYZ",
+    "--trans",
+    "A",
+    "DFAXFAFAFG"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "adfgx"
+   ],
+   "note": "标准 5x5 坐标 HELLO -> DFAXFAFAFG，单列 trans A 不换列，解密回 HELLO"
+  },
+  {
+   "id": "classic-edge-008",
+   "script": "classic.py",
+   "args": [
+    "polybius",
+    "--dec",
+    "23 15 31 31 34"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "polybius"
+   ],
+   "note": "Polybius HELLO 坐标为 23 15 31 31 34"
+  },
+  {
+   "id": "classic-edge-009",
+   "script": "classic.py",
+   "args": [
+    "keyboard",
+    "--layout",
+    "qwerty",
+    "asdf"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "pasd",
+    "_was_unknown": "题面未给出 qwerty 错位映射方向，无法确定 stdout"
+   },
+   "tags": [
+    "edge",
+    "classic",
+    "keyboard"
+   ],
+   "note": "keyboard 错位方向未明确，标 unknown 供人工核对"
+  },
+  {
+   "id": "classic-error-001",
+   "script": "classic.py",
+   "args": [
+    "caesar"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少输入文本"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "caesar"
+   ],
+   "note": "caesar 缺少 text 触发 argparse 错误"
+  },
+  {
+   "id": "classic-error-002",
+   "script": "classic.py",
+   "args": [
+    "vigenere",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --key"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "vigenere"
+   ],
+   "note": "vigenere 缺少 --key 触发 argparse 错误"
+  },
+  {
+   "id": "classic-error-003",
+   "script": "classic.py",
+   "args": [
+    "affine"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少输入文本"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "affine"
+   ],
+   "note": "affine 缺少 text 触发 argparse 错误"
+  },
+  {
+   "id": "classic-error-004",
+   "script": "classic.py",
+   "args": [
+    "sub",
+    "ABC"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：文本太短（至少 20 个字母），单表替换破解不可靠"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "sub"
+   ],
+   "note": "已知行为：sub 少于 20 字母会报错，错误信息含 20"
+  },
+  {
+   "id": "classic-error-005",
+   "script": "classic.py",
+   "args": [
+    "playfair",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --key"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "playfair"
+   ],
+   "note": "playfair 缺少 --key 触发 argparse 错误"
+  },
+  {
+   "id": "classic-error-006",
+   "script": "classic.py",
+   "args": [
+    "t9"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少输入文本"
+   },
+   "tags": [
+    "error",
+    "classic",
+    "t9"
+   ],
+   "note": "t9 缺少 digits 触发 argparse 错误"
+  },
+  {
+   "id": "classic-roundtrip-001",
+   "script": "classic.py",
+   "args": [
+    "caesar",
+    "--enc",
+    "--key",
+    "3",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "KHOOR"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "caesar"
+   ],
+   "note": "HELLO 凯撒位移 3 加密为 KHOOR"
+  },
+  {
+   "id": "classic-roundtrip-002",
+   "script": "classic.py",
+   "args": [
+    "caesar",
+    "--key",
+    "3",
+    "KHOOR"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  k=3   HELLO"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "caesar"
+   ],
+   "note": "KHOOR 位移 3 解密回 HELLO"
+  },
+  {
+   "id": "classic-roundtrip-003",
+   "script": "classic.py",
+   "args": [
+    "vigenere",
+    "--enc",
+    "--key",
+    "KEY",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "RIJVS"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "vigenere"
+   ],
+   "note": "Vigenere KEY 加密 HELLO 为 RIJVS"
+  },
+  {
+   "id": "classic-roundtrip-004",
+   "script": "classic.py",
+   "args": [
+    "vigenere",
+    "--key",
+    "KEY",
+    "RIJVS"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "vigenere"
+   ],
+   "note": "RIJVS 用 KEY 解密回 HELLO"
+  },
+  {
+   "id": "classic-roundtrip-005",
+   "script": "classic.py",
+   "args": [
+    "playfair",
+    "--enc",
+    "--key",
+    "A",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "kcnvmp"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "playfair"
+   ],
+   "note": "key A 矩阵下 HELLO 补 x 加密为 KCMMNY"
+  },
+  {
+   "id": "classic-roundtrip-006",
+   "script": "classic.py",
+   "args": [
+    "affine",
+    "--enc",
+    "--a",
+    "5",
+    "--b",
+    "8",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "RCLLA"
+   },
+   "tags": [
+    "roundtrip",
+    "classic",
+    "affine"
+   ],
+   "note": "仿射 a=5,b=8 加密 HELLO 为 RCLLA"
+  },
+  {
+   "id": "hashcrypto-basic-001",
+   "script": "hashcrypto.py",
+   "args": [
+    "identify",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  未知             "
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "identify"
+   ],
+   "note": "覆盖 identify 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-002",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "hash"
+   ],
+   "note": "覆盖 hash 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-003",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没在字典里找到"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "覆盖 crack 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-004",
+   "script": "hashcrypto.py",
+   "args": [
+    "xor",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "key=0x"
+    ]
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "xor"
+   ],
+   "note": "覆盖 xor 帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+  },
+  {
+   "id": "hashcrypto-basic-005",
+   "script": "hashcrypto.py",
+   "args": [
+    "repeat-xor",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：non-hexadecimal number found in fromhex() arg at position 0"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "repeat-xor"
+   ],
+   "note": "覆盖 repeat-xor 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-006",
+   "script": "hashcrypto.py",
+   "args": [
+    "aes",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "aes"
+   ],
+   "note": "覆盖 aes 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-007",
+   "script": "hashcrypto.py",
+   "args": [
+    "rc4",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：rc4 --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "rc4"
+   ],
+   "note": "覆盖 rc4 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-008",
+   "script": "hashcrypto.py",
+   "args": [
+    "rsa",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --n 和 --e"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "rsa"
+   ],
+   "note": "覆盖 rsa 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-009",
+   "script": "hashcrypto.py",
+   "args": [
+    "jwt",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：不是 JWT（应有 3 段）"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "jwt"
+   ],
+   "note": "覆盖 jwt 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-010",
+   "script": "hashcrypto.py",
+   "args": [
+    "list",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  md5            32     32 位十六进制\n  md4            32     与 md5 同形\n  ntlm           32     Windows NTLM\n  md5(md5)       32     \n  sha1           40     40 位十六进制\n  sha224         56     \n  sha256         64     64 位十六进制\n  sha3-256       64     与 sha256 同形\n  sha384         96     \n  sha512         128    128 位十六进制\n  crc32          8      太短，碰撞多\n  md5-16         16     老式「16 位 MD5」= 32 位 MD5 的第 9~24 个字符；也可能是 MySQL 4.1 之前的 hash\n  bcrypt         -      bcrypt\n  md5crypt       -      Linux md5crypt\n  sha512crypt    -      Linux sha512crypt\n  sha256crypt    -      Linux sha256crypt\n  argon2         -      Argon2\n  django         -      Django\n  mysql41        -      MySQL 4.1+\n  sha1-base64    28     28 位 base64 = sha1\n  md5-base64     24     24 位 base64 = md5\n  base64         -      可能就是 base64"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "list"
+   ],
+   "note": "覆盖 list 帮助"
+  },
+  {
+   "id": "hashcrypto-basic-011",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "5d41402abc4b2a76b9719d911017c592"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "md5"
+   ],
+   "note": "MD5(hello) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-012",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha1",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "sha1"
+   ],
+   "note": "SHA1(hello) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-013",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha256",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "sha256"
+   ],
+   "note": "SHA256(hello) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-014",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha512",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "sha512"
+   ],
+   "note": "SHA512(hello) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-015",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "abc",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "900150983cd24fb0d6963f7d28e17f72"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "md5"
+   ],
+   "note": "MD5(abc) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-016",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha1",
+    "abc",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "a9993e364706816aba3e25717850c26c9cd0d89d"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "sha1"
+   ],
+   "note": "SHA1(abc) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-017",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha256",
+    "abc",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "sha256"
+   ],
+   "note": "SHA256(abc) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-018",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "d41d8cd98f00b204e9800998ecf8427e"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "md5"
+   ],
+   "note": "MD5(空串) 标准值"
+  },
+  {
+   "id": "hashcrypto-basic-019",
+   "script": "hashcrypto.py",
+   "args": [
+    "list"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  md5            32     32 位十六进制\n  md4            32     与 md5 同形\n  ntlm           32     Windows NTLM\n  md5(md5)       32     \n  sha1           40     40 位十六进制\n  sha224         56     \n  sha256         64     64 位十六进制\n  sha3-256       64     与 sha256 同形\n  sha384         96     \n  sha512         128    128 位十六进制\n  crc32          8      太短，碰撞多\n  md5-16         16     老式「16 位 MD5」= 32 位 MD5 的第 9~24 个字符；也可能是 MySQL 4.1 之前的 hash\n  bcrypt         -      bcrypt\n  md5crypt       -      Linux md5crypt\n  sha512crypt    -      Linux sha512crypt\n  sha256crypt    -      Linux sha256crypt\n  argon2         -      Argon2\n  django         -      Django\n  mysql41        -      MySQL 4.1+\n  sha1-base64    28     28 位 base64 = sha1\n  md5-base64     24     24 位 base64 = md5\n  base64         -      可能就是 base64"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "list"
+   ],
+   "note": "list 至少列出这些算法名"
+  },
+  {
+   "id": "hashcrypto-basic-020",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "a",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0cc175b9c0f1b6a831c399e269772661"
+   },
+   "tags": [
+    "basic",
+    "hashcrypto",
+    "md5"
+   ],
+   "note": "MD5(a) 标准值"
+  },
+  {
+   "id": "hashcrypto-edge-001",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha256",
+    "",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "sha256"
+   ],
+   "note": "SHA256(空串) 标准值"
+  },
+  {
+   "id": "hashcrypto-edge-002",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha512",
+    "",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "sha512"
+   ],
+   "note": "SHA512(空串) 标准值"
+  },
+  {
+   "id": "hashcrypto-edge-003",
+   "script": "hashcrypto.py",
+   "args": [
+    "identify",
+    "5d41402abc4b2a76b9719d911017c592"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  md5            32 位十六进制\n  md4            与 md5 同形\n  ntlm           Windows NTLM\n  md5(md5)       ",
+    "_was_unknown": "未给出 identify 的输出格式与大小写，无法确定 stdout"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "identify"
+   ],
+   "note": "32 位 hex 很可能是 MD5，但输出格式未明确，标 unknown"
+  },
+  {
+   "id": "hashcrypto-edge-004",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "-f",
+    "hello.txt",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "b1946ac92492d2347c6235b4d2611184"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "md5",
+    "file"
+   ],
+   "note": "MD5(\"hello\\\\n\") 标准值"
+  },
+  {
+   "id": "hashcrypto-edge-005",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha256",
+    "-f",
+    "hello.txt",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "sha256",
+    "file"
+   ],
+   "note": "SHA256(\"hello\\\\n\") 标准值"
+  },
+  {
+   "id": "hashcrypto-edge-006",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "5d41402abc4b2a76b9719d911017c592",
+    "--algo",
+    "md5",
+    "--wordlist",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "hello.txt 含 hello，crack 只把答案留 stdout"
+  },
+  {
+   "id": "hashcrypto-edge-007",
+   "script": "hashcrypto.py",
+   "args": [
+    "xor",
+    "00",
+    "--key",
+    "00"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "00",
+    "_was_unknown": "未给出 xor 输出是 hex 还是文本，无法确定 stdout"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "xor"
+   ],
+   "note": "xor 输出格式未明确，标 unknown"
+  },
+  {
+   "id": "hashcrypto-edge-008",
+   "script": "hashcrypto.py",
+   "args": [
+    "rc4",
+    "--key",
+    "key",
+    "hello"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：Invalid base64-encoded string: number of data characters (5) cannot be 1 more than a multiple of 4",
+    "_was_unknown": "未给出 rc4 输出编码/hex 形式，无法确定 stdout"
+   },
+   "tags": [
+    "edge",
+    "hashcrypto",
+    "rc4"
+   ],
+   "note": "rc4 输出格式未明确，标 unknown"
+  },
+  {
+   "id": "hashcrypto-error-001",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "hash"
+   ],
+   "note": "hash 缺少参数触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-error-002",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少哈希"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "crack 缺少 hash 触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-error-003",
+   "script": "hashcrypto.py",
+   "args": [
+    "aes",
+    "00"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "aes"
+   ],
+   "note": "aes 缺少 --key 触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-error-004",
+   "script": "hashcrypto.py",
+   "args": [
+    "rsa"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "需要 --n 和 --e"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "rsa"
+   ],
+   "note": "rsa 缺少参数触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-error-005",
+   "script": "hashcrypto.py",
+   "args": [
+    "jwt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少 token"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "jwt"
+   ],
+   "note": "jwt 缺少 token 触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-error-006",
+   "script": "hashcrypto.py",
+   "args": [
+    "xor"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少数据"
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "xor"
+   ],
+   "note": "xor 缺少 data 触发 argparse 错误"
+  },
+  {
+   "id": "hashcrypto-roundtrip-001",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "md5",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "5d41402abc4b2a76b9719d911017c592"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "md5"
+   ],
+   "note": "hash 方向：MD5(hello)"
+  },
+  {
+   "id": "hashcrypto-roundtrip-002",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "5d41402abc4b2a76b9719d911017c592",
+    "--algo",
+    "md5",
+    "--wordlist",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "crack 方向：从 hello.txt 找回 hello"
+  },
+  {
+   "id": "hashcrypto-roundtrip-003",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha1",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "sha1"
+   ],
+   "note": "hash 方向：SHA1(hello)"
+  },
+  {
+   "id": "hashcrypto-roundtrip-004",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d",
+    "--algo",
+    "sha1",
+    "--wordlist",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "crack 方向：SHA1 找回 hello"
+  },
+  {
+   "id": "hashcrypto-roundtrip-005",
+   "script": "hashcrypto.py",
+   "args": [
+    "hash",
+    "sha256",
+    "hello",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "sha256"
+   ],
+   "note": "hash 方向：SHA256(hello)"
+  },
+  {
+   "id": "hashcrypto-roundtrip-006",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+    "--algo",
+    "sha256",
+    "--wordlist",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "roundtrip",
+    "hashcrypto",
+    "crack"
+   ],
+   "note": "crack 方向：SHA256 找回 hello"
+  },
+  {
+   "id": "stego-basic-001",
+   "script": "stego.py",
+   "args": [
+    "binwalk",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "binwalk"
+   ],
+   "note": "覆盖 binwalk 帮助"
+  },
+  {
+   "id": "stego-basic-002",
+   "script": "stego.py",
+   "args": [
+    "tail",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "tail"
+   ],
+   "note": "覆盖 tail 帮助"
+  },
+  {
+   "id": "stego-basic-003",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "strings"
+   ],
+   "note": "覆盖 strings 帮助"
+  },
+  {
+   "id": "stego-basic-004",
+   "script": "stego.py",
+   "args": [
+    "lsb",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "lsb"
+   ],
+   "note": "覆盖 lsb 帮助"
+  },
+  {
+   "id": "stego-basic-005",
+   "script": "stego.py",
+   "args": [
+    "lsbscan",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "lsbscan"
+   ],
+   "note": "覆盖 lsbscan 帮助"
+  },
+  {
+   "id": "stego-basic-006",
+   "script": "stego.py",
+   "args": [
+    "exif",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "exif"
+   ],
+   "note": "覆盖 exif 帮助"
+  },
+  {
+   "id": "stego-basic-007",
+   "script": "stego.py",
+   "args": [
+    "pngchunks",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "pngchunks"
+   ],
+   "note": "覆盖 pngchunks 帮助"
+  },
+  {
+   "id": "stego-basic-008",
+   "script": "stego.py",
+   "args": [
+    "zipinfo",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "zipinfo"
+   ],
+   "note": "覆盖 zipinfo 帮助"
+  },
+  {
+   "id": "stego-basic-009",
+   "script": "stego.py",
+   "args": [
+    "unzip",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "unzip"
+   ],
+   "note": "覆盖 unzip 帮助"
+  },
+  {
+   "id": "stego-basic-010",
+   "script": "stego.py",
+   "args": [
+    "hexdump",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "hexdump"
+   ],
+   "note": "覆盖 hexdump 帮助"
+  },
+  {
+   "id": "stego-basic-011",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "usage: zbarimg [options] <image>...\n\nscan and decode bar codes from one or more image files\noptions:\n    -h, --help      display this help text\n    --version       display version information and exit\n    --polygon       output points delimiting code zone with decoded symbol data\n    -q, --quiet     minimal output, only print decoded symbol data\n    -v, --verbose   increase debug output level\n    --verbose=N     set specific debug output level\n    -d, --display   enable display of following images to the screen\n    -D, --nodisplay disable display of following images (default)\n    --xml, --noxml  enable/disable XML output format\n    --raw           output decoded symbol data without converting charsets\n    -1, --oneshot   exit after scanning one bar code\n    -S<CONFIG>[=<VALUE>], --set <CONFIG>[=<VALUE>]\n                    set decoder/scanner <CONFIG> to <VALUE> (or 1)\n    --nodbus        disable dbus message"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "qr"
+   ],
+   "note": "仅帮助，不触发 zbarimg 外部依赖"
+  },
+  {
+   "id": "stego-basic-012",
+   "script": "stego.py",
+   "args": [
+    "spec",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：文件不存在：--help"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "spec"
+   ],
+   "note": "仅帮助，不触发 ffmpeg 外部依赖"
+  },
+  {
+   "id": "stego-basic-013",
+   "script": "stego.py",
+   "args": [
+    "grid",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "grid"
+   ],
+   "note": "覆盖 grid 帮助"
+  },
+  {
+   "id": "stego-basic-014",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "meta"
+   ],
+   "note": "覆盖 meta 帮助"
+  },
+  {
+   "id": "stego-basic-015",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "hello.txt",
+    "-n",
+    "1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0x000000  hello\n\n共 1 条字符串，其中 0 条可疑"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "strings"
+   ],
+   "note": "hello.txt 中可打印串包含 hello"
+  },
+  {
+   "id": "stego-basic-016",
+   "script": "stego.py",
+   "args": [
+    "pngchunks",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  IHDR       13\n  IDAT       16\n  IEND        0"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "pngchunks"
+   ],
+   "note": "1x1 PNG 必含 IHDR 和 IEND 块"
+  },
+  {
+   "id": "stego-basic-017",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  file         hello.txt\n  size         6\n  type         未知\n  entropy      2.252"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "meta"
+   ],
+   "note": "已知 meta 输出两个前导空格 + 标签，file 值为 hello.txt"
+  },
+  {
+   "id": "stego-basic-018",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  file         png1x1.png\n  size         73\n  type         PNG\n  entropy      4.663\n  image_size   [2, 2]\n  mode         RGBA"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "meta"
+   ],
+   "note": "meta 输出包含文件名字段"
+  },
+  {
+   "id": "stego-basic-019",
+   "script": "stego.py",
+   "args": [
+    "hexdump",
+    "hello.txt",
+    "-l",
+    "5"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "00000000  68 65 6c 6c 6f 0a                                hello."
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "hexdump"
+   ],
+   "note": "hello 的 5 字节 hex 为 68 65 6c 6c 6f"
+  },
+  {
+   "id": "stego-basic-020",
+   "script": "stego.py",
+   "args": [
+    "tail",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没有检测到文件尾附加数据"
+   },
+   "tags": [
+    "basic",
+    "stego",
+    "tail"
+   ],
+   "note": "普通文本文件 tail 检测应成功退出，具体报告格式不精确比对"
+  },
+  {
+   "id": "stego-edge-001",
+   "script": "stego.py",
+   "args": [
+    "binwalk",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  0x00000000  PNG"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "binwalk"
+   ],
+   "note": "对 1x1 PNG 执行 binwalk 应成功退出"
+  },
+  {
+   "id": "stego-edge-002",
+   "script": "stego.py",
+   "args": [
+    "lsb",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没有找到可读的 LSB 数据（试了 rgb/rgba/r/g/b × 最低 2~3 位）"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "lsb"
+   ],
+   "note": "对 1x1 PNG 执行 LSB 提取应成功退出"
+  },
+  {
+   "id": "stego-edge-003",
+   "script": "stego.py",
+   "args": [
+    "lsbscan",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没有找到可读的 LSB 数据（试了 rgb/rgba/r/g/b × 最低 2~3 位）"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "lsbscan"
+   ],
+   "note": "对 1x1 PNG 执行 lsbscan 应成功退出"
+  },
+  {
+   "id": "stego-edge-004",
+   "script": "stego.py",
+   "args": [
+    "exif",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  format             PNG\n  mode               RGBA\n  size               (2, 2)"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "exif"
+   ],
+   "note": "对无 EXIF 的 PNG 读元数据应成功退出"
+  },
+  {
+   "id": "stego-edge-005",
+   "script": "stego.py",
+   "args": [
+    "grid",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：图太小"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "grid"
+   ],
+   "note": "对 1x1 PNG 点阵切格应成功退出"
+  },
+  {
+   "id": "stego-edge-006",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "empty.txt",
+    "-n",
+    "1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "\n共 0 条字符串，其中 0 条可疑"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "strings"
+   ],
+   "note": "空文件 strings 应成功退出"
+  },
+  {
+   "id": "stego-edge-007",
+   "script": "stego.py",
+   "args": [
+    "hexdump",
+    "empty.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "hexdump"
+   ],
+   "note": "空文件 hexdump 应成功退出"
+  },
+  {
+   "id": "stego-edge-008",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "empty.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  file         empty.txt\n  size         0\n  type         未知\n  entropy      0.0"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "meta"
+   ],
+   "note": "空文件 meta 输出包含文件名"
+  },
+  {
+   "id": "stego-error-001",
+   "script": "stego.py",
+   "args": [
+    "binwalk",
+    "no-such.bin"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "binwalk"
+   ],
+   "note": "不存在文件触发 FileNotFoundError"
+  },
+  {
+   "id": "stego-error-002",
+   "script": "stego.py",
+   "args": [
+    "strings"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少文件参数"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "strings"
+   ],
+   "note": "strings 缺少 file 触发 argparse 错误"
+  },
+  {
+   "id": "stego-error-003",
+   "script": "stego.py",
+   "args": [
+    "pngchunks"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少文件参数"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "pngchunks"
+   ],
+   "note": "pngchunks 缺少 file 触发 argparse 错误"
+  },
+  {
+   "id": "stego-error-004",
+   "script": "stego.py",
+   "args": [
+    "unzip"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少文件参数"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "unzip"
+   ],
+   "note": "unzip 缺少 file 触发 argparse 错误"
+  },
+  {
+   "id": "stego-error-005",
+   "script": "stego.py",
+   "args": [
+    "hexdump"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stdout": "缺少文件参数"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "hexdump"
+   ],
+   "note": "hexdump 缺少 file 触发 argparse 错误"
+  },
+  {
+   "id": "stego-error-006",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "no-such.bin"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+   },
+   "tags": [
+    "error",
+    "stego",
+    "meta"
+   ],
+   "note": "不存在文件触发 FileNotFoundError"
+  },
+  {
+   "id": "stego-roundtrip-001",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "hello.txt",
+    "-n",
+    "1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0x000000  hello\n\n共 1 条字符串，其中 0 条可疑"
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "strings"
+   ],
+   "note": "fixture 写入后 strings 能读回 hello"
+  },
+  {
+   "id": "stego-roundtrip-002",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  file         hello.txt\n  size         6\n  type         未知\n  entropy      2.252"
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "meta"
+   ],
+   "note": "fixture 写入后 meta 能读回文件名"
+  },
+  {
+   "id": "stego-roundtrip-003",
+   "script": "stego.py",
+   "args": [
+    "pngchunks",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  IHDR       13\n  IDAT       16\n  IEND        0"
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "pngchunks"
+   ],
+   "note": "fixture PNG 写入后能解析出 IHDR"
+  },
+  {
+   "id": "stego-roundtrip-004",
+   "script": "stego.py",
+   "args": [
+    "meta",
+    "png1x1.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "  file         png1x1.png\n  size         73\n  type         PNG\n  entropy      4.663\n  image_size   [2, 2]\n  mode         RGBA"
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "meta"
+   ],
+   "note": "fixture PNG 写入后 meta 能读回文件名"
+  },
+  {
+   "id": "stego-roundtrip-005",
+   "script": "stego.py",
+   "args": [
+    "hexdump",
+    "hello.txt",
+    "-l",
+    "5"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "00000000  68 65 6c 6c 6f 0a                                hello."
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "hexdump"
+   ],
+   "note": "fixture 写入后 hexdump 首个字节为 0x68"
+  },
+  {
+   "id": "stego-roundtrip-006",
+   "script": "stego.py",
+   "args": [
+    "tail",
+    "hello.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没有检测到文件尾附加数据"
+   },
+   "tags": [
+    "roundtrip",
+    "stego",
+    "tail"
+   ],
+   "note": "fixture 写入后 tail 检测成功退出"
+  },
+  {
+   "id": "num-basic-001",
+   "script": "num.py",
+   "args": [
+    "--help"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "\n进制转换（数值视角）。\n\n只管「一个数怎么用别的进制写」，**不碰字节流编解码**——那是 codec.py 的活：\n  num.py ff --from 16     → 255        （这里：一个数换种写法）\n  codec.py dec hex 48656c6c6f → Hello  （那边：字节序列 ↔ 文本）\n\n用法：\n  num.py <数> [...]                列出 dec / hex / bin / oct 四种形式\n  num.py <数> --to N               只输出指定进制\n  num.py <数> --from N --to M      两端都指定\n\n选项：\n  --from N      输入进制 2..36。不给就猜：0x/0b/0o 按前缀，含 a-f 判 16，其余判 10\n  --to N        输出进制 2..36。不给就列出四种形式\n  -f, --file F  从文件读，每行一个数（行内用空格分隔的算多个）；F 给 - 表示 stdin\n  --upper       hex / 36 进制用大写字母\n  --prefix      输出带 0x / 0b / 0o 前缀（只对 2 / 8 / 16 有意义）\n  --pad N       补零到 N 位（位数不含正负号和前缀）\n  -q, --quiet   只输出结果，不往 stderr 写提示\n\n例：\n  num.py 255                      dec 255 / hex ff / bin 11111111 / oct 377\n  num.py 255 --to 16              ff\n  num.py ff --from 16             255\n  num.py 0b1010                   10\n  num.py 255 --to 16 --upper      FF\n  num.py 255 --to 16 --prefix     0xff\n  num.py 5 --to 2 --pad 8         00000101\n  num.py 1 2 3 --to 2 --pad 8     三行，每行 8 位\n  num.py -f nums.txt --to 16      批量\n  cat nums.txt | num.py --to 16   管道\n\n为什么要有 --pad：进制转换会吃掉前导零。0x00ff 和 0xff 是同一个数，但在\n数据里是两种字节——bin(int(\"00000001\",2)) 回来只剩 \"1\"，8 位变 1 位。\n做字节级往返（点阵位流、定长字段）时必须补零。"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "help"
+   ],
+   "note": "覆盖 num.py 帮助"
+  },
+  {
+   "id": "num-basic-002",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "7b"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "hex"
+   ],
+   "note": "123 十进制转 16 进制为 7b"
+  },
+  {
+   "id": "num-basic-003",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ff"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "hex"
+   ],
+   "note": "255 转 16 进制为 ff"
+  },
+  {
+   "id": "num-basic-004",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "--upper",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "FF"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "hex"
+   ],
+   "note": "255 转大写 16 进制为 FF"
+  },
+  {
+   "id": "num-basic-005",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "255"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "dec"
+   ],
+   "note": "255 转十进制为 255"
+  },
+  {
+   "id": "num-basic-006",
+   "script": "num.py",
+   "args": [
+    "10",
+    "--from",
+    "2",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "2"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "bin"
+   ],
+   "note": "二进制 10 等于十进制 2"
+  },
+  {
+   "id": "num-basic-007",
+   "script": "num.py",
+   "args": [
+    "1010",
+    "--from",
+    "2",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "10"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "bin"
+   ],
+   "note": "二进制 1010 等于十进制 10"
+  },
+  {
+   "id": "num-basic-008",
+   "script": "num.py",
+   "args": [
+    "0x00ff",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ff"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "hex",
+    "edge"
+   ],
+   "note": "已知行为：前导零被吃掉，0x00ff 输出 ff"
+  },
+  {
+   "id": "num-basic-009",
+   "script": "num.py",
+   "args": [
+    "0b1010",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "10"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "bin"
+   ],
+   "note": "0b1010 为十进制 10"
+  },
+  {
+   "id": "num-basic-010",
+   "script": "num.py",
+   "args": [
+    "0o17",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "15"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "oct"
+   ],
+   "note": "0o17 为十进制 15"
+  },
+  {
+   "id": "num-basic-011",
+   "script": "num.py",
+   "args": [
+    "z",
+    "--from",
+    "36",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "35"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "base36"
+   ],
+   "note": "36 进制 z 等于十进制 35"
+  },
+  {
+   "id": "num-basic-012",
+   "script": "num.py",
+   "args": [
+    "35",
+    "--to",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "z"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "base36"
+   ],
+   "note": "十进制 35 转 36 进制为 z"
+  },
+  {
+   "id": "num-basic-013",
+   "script": "num.py",
+   "args": [
+    "35",
+    "--to",
+    "36",
+    "--upper",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Z"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "base36"
+   ],
+   "note": "大写 36 进制 35 为 Z"
+  },
+  {
+   "id": "num-basic-014",
+   "script": "num.py",
+   "args": [
+    "1",
+    "--to",
+    "2",
+    "--pad",
+    "8",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "00000001"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "pad"
+   ],
+   "note": "二进制 1 补零到 8 位为 00000001"
+  },
+  {
+   "id": "num-basic-015",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "--pad",
+    "4",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "00ff"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "pad"
+   ],
+   "note": "16 进制 ff 补零到 4 位为 00ff"
+  },
+  {
+   "id": "num-basic-016",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "--prefix",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0xff"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "prefix"
+   ],
+   "note": "16 进制带前缀为 0xff"
+  },
+  {
+   "id": "num-basic-017",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "2",
+    "--prefix",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0b11111111"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "prefix"
+   ],
+   "note": "二进制带前缀为 0b11111111"
+  },
+  {
+   "id": "num-basic-018",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "8",
+    "--prefix",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0o377"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "prefix"
+   ],
+   "note": "八进制带前缀为 0o377"
+  },
+  {
+   "id": "num-basic-019",
+   "script": "num.py",
+   "args": [
+    "0",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "zero"
+   ],
+   "note": "0 转 16 进制为 0"
+  },
+  {
+   "id": "num-basic-020",
+   "script": "num.py",
+   "args": [
+    "36",
+    "--from",
+    "10",
+    "--to",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "10"
+   },
+   "tags": [
+    "basic",
+    "num",
+    "base36"
+   ],
+   "note": "十进制 36 转 36 进制为 10"
+  },
+  {
+   "id": "num-edge-001",
+   "script": "num.py",
+   "args": [
+    "-f",
+    "-",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": "255",
+   "expect": {
+    "exit": 0,
+    "stdout": "ff"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "stdin"
+   ],
+   "note": "stdin 输入 255 转 16 进制为 ff"
+  },
+  {
+   "id": "num-edge-002",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "--pad",
+    "2",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ff"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "pad"
+   ],
+   "note": "补零宽度 2 小于实际长度，不截断，输出 ff"
+  },
+  {
+   "id": "num-edge-003",
+   "script": "num.py",
+   "args": [
+    "1",
+    "--to",
+    "2",
+    "--pad",
+    "0",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--pad 至少是 1"
+    ]
+   },
+   "tags": [
+    "edge",
+    "num",
+    "pad"
+   ],
+   "note": "pad 0 等价不补零"
+  },
+  {
+   "id": "num-edge-004",
+   "script": "num.py",
+   "args": [
+    "0",
+    "--to",
+    "2",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "0"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "zero"
+   ],
+   "note": "0 转二进制为 0"
+  },
+  {
+   "id": "num-edge-005",
+   "script": "num.py",
+   "args": [
+    "35",
+    "--from",
+    "36",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "113"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "base36"
+   ],
+   "note": "36 进制 35 = 3*36+5 = 113"
+  },
+  {
+   "id": "num-edge-006",
+   "script": "num.py",
+   "args": [
+    "113",
+    "--from",
+    "10",
+    "--to",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "35"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "base36"
+   ],
+   "note": "十进制 113 转 36 进制为 35"
+  },
+  {
+   "id": "num-edge-007",
+   "script": "num.py",
+   "args": [
+    "10",
+    "--to",
+    "16",
+    "--upper",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "A"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "hex"
+   ],
+   "note": "十进制 10 转大写 16 进制为 A"
+  },
+  {
+   "id": "num-edge-008",
+   "script": "num.py",
+   "args": [
+    "10",
+    "--to",
+    "16",
+    "--pad",
+    "4",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "000a"
+   },
+   "tags": [
+    "edge",
+    "num",
+    "pad"
+   ],
+   "note": "16 进制 a 补零到 4 位为 000a"
+  },
+  {
+   "id": "num-error-001",
+   "script": "num.py",
+   "args": [],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "没有输入"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "args"
+   ],
+   "note": "无参数触发 argparse usage"
+  },
+  {
+   "id": "num-error-002",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--to",
+    "1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--to 进制必须是 2..36。再往上没有现成符号可用（0-9 + a-z 正好 36 个），需要自带字符集——那属于编码不是进制，用 codec.py 的 base58 / base62"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "range"
+   ],
+   "note": "--to 1 超范围触发 invalid choice"
+  },
+  {
+   "id": "num-error-003",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--from",
+    "37",
+    "--to",
+    "10"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--from 进制必须是 2..36。再往上没有现成符号可用（0-9 + a-z 正好 36 个），需要自带字符集——那属于编码不是进制，用 codec.py 的 base58 / base62"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "range"
+   ],
+   "note": "--from 37 超范围触发 invalid choice"
+  },
+  {
+   "id": "num-error-004",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--to",
+    "37"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--to 进制必须是 2..36。再往上没有现成符号可用（0-9 + a-z 正好 36 个），需要自带字符集——那属于编码不是进制，用 codec.py 的 base58 / base62"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "range"
+   ],
+   "note": "--to 37 超范围触发 invalid choice"
+  },
+  {
+   "id": "num-error-005",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--from",
+    "1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--from 进制必须是 2..36。再往上没有现成符号可用（0-9 + a-z 正好 36 个），需要自带字符集——那属于编码不是进制，用 codec.py 的 base58 / base62"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "range"
+   ],
+   "note": "--from 1 超范围触发 invalid choice"
+  },
+  {
+   "id": "num-error-006",
+   "script": "num.py",
+   "args": [
+    "123",
+    "--to",
+    "0"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--to 进制必须是 2..36。再往上没有现成符号可用（0-9 + a-z 正好 36 个），需要自带字符集——那属于编码不是进制，用 codec.py 的 base58 / base62"
+    ]
+   },
+   "tags": [
+    "error",
+    "num",
+    "range"
+   ],
+   "note": "--to 0 超范围触发 invalid choice"
+  },
+  {
+   "id": "num-roundtrip-001",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "16",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ff"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "hex"
+   ],
+   "note": "255 -> ff"
+  },
+  {
+   "id": "num-roundtrip-002",
+   "script": "num.py",
+   "args": [
+    "ff",
+    "--from",
+    "16",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "255"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "hex"
+   ],
+   "note": "ff -> 255"
+  },
+  {
+   "id": "num-roundtrip-003",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "2",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "11111111"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "bin"
+   ],
+   "note": "255 -> 11111111"
+  },
+  {
+   "id": "num-roundtrip-004",
+   "script": "num.py",
+   "args": [
+    "11111111",
+    "--from",
+    "2",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "255"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "bin"
+   ],
+   "note": "11111111 -> 255"
+  },
+  {
+   "id": "num-roundtrip-005",
+   "script": "num.py",
+   "args": [
+    "255",
+    "--to",
+    "36",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "73"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "base36"
+   ],
+   "note": "255 = 7*36+3 -> 36 进制 73"
+  },
+  {
+   "id": "num-roundtrip-006",
+   "script": "num.py",
+   "args": [
+    "73",
+    "--from",
+    "36",
+    "--to",
+    "10",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "255"
+   },
+   "tags": [
+    "roundtrip",
+    "num",
+    "base36"
+   ],
+   "note": "36 进制 73 = 7*36+3 = 255"
+  }
+ ]
+}

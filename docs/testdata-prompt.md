@@ -254,6 +254,60 @@
    `enc wabun ガッコウ` 再 `dec` 回来是 `がつこう`（假名变小写、ッ→ツ）——
    这是体系限制，不是 bug。要看片假名得加 `--katakana`，那时是 `ガツコウ`。
 
+## 六之二、输出格式速查（**写期望值前先看这个**）
+
+上一版数据集 200 条里有 90 条期望值写错，**七成是因为不知道输出长什么样**。
+下面是从实际运行里抄下来的形态，照这个写：
+
+| 命令 | stdout 形态 |
+|---|---|
+| `codec.py auto` / `dec` / `enc` / `convert` | 纯结果，一行 |
+| `codec.py list` | `名字` + 对齐空格 + `enc` 标记（有编码器的才有） |
+| `codec.py blocks` | **三行报告**：`bytes: [104, 111, 112, 101]` / `ascii: hope` / `utf-8: hope` |
+| `codec.py brute` | 首行「对 'xxx' 尝试所有编码：」，之后每行 `  名字   得分   结果` |
+| `codec.py grid` | 纯 0/1 点阵，**不带行号** |
+| `classic.py <密码>` | 常带格式前缀：`  k=3   HELLO`（两空格 + k= + 三空格） |
+| `classic.py columnar` | `  key=xxx   得分   结果` 多行 |
+| `classic.py auto` | 首行「全部手法尝试（按英文契合度）：」+ 排名行 |
+| `classic.py list` | 子命令清单 |
+| `hashcrypto.py identify` | `  md5            32 位十六进制` |
+| `hashcrypto.py hash` | 纯 hex，一行 |
+| `hashcrypto.py crack` | 纯明文，一行（进度走 stderr） |
+| `hashcrypto.py xor` | `  key=0xNN   得分   b'结果'` |
+| `hashcrypto.py list` | `  名字   位数   说明` |
+| `stego.py meta` | **两个前导空格** + 标签 + 对齐空格 + 值：`  file         x.txt` |
+| `stego.py hexdump` | `偏移  hex  \|ascii\|` |
+| `stego.py binwalk` / `zipinfo` | 表格 / 清单 |
+| `num.py <数>` | 四行：`dec   255` / `hex   ff` / `bin   11111111` / `oct   377` |
+| `num.py <数> --to N` | 纯一个值 |
+
+## 六之三、上一版数据集栽过的 7 个坑（新加的，务必避开）
+
+1. **参数解析是手写的，不是 argparse。** 所以**根本不存在** `usage:` /
+   `error:` / `invalid choice` 这些输出。真实报错长这样：
+   - `失败：含十六进制以外的字符：'g'`（codec，走 **stderr**）
+   - `出错：文本太短（至少 20 个字母），单表替换破解不可靠`（classic，走 **stdout**）
+   - `--to 进制必须是 2..36。…`（num，走 stderr）
+   **失败退出码统一是 1**（少数参数缺失是 2），不要写 argparse 的 2。
+
+2. **`classic.py` 解出来的明文是小写**：`a1z26 --dec 8 5 12 12 15` → `hello`。
+
+3. **`codec.py blocks` 不是纯结果**，是三行报告；且 `-q` 对它无效。
+
+4. **含得分/评估的输出不要用精确 `stdout`**：`codec brute`、`classic auto` /
+   `columnar`、`hashcrypto xor` 里有 `125.0`、`108.0` 这类分数，会随实现微调
+   变化。用 `stdout_contains` 断言稳定的部分（编码名、结果）。
+
+5. **子命令 `--help` 不一定有输出**：`classic.py bacon --help` / `polybius --help` /
+   `t9 --help` 是**空输出 + exit 0**（只有部分子命令写了说明）。
+
+6. **fixture 必须是真能用的文件**。上一版手搓的 PNG 里 IDAT 块 CRC 算错了，
+   `zlib.decompress` 直接报 `incorrect data check`，stego 全线 "broken data
+   stream"——**四条用例集体误报**。生成二进制 fixture 后务必自己解一遍。
+
+7. **不要凭想象编密文**。上一版写 `playfair --key A --enc HELLO` 期望 `KCMMNY`，
+   实际是 `kcnvmp`。要么用 Python 自己算，要么标 unknown。
+
 ## 七、验收标准（你自己检查一遍再交）
 
 - [ ] JSON 能被 `json.load` 解析，无尾逗号

@@ -570,6 +570,29 @@
 
 ### 文档
 
+- 新增 `tests/` 测试基线：`dataset.json`（200 条用例）+ `run.py`（runner）。
+  覆盖 5 个脚本各 40 条，含 `fixtures` 机制（自动写到临时目录当 cwd，
+  所以 `-f hello.txt` 这种相对路径能生效）。断言支持精确 `stdout`、
+  宽松 `stdout_contains`/`stderr_contains`、`exit`。
+
+  数据集由外部 AI 按 `docs/testdata-prompt.md` 生成，**首轮 200 条里 90 条失败**，
+  逐条核对后确认：**全部是数据集的错，工具零 bug**。主要三类：
+  - 七成（约 73 条）假设参数解析是 argparse，期望 `usage:` / `error:` /
+    `invalid choice`——实际是手写解析，报错形如「失败：含十六进制以外的字符：'g'」，
+    失败退出码是 1 不是 2。
+  - 十余条输出格式猜错：`classic` 明文是小写、`blocks` 是三行报告
+    （`bytes:/ascii:/utf-8:`）而非纯结果。
+  - 4 条 fixture 本身坏了：手搓的 1×1 PNG 里 IDAT 的 CRC 算错，
+    `zlib.decompress` 直接 `incorrect data check`，stego 全线报 "broken data
+    stream"。换成合法的 2×2 RGBA 后全部正常。
+
+  修正后两遍连跑均 200/200，且把含得分的输出（`brute`/`auto`/`columnar`/`xor`）
+  改成宽松断言——分数会随实现微调，精确比对会导致假失败。
+
+  `docs/testdata-prompt.md` 据此补了两节：**输出格式速查**（18 条命令的 stdout
+  形态，上一版七成错误源于此）+ **7 个踩过的坑**。
+
+
 - 新增 `docs/testdata-prompt.md`：让另一个 AI 生成**全量测试数据集**的提示词。
   对方拿不到源码，所以提示词是自包含的——5 个脚本的完整命令清单、数据集 JSON
   格式（`fixtures` + `cases`，含 `stdout` 精确 / `stdout_contains` 宽松两种比对）、
