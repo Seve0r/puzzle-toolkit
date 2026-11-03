@@ -2017,9 +2017,30 @@ def try_decode(text, name):
     return out
 
 
+def _cjk_only(s):
+    """只留汉字。用来判断「这个变换到底动了什么」。"""
+    return "".join(c for c in s if "\u4e00" <= c <= "\u9fff")
+
+
 def brute(text, top=15):
-    """所有编码都试，按可读性排序（这里才包含 rot13/rot47/atbash 这类模糊变换）"""
+    """所有编码都试，按可读性排序（这里才包含 rot13/rot47/atbash 这类模糊变换）。
+
+    ★ 两处专治「乱码输入」的坑：
+
+    1. mojibake 数据稍有残缺就抛 ValueError（损失率超标），而那个异常里其实
+       **带着最佳猜测**。原来那一步 `except: continue` 等于把唯一能救它的
+       解码器装看不见。现在失败时退到 mojibake_best 参与比较。
+
+    2. rot13 / rot47 / atbash 只作用于 ASCII，汉字原样返回。当输入的汉字
+       本身是乱码时，它们等于什么都没做，却仍能靠「全可打印 + 汉字占比」
+       白拿 score() 给乱码汉字的底分（见 score 里那 0.3 系数）——
+       实测 `鉑愮櫥褰曞悕…` 的 rot47 得 116.1 分，压过真正解出来的
+       `?K?登录名：她的生日……`。这里对「CJK 完全没变且这些 CJK 是乱码」
+       的结果降权。
+    """
     names = list(DECODERS) + ["rot13", "rot47", "atbash"]
+    cjk_in = _cjk_only(text)
+    cjk_in_is_garbage = len(cjk_in) >= 4 and _common_ratio(cjk_in) < 0.5
     results = []
     for name in names:
         if name == "braillebits":
@@ -2027,17 +2048,41 @@ def brute(text, top=15):
         fn = DECODERS.get(name)
         if not fn:
             continue
+        partial = False
         try:
             out = fn(text)
         except Exception:
-            continue
+            # 判据只看**汉字部分**是否乱码，不能看整串：`_common_ratio` 把
+            # ASCII（含空白）也算作正常字符，输入末尾多一个换行就能把比例从
+            # 0.488 顶到 0.500，正好踩过阈值——实测「末尾带 \n 的同一串」
+            # 因此被 continue 掉，mojibake 整个不参与比较，rot47 又爬回第一。
+            if name != "mojibake" or not cjk_in_is_garbage:
+                continue
+            try:
+                out, _r, _b, _e = mojibake_best(text)
+                partial = True
+            except Exception:
+                continue
         if not out or out == text:
             continue
         if not isinstance(out, str):
             out = as_text(out)
+        if partial:
+            # U+FFFD 在这里的意思是「这个位置原始字节丢了」，不是「解错了」。
+            # score() 对替换符有 300 分/n 的重罚（防乱码靠"可打印"虚高），
+            # 直接算会把唯一能救的结果压到 70 分、排到最后——和 UI 一样先换成
+            # `?` 再打分，让缺失处只体现"不可读一个字符"，不否定整个还原。
+            out = out.replace("\ufffd", "?")
         if not acceptable(out, 0.25):
             continue
-        results.append((score(out), name, out))
+        sc = score(out)
+        if partial:
+            # 有缺失处的结果打个折：能无损解出的候选应该排在它前面。
+            sc -= 3.0
+        # 只轮换 ASCII、汉字原样保留 —— 而这些汉字本来就是乱码，等于白做。
+        if cjk_in_is_garbage and _cjk_only(out) == cjk_in:
+            sc -= 20.0
+        results.append((sc, name + ("(缺字)" if partial else ""), out))
     results.sort(key=lambda x: -x[0])
     seen = set()
     uniq = []

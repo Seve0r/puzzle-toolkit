@@ -76,6 +76,18 @@ def check(case, tmp, verbose=False):
         for s in exp["stdout_contains"]:
             if s not in out:
                 problems.append("stdout 缺 %r" % s)
+    # 顺序断言：这些子串必须按给定顺序出现。用于验证「排序类」修复
+    # （比如 brute 的候选排名），单靠 contains 是抓不到回退的。
+    if "stdout_contains_order" in exp:
+        pos = -1
+        for s in exp["stdout_contains_order"]:
+            i = out.find(s, pos + 1)
+            if i < 0:
+                problems.append("stdout 顺序断言缺 %r" % s)
+                break
+            pos = i
+        else:
+            pass
     if "stderr_contains" in exp:
         for s in exp["stderr_contains"]:
             if s not in err:
