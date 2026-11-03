@@ -868,14 +868,17 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "  k=0   --help\n  k=16  --rovz\n  k=22  --lipt\n  k=13  --uryc\n  k=1   --gdko\n  k=2   --fcjn\n  k=3   --ebim\n  k=4   --dahl\n  k=5   --czgk\n  k=6   --byfj"
+    "stdout_contains": [
+     "caesar",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "caesar"
    ],
-   "note": "覆盖 caesar 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-002",
@@ -886,15 +889,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 2,
-    "stdout": "需要 --key"
+    "exit": 0,
+    "stdout_contains": [
+     "vigenere",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "vigenere"
    ],
-   "note": "覆盖 vigenere 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-003",
@@ -905,15 +911,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：文本太短，维吉尼亚破解至少需要 20 个字母（现在 4）"
+    "exit": 0,
+    "stdout_contains": [
+     "vigcrack",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "vigcrack"
    ],
-   "note": "覆盖 vigcrack 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-004",
@@ -925,14 +934,17 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "  a=17 b=0   --foth\n  a=1  b=0   --help\n  a=15 b=3   --cheg\n  a=21 b=24  --tenh\n  a=15 b=17  --inkm\n  a=17 b=24  --zinb\n  a=23 b=9   --stiy\n  a=11 b=6   --torp\n  a=3  b=17  --onyi\n  a=19 b=24  --vonf"
+    "stdout_contains": [
+     "affine",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "affine"
    ],
-   "note": "覆盖 affine 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-005",
@@ -943,15 +955,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：文本太短（至少 20 个字母），单表替换破解不可靠"
+    "exit": 0,
+    "stdout_contains": [
+     "sub",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "sub"
    ],
-   "note": "覆盖 sub 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-006",
@@ -962,14 +977,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 0
+    "exit": 0,
+    "stdout_contains": [
+     "bacon",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "bacon"
    ],
-   "note": "覆盖 bacon 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-007",
@@ -981,14 +1000,17 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "  5  栏  --hepl\n  2  栏  -e-lhp\n  3  栏  -hpe-l\n  4  栏  --eplh"
+    "stdout_contains": [
+     "railfence",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "railfence"
    ],
-   "note": "覆盖 railfence 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-008",
@@ -1001,7 +1023,8 @@
    "expect": {
     "exit": 0,
     "stdout_contains": [
-     "key="
+     "columnar",
+     "通用："
     ]
    },
    "tags": [
@@ -1009,7 +1032,7 @@
     "classic",
     "columnar"
    ],
-   "note": "覆盖 columnar 帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-009",
@@ -1021,14 +1044,17 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "--svok"
+    "stdout_contains": [
+     "atbash",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "atbash"
    ],
-   "note": "覆盖 atbash 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-010",
@@ -1039,15 +1065,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：没有数字"
+    "exit": 0,
+    "stdout_contains": [
+     "a1z26",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "a1z26"
    ],
-   "note": "覆盖 a1z26 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-011",
@@ -1058,14 +1087,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 0
+    "exit": 0,
+    "stdout_contains": [
+     "polybius",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "polybius"
    ],
-   "note": "覆盖 polybius 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-012",
@@ -1076,15 +1109,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 2,
-    "stdout": "需要 --key"
+    "exit": 0,
+    "stdout_contains": [
+     "playfair",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "playfair"
    ],
-   "note": "覆盖 playfair 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-013",
@@ -1095,15 +1131,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 2,
-    "stdout": "需要 --key"
+    "exit": 0,
+    "stdout_contains": [
+     "adfgx",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "adfgx"
    ],
-   "note": "覆盖 adfgx 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-014",
@@ -1115,14 +1154,17 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "--gwko"
+    "stdout_contains": [
+     "keyboard",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "keyboard"
    ],
-   "note": "覆盖 keyboard 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-015",
@@ -1133,14 +1175,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 0
+    "exit": 0,
+    "stdout_contains": [
+     "t9",
+     "通用："
+    ]
    },
    "tags": [
     "basic",
     "classic",
     "t9"
    ],
-   "note": "覆盖 t9 帮助"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-016",
@@ -1153,7 +1199,8 @@
    "expect": {
     "exit": 0,
     "stdout_contains": [
-     "全部手法尝试"
+     "auto",
+     "通用："
     ]
    },
    "tags": [
@@ -1161,7 +1208,7 @@
     "classic",
     "auto"
    ],
-   "note": "覆盖 classic auto 帮助 ｜ 含得分的输出改为宽松断言（分数随实现微调会变）"
+   "note": "子命令级 --help 应打印该命令的用法行 + 通用选项"
   },
   {
    "id": "classic-basic-017",

@@ -8,6 +8,8 @@ description: Use when solving classical/hand ciphers or CTF-style puzzles — �
 ```bash
 C=~/.dsh/skills/classic-cipher/scripts/classic.py
 python3 $C <子命令> <文本>
+python3 $C <子命令> --help     # 看该子命令的用法（也可用 -h）
+python3 $C --help              # 全部子命令一览
 ```
 
 | 子命令 | 作用 |

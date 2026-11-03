@@ -1042,6 +1042,36 @@ def show_list(rows, fmt, limit=None, quiet=False):
         print("  " + fmt(r))
 
 
+def _sub_help(cmd):
+    """打印单个子命令的说明：从 `__doc__` 抽它那一行，再附上通用选项。
+
+    docstring 里每个子命令占一行（`  bacon       [--old] <text>      培根密码…`），
+    所以按「去空白后第一个词 == cmd」定位。用整词比较而不是 startswith，
+    否则 `t` 之类的短名会误匹配 `t9`。
+    """
+    lines = (__doc__ or "").split("\n")
+    hit = None
+    for l in lines:
+        s = l.strip()
+        if s and s.split()[0] == cmd:
+            hit = s
+            break
+    if not hit:
+        print("没有 %r 这个子命令。" % cmd)
+        print("用 `classic.py --help` 看全部子命令。")
+        return 2
+    print(hit)
+    try:
+        i = next(k for k, l in enumerate(lines) if l.strip() == "通用：")
+    except StopIteration:
+        return 0
+    print()
+    for l in lines[i:]:
+        if l.strip():
+            print(l.rstrip())
+    return 0
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
@@ -1104,6 +1134,14 @@ def main():
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(__doc__)
         return 0
+
+    # 子命令级的 -h：docstring 第一行就写着「子命令（都能 `-h` 看细节）」，
+    # 但原来只判断 argv[0]，于是 `classic.py bacon --help` 会把 "--help"
+    # 当成**待解密的密文**去跑——bacon/polybius/t9 的 `--help` 因此输出为空
+    # 或垃圾；而 caesar 会打印「凯撒爆破（按契合度）」，看着像帮助，其实那
+    # 是它拿 "--help" 当密文的运行结果。必须在拼 text 之前拦。
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        return _sub_help(argv[0])
 
     cmd = argv[0]
     text = " ".join(argv[1:])
