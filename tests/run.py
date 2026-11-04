@@ -14,6 +14,7 @@
   · expect.stderr_contains   所有子串都出现在 stderr
   · expect.exit              退出码相等
   · expect.unknown           跳过（数据集里明确标了"没把握"的条目）
+  · requires                 用例依赖的外部命令，本机缺了 → skip（如 ["zbarimg"]）
 
 fixtures 会先写到临时目录，用例以该目录为 cwd 执行，所以 `-f hello.txt`
 这种相对路径能生效；脚本本身用绝对路径调用，不受 cwd 影响。
@@ -41,6 +42,13 @@ def check(case, tmp, verbose=False):
     exp = case.get("expect") or {}
     if "unknown" in exp:
         return "skip", "数据集标注 unknown：%s" % exp["unknown"], "", ""
+
+    # requires：用例依赖的外部命令（zbarimg / ffmpeg…）。缺了直接 skip 而不是
+    # fail —— 「本机没装」不等于「功能坏了」。否则没装 zbar 的机器上整份基线
+    # 永远挂着红项，基线就废了。
+    missing = [x for x in (case.get("requires") or []) if not shutil.which(x)]
+    if missing:
+        return "skip", "缺外部依赖：%s" % "、".join(missing), "", ""
 
     script = os.path.join(PROJ, case["script"])
     if not os.path.exists(script):

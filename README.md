@@ -275,7 +275,7 @@ python3 codec.py enc hex -f picture.png
 | `stego zipinfo <zip>` | 不依赖 unzip：列条目、注释、伪加密标记 |
 | `stego unzip <zip> [--out 目录]` | 解压到目录（只支持 store/deflate，加密条目跳过，带路径越界防护） |
 | `stego hexdump <文件> [-l N]` | 十六进制查看 |
-| `stego qr <图片> [--all]` | 识别二维码/条形码，`--all` 会放大 2×/4× 重试 |
+| `stego qr <图片> [--all] [--no-invert]` | 识别二维码/条形码，`--all` 放大 2×/4× 重试；**扫不出自动反色再试** |
 | `stego spec <音频> [--out 图.png]` | 生成频谱图（看隐藏的摩斯/文字） |
 | `stego grid <图片>` | 点阵图切成格子，自动测格宽/相位/阈值，输出 **0/1 点阵**（分析走 stderr），解码交给 `codec dec bin` |
 | `stego meta <文件>` | 文件类型 + 尺寸 + 熵 |

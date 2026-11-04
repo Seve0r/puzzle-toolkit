@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 205,
+  "count": 207,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -19,6 +19,10 @@
   {
    "name": "png1x1.png",
    "content_b64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEElEQVR4nGP4z8DwHwohFABFzAf5Zsv/OQAAAABJRU5ErkJggg=="
+  },
+  {
+   "name": "qr_inverted.png",
+   "content_b64": "iVBORw0KGgoAAAANSUhEUgAAAHQAAAB0CAIAAADb+IFwAAACEElEQVR42u3d0W7CQAxEUaj6/79M3ytFtTPrTaDnPrYBNiPrYpwNPB4AAADA5/E8+sfr9Vr/Ys/nn691dExlnZXH7jyvL/U1h3CF+558J07pOrHiyqPjK8d0XTxxXiqXFoSL1Lld1yS9auV5uo6+6rxULi0IF6lz70Clh03mFSqXFoSLT3NuxZV38KbKFa5wcaVzJ9yX9K1Hf++uc+K8VC4tCBdnnDtxrb/r0GmPq1xagHB3fMS/6oW7vku8aZ5LCxDu3fvcnf3mxD6wipenPa5yaUG4ODNbSD6zd316dHxln2+3XzZboAUI9+7O7V6/Svy7ypWVnrS75sp7j8qlBeGi6tzEU12XJZ/ru05Petuu91UuLQgXO2YLFcd1Hd3tqRNWXXNTubQgXFSdm/SkyX230/dBJI7urk3l0oJw8VtBE86dmAlUnL5zzZX1qFxaEC5S5+78roOJ51nlVtfQaEG4WDlbWOWyib2xq77vsfseU1m/yqUF4eJMnzvNxP6E5B7iiTmyyqUF4aLa507/nkJ3X9cqD+6ce6hcWhAuzswWpmep3ZlDslds53xZ5dKCcHHGuclMoOvZib0HSc+e9OAqlxaEi9S5EyS/XTax56zyfqByaUG4eFfnrupPp/eWufeXFoSL3c6d/i7aVXvLEm/at0ALwsWVzp3+nYjErRWfXnVPh8qlBeECAAAA+Af8APXNeuaHuep4AAAAAElFTkSuQmCC"
   }
  ],
  "cases": [
@@ -2529,15 +2533,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "binwalk"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "binwalk"
    ],
-   "note": "覆盖 binwalk 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-002",
@@ -2548,15 +2555,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "tail"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "tail"
    ],
-   "note": "覆盖 tail 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-003",
@@ -2567,15 +2577,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "strings"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "strings"
    ],
-   "note": "覆盖 strings 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-004",
@@ -2586,15 +2599,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "lsb"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "lsb"
    ],
-   "note": "覆盖 lsb 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-005",
@@ -2605,15 +2621,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "lsbscan"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "lsbscan"
    ],
-   "note": "覆盖 lsbscan 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-006",
@@ -2624,15 +2643,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "exif"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "exif"
    ],
-   "note": "覆盖 exif 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-007",
@@ -2643,15 +2665,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "pngchunks"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "pngchunks"
    ],
-   "note": "覆盖 pngchunks 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-008",
@@ -2662,15 +2687,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "zipinfo"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "zipinfo"
    ],
-   "note": "覆盖 zipinfo 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-009",
@@ -2681,15 +2709,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "unzip"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "unzip"
    ],
-   "note": "覆盖 unzip 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-010",
@@ -2700,15 +2731,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "hexdump"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "hexdump"
    ],
-   "note": "覆盖 hexdump 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-011",
@@ -2720,14 +2754,18 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "usage: zbarimg [options] <image>...\n\nscan and decode bar codes from one or more image files\noptions:\n    -h, --help      display this help text\n    --version       display version information and exit\n    --polygon       output points delimiting code zone with decoded symbol data\n    -q, --quiet     minimal output, only print decoded symbol data\n    -v, --verbose   increase debug output level\n    --verbose=N     set specific debug output level\n    -d, --display   enable display of following images to the screen\n    -D, --nodisplay disable display of following images (default)\n    --xml, --noxml  enable/disable XML output format\n    --raw           output decoded symbol data without converting charsets\n    -1, --oneshot   exit after scanning one bar code\n    -S<CONFIG>[=<VALUE>], --set <CONFIG>[=<VALUE>]\n                    set decoder/scanner <CONFIG> to <VALUE> (or 1)\n    --nodbus        disable dbus message"
+    "stdout_contains": [
+     "子命令：",
+     "qr <image>",
+     "--no-invert"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "qr"
    ],
-   "note": "仅帮助，不触发 zbarimg 外部依赖"
+   "note": "子命令级帮助：以前 --help 被当文件名传给 zbarimg，打出来的是 zbarimg 的帮助（note 说「不触发外部依赖」是假的）"
   },
   {
    "id": "stego-basic-012",
@@ -2738,15 +2776,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：文件不存在：--help"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "spec"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "spec"
    ],
-   "note": "仅帮助，不触发 ffmpeg 外部依赖"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-013",
@@ -2757,15 +2798,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "grid"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "grid"
    ],
-   "note": "覆盖 grid 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-014",
@@ -2776,15 +2820,18 @@
    ],
    "stdin": null,
    "expect": {
-    "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: '--help'"
+    "exit": 0,
+    "stdout_contains": [
+     "子命令：",
+     "meta"
+    ]
    },
    "tags": [
     "basic",
     "stego",
     "meta"
    ],
-   "note": "覆盖 meta 帮助"
+   "note": "子命令级帮助：以前 --help 被当文件名，报「No such file or directory」"
   },
   {
    "id": "stego-basic-015",
@@ -4273,6 +4320,51 @@
     "cross-encoding"
    ],
    "note": "Shift_JIS 被当 GBK 读：必须 encode(gbk) → decode(cp932) 才对。目标编码若写死 UTF-8 就解不出（AIU #003 标题）"
+  },
+  {
+   "id": "stego-edge-009",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "qr_inverted.png"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "https://example.com/arg"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "qr"
+   ],
+   "requires": [
+    "zbarimg"
+   ],
+   "note": "反色二维码（白码黑底）：zbar 直接认不出，放大也没用，必须自动反转才能识别"
+  },
+  {
+   "id": "stego-edge-010",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "qr_inverted.png",
+    "--no-invert"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "没识别到二维码/条形码"
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "qr"
+   ],
+   "requires": [
+    "zbarimg"
+   ],
+   "note": "--no-invert 关掉自动反色：同一张反色图应该认不出，证明开关真的生效"
   }
  ]
 }

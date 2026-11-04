@@ -15,6 +15,8 @@
   unzip <zip> [--out DIR]     解压到目录（store/deflate，加密条目跳过，带路径越界防护）
   hexdump <file> [-l N]       十六进制查看
   qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试）
+                              扫不出会自动反色再试（白码黑底）；--no-invert 关掉，
+                              --invert 直接按反色扫。PNG 走内置解码器，其它格式需 Pillow
   spec <audio> [--out a.png]  ffmpeg 生成频谱图（看隐藏的摩斯/文字）
   grid <image>                点阵图切成格子，输出 0/1 点阵（网格参数等分析走 stderr）
                               解码交给 codec：stego.py grid x.png | codec.py dec bin
@@ -383,39 +385,80 @@ def exif_info(path):
     return info
 
 
-def qr_scan(path, allres=False):
+def qr_scan(path, allres=False, invert=None):
+    """返回 (结果列表, 是否用了反色, 反色做不到的原因)。
+
+    invert 三态：
+      None  先扫原图，扫不到再自动反色试一次（默认）
+      True  直接反色扫（使用者已确定是反色图，省一轮）
+      False 不反色，只扫原图
+
+    为什么要自动：反色二维码和「图太小」的现象完全一样——都是「没识别到」，
+    但用户根本看不出图是反色的。指望他记得加参数不现实。
+    反转是纯增量尝试：原图能识别时走不到这一步，不存在误判。
+    """
     # 不能写死 /usr/bin/zbarimg：macOS 的 Homebrew 装在 /opt/homebrew/bin，
     # Windows 上是 zbarimg.exe，写死路径会误判成"没装"。
     zbar = shutil.which("zbarimg")
     if not zbar:
         raise RuntimeError("需要 zbarimg（apt install zbar-tools / brew install zbar）")
-    outs = []
-    r = subprocess.run([zbar, "--raw", "-q", path], capture_output=True)
-    if r.stdout.strip():
-        outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
-    if allres and HAVE_PIL:
-        # 放大后再试一次，小二维码原图识别不出
-        im = open_img(path).convert("L")
-        w, h = im.size
-        for scale in (2, 4):
-            fd, tmp = tempfile.mkstemp(suffix=".png", prefix="_qr_%dx_" % scale)
-            os.close(fd)
-            try:
-                im.resize((w * scale, h * scale), Image.LANCZOS).save(tmp)
-                r = subprocess.run([zbar, "--raw", "-q", tmp], capture_output=True)
-                if r.stdout.strip():
-                    outs.extend(r.stdout.decode("utf-8", "replace").splitlines())
-            finally:
+
+    def _try(p):
+        got = []
+        r = subprocess.run([zbar, "--raw", "-q", p], capture_output=True)
+        if r.stdout.strip():
+            got.extend(r.stdout.decode("utf-8", "replace").splitlines())
+        if allres and HAVE_PIL:
+            # 放大后再试一次，小二维码原图识别不出
+            im = open_img(p).convert("L")
+            w, h = im.size
+            for scale in (2, 4):
+                fd, tmp = tempfile.mkstemp(suffix=".png", prefix="_qr_%dx_" % scale)
+                os.close(fd)
                 try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-    seen, uniq = set(), []
-    for o in outs:
-        if o not in seen:
-            seen.add(o)
-            uniq.append(o)
-    return uniq
+                    im.resize((w * scale, h * scale), Image.LANCZOS).save(tmp)
+                    r = subprocess.run([zbar, "--raw", "-q", tmp], capture_output=True)
+                    if r.stdout.strip():
+                        got.extend(r.stdout.decode("utf-8", "replace").splitlines())
+                finally:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
+        return got
+
+    def _try_inverted():
+        tmp, why = inverted_copy(path)
+        if not tmp:
+            return [], why
+        try:
+            return _try(tmp), ""
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    def _uniq(seq):
+        seen, out = set(), []
+        for o in seq:
+            if o not in seen:
+                seen.add(o)
+                out.append(o)
+        return out
+
+    if invert is True:
+        got, why = _try_inverted()
+        if got:
+            return _uniq(got), True, why
+        # 强制反转却没结果：退回原图再试，别让 --invert 反而漏掉正色图
+        return _uniq(_try(path)), False, why
+
+    got = _try(path)
+    if got or invert is False:
+        return _uniq(got), False, ""
+    got, why = _try_inverted()
+    return _uniq(got), bool(got), why
 
 
 # ---------------------------------------------------------------- ZIP
@@ -670,6 +713,63 @@ def canvas_of(path):
     w, h = im.size
     raw = im.tobytes()
     return w, h, [raw[0::4], raw[1::4], raw[2::4], raw[3::4]]
+
+
+def _png_encode_rgb(w, h, R, G, B):
+    """把三个平面打包成非隔行 8 位 RGB PNG（纯标准库）。
+
+    给 qr 的反色重试用：zbarimg 只吃图片文件，不能直接喂内存里的像素。
+    这里只要「zbar 能读懂」，所以统一输出 8 位 RGB、filter 全 0，
+    不追求体积——二维码图通常很小，压缩比无所谓。
+    """
+    raw = bytearray()
+    for y in range(h):
+        raw.append(0)                      # filter type 0 = None
+        i = y * w
+        row = bytearray(w * 3)
+        row[0::3] = R[i:i + w]
+        row[1::3] = G[i:i + w]
+        row[2::3] = B[i:i + w]
+        raw += row
+
+    def chunk(typ, body):
+        return (struct.pack(">I", len(body)) + typ + body +
+                struct.pack(">I", zlib.crc32(typ + body) & 0xFFFFFFFF))
+
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)   # 8bit, ctype 2 = RGB
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(bytes(raw), 6))
+            + chunk(b"IEND", b""))
+
+
+# 反色查表：bytes.translate 走 C 实现，比逐字节生成快得多
+_INV256 = bytes(255 - i for i in range(256))
+
+
+def inverted_copy(path):
+    """生成一张反色临时 PNG，返回 (路径, 说明)。做不到时 (None, 原因)。
+
+    分级和 canvas_of 一致：PNG 走 _png_canvas（纯标准库，任何机器可用），
+    其它格式（JPEG 等）靠 Pillow。两者都缺时把原因带回去——调用方要能说清
+    「为什么反色这条路走不通」，而不是只丢一句「没识别到」，
+    否则用户会以为是清晰度问题，跑去二值化/锐化上白耗时间。
+    """
+    try:
+        w, h, planes = canvas_of(path)
+    except Exception as e:
+        return None, "%s: %s" % (type(e).__name__, e)
+    R, G, B = planes[0], planes[1], planes[2]
+    # 只翻 RGB，Alpha 原样保留：透明区反转后要不要变不透明，
+    # 各解码器行为不一致，留原样最不容易出意外。
+    data = _png_encode_rgb(w, h,
+                           R.translate(_INV256),
+                           G.translate(_INV256),
+                           B.translate(_INV256))
+    fd, tmp = tempfile.mkstemp(suffix=".png", prefix="_qr_inv_")
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    return tmp, ""
 
 
 def _otsu_split(vals):
@@ -1116,6 +1216,12 @@ def main():
         return 0
 
     cmd = argv[0]
+    # `stego qr --help` 以前会把 --help 当文件名往下传（qr 分支原样交给
+    # zbarimg，打出来的其实是 zbarimg 的帮助）。子命令后跟 -h/--help 一律当
+    # 「看帮助」——和 classic.py 子命令级帮助保持一致。
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return 0
     if len(argv) < 2 and cmd not in ("help",):
         print("缺少文件参数")
         return 2
@@ -1255,10 +1361,24 @@ def main():
         if cmd == "qr":
             # 原来是 qr_scan(path, use_all or True)：use_all 是布尔，
             # False or True 恒等于 True，--all 形同虚设，而且每次都白跑两轮放大识别。
-            outs = qr_scan(path, use_all)
+            force_inv = "--invert" in argv
+            no_inv = "--no-invert" in argv
+            inv = False if no_inv else (True if force_inv else None)
+            outs, used_inv, inv_why = qr_scan(path, use_all, inv)
             if not outs:
-                print("没识别到二维码/条形码")
+                if no_inv:
+                    print("没识别到二维码/条形码")
+                elif inv_why:
+                    print("没识别到二维码/条形码（反色重试没做成：%s）" % inv_why)
+                else:
+                    print("没识别到二维码/条形码（正色、反色都试过了）")
                 return 0
+            if used_inv and not quiet:
+                # 「是反色才认出」这件事必须说出来：否则用户以为图本来就是正的，
+                # 下次再遇到扫不出时，又分不清是反色还是分辨率不够。
+                sys.stdout.flush()
+                sys.stderr.write("  原图是反色的（白码黑底），已反转后识别\n")
+                sys.stderr.flush()
             for o in outs:
                 print(o)
             return 0
