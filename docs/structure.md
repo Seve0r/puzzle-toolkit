@@ -25,22 +25,22 @@
 | 区 | 行范围 | 行数 | 对象 | 干什么 |
 |---|---|---:|---:|---|
 | 文件头 | 1–63 | 63 | — | docstring（也就是 `--help` 的内容）+ import |
-| 基础设施 | 64–121 | 58 | 8 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口 |
-| Base 系列 | 122–347 | 226 | 25 | base64/32/58/62/85/91/36 等 8 对 |
-| 进制 / 二进制串 | 348–450 | 103 | 10 | hex·bin·dec·oct·block36 |
-| Punycode | 451–499 | 49 | 4 | IDN 编码 |
-| 文本转义 | 500–578 | 79 | 10 | url / html / unicode / js / quoted-printable |
-| 字符替换 | 579–630 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
-| 摩斯 | 631–678 | 48 | 4 | 国际摩斯 + 两张表 |
-| 和文モールス | 679–832 | 154 | 10 | Wabun code + 6 张表/工具 |
-| 盲文 | 833–920 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
-| 压缩流与字符编码 | 921–1029 | 109 | 12 | zlib/uu + utf16 + gbk |
-| UTF-32 | 1030–1081 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1082–1803 | **722** | 23 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 1804–2109 | 306 | 12 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2110–2175 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2176–2388 | 213 | 11 | `convert` |
-| CLI | 2389–2745 | 357 | 2 | `read_input` → `main` |
+| 基础设施 | 64–141 | 78 | 7 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口、`_hint`（`-q` 的静默出口） |
+| Base 系列 | 142–367 | 226 | 22 | base64/32/58/62/85/91/36 等 8 对 |
+| 进制 / 二进制串 | 368–470 | 103 | 9 | hex·bin·dec·oct·block36 |
+| Punycode | 471–519 | 49 | 2 | IDN 编码 |
+| 文本转义 | 520–598 | 79 | 10 | url / html / unicode / js / quoted-printable |
+| 字符替换 | 599–650 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
+| 摩斯 | 651–698 | 48 | 2 | 国际摩斯 + 两张表 |
+| 和文モールス | 699–852 | 154 | 5 | Wabun code + 6 张表/工具 |
+| 盲文 | 853–940 | 88 | 3 | 2 解码 + 1 编码 + 5 张表 |
+| 压缩流与字符编码 | 941–1049 | 109 | 12 | zlib/uu + utf16 + gbk |
+| UTF-32 | 1050–1101 | 52 | 7 | utf32/be/le |
+| **乱码还原** | 1102–1816 | **715** | 17 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 1817–2167 | 351 | 7 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2168–2233 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2234–2446 | 213 | 6 | `convert` |
+| CLI | 2447–2801 | 355 | 2 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -51,41 +51,42 @@
 ### 2. 逐区
 
 ```
-【基础设施】L64-121
+【基础设施】L64-141
   DECODERS / ENCODERS            两张 dict，装饰器往里塞
   dec_name(*names) / enc_name()  一个函数可以挂多个名字（正式名 + 别名）
   as_bytes / raw_bytes           str → bytes。区别：前者走 latin-1 承载，后者认两种形态
   as_text / _bin_str             bytes → str。_bin_str 用 latin-1 保证 1 字符 = 1 字节
+  _QUIET / _hint(msg)            诊断提示的统一出口，`-q` 时静默；错误信息不走这里
 
-【Base 系列】L122-347
+【Base 系列】L142-367
   base64/b64 · base64url · base32/b32 · base32hex/b32hex · base16/hex
   base58/b58/base58btc · base62/b62 · base85/b85 · ascii85/a85
   base91/b91 · base36/b36
   常量：B58_ALPHABET、B62_SETS（三套字母表）、B91
 
-【进制 / 二进制串】L348-450
+【进制 / 二进制串】L368-470
   bin/binary · dec/decimal · oct/octal   ← 都是「一串数 → 字节」
   blocks_to_bytes + _B36_ALPHA + block36/b36x2   ← 「两位 base36 = 一字节」
   注意 base36 和 block36 不是一回事：前者整串当大整数，后者每两位一个字节
 
-【Punycode】L451-499       punycode/puny/idn
-【文本转义】L500-578       url · html · unicode · js · qp
-【字符替换】L579-630       _rot_n → rot13 / rot47 / atbash（自反：enc 就是再 dec 一次）
+【Punycode】L471-519       punycode/puny/idn
+【文本转义】L520-598       url · html · unicode · js · qp
+【字符替换】L599-650       _rot_n → rot13 / rot47 / atbash（自反：enc 就是再 dec 一次）
 
-【摩斯】L631-678           MORSE / MORSE_REV + morse
-【和文モールス】L679-832   WABUN / WABUN_REV / _WABUN_DAKU / _WABUN_HANDAKU
+【摩斯】L651-698           MORSE / MORSE_REV + morse
+【和文モールス】L699-852   WABUN / WABUN_REV / _WABUN_DAKU / _WABUN_HANDAKU
                            _kata2hira / _hira2kata / _wabun_near / _WABUN_SMALL
                            注意：没有小假名（ャュョッ）的独立符号，统一按大假名送
 
-【盲文】L833-920           braille（解+编）、braillebits（只解，点阵位流形态）
-【压缩流与字符编码】L921-1029
+【盲文】L853-940           braille（解+编）、braillebits（只解，点阵位流形态）
+【压缩流与字符编码】L941-1049
   compress（gzip/zlib/bz2/deflate/inflate 共用一对函数）· uu
   utf16/be/le · gbk
   二进制结果统一用 latin-1 承载（1 字符 = 1 字节），要落文件请套 enc hex
 
-【UTF-32】L1030-1081       _u32_input（输入归一）+ utf32/be/le
+【UTF-32】L1050-1101       _u32_input（输入归一）+ utf32/be/le
 
-【评分 / 识别】L1804-2109
+【评分 / 识别】L1817-2167
   score                    可读性打分（比例类，短串会失真）
   acceptable               长度骤减 / 控制字符的否决
   structural_candidates    结构指纹：这串像什么编码
@@ -94,9 +95,9 @@
   auto                     递归剥皮，默认深度 3
   COMMON_EN / COMMON_CN / CJK_RE / STRUCT_BONUS / LOOSE_ORDER / MIN_OUT_RATIO
 
-【矩阵重排】L2110-2175     _blocks / _read / grid_variants
+【矩阵重排】L2168-2233     _blocks / _read / grid_variants
 
-【编码 × 进制】L2176-2388
+【编码 × 进制】L2234-2446
   _RADIX_*（字符集、标签、分隔符）
   _radix_clean / _radix_bad_chars   ← 先去分隔符，再校验字符集
   radix_to_bytes                     ← 报错顺序：字符集 → 长度 → 范围
@@ -104,7 +105,7 @@
   bytes_to_text                      ← auto 是「挑一个」不是「它就是」
   convert_decode                     ← CLI 与界面共用
 
-【CLI】L2389-2745
+【CLI】L2447-2801
   read_input    多吃一个参数：`-f` 文件 / 管道 / argv 拼接
   main          手写参数解析 + 子命令分发（没有通用 opt 库）
 ```
@@ -117,7 +118,7 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1513）
+#### 3.1 调度顺序（`_d_mojibake`, L1533）
 
 ```
 _d_mojibake(s)
@@ -198,7 +199,7 @@ _MOJIBAKE_FAMILIES   上两者的族分组
 #### 3.6 实验开关
 
 ```python
-_ENABLE_LATIN1_MOJIBAKE = False   # L1148
+_ENABLE_LATIN1_MOJIBAKE = False   # L1168
 ```
 
 同时控制三处：`mojibake_latin1()`、`_encode_back()` 里的 NFC 归一、
@@ -212,12 +213,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L1904 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L1917 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1621）/ `bytes_to_text`（L2304） |
+| 报告里的编码名不对 | `text_encoding_name`（L1634）/ `bytes_to_text`（L2362） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2230）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2439）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2288）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2497）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---
@@ -260,7 +261,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 
 ## 二、`classic.py`
 
-1285 行 / 71 个顶层对象 / 17 个分区。
+1323 行 / 51 个顶层对象 / 17 个分区。
 
 **结构特点：一个密码一个区，`xxx_dec` 和 `xxx_enc` 相邻。** 这点和 `codec.py`
 相反——codec 曾经把编码器全堆在文件末尾（2026-11 才归位），classic 从一开始
@@ -284,7 +285,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 | 键盘错位 | 894–928 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
 | T9 九宫格 | 929–978 | 50 | `t9_encode` / `t9` |
 | auto | 979–1031 | 53 | `auto` + `affine_enc_free` |
-| CLI | 1032–1285 | 254 | `show_list` / `main` |
+| CLI | 1032–1323 | 292 | `show_list` / `main` |
 
 ### 改代码时从哪下手
 
@@ -293,7 +294,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 | 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
 | 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
 | 加进 auto | `auto`（L981 附近），把新密码接进它的候选循环 |
-| 加子命令 | `main`（L1045，237 行，手写参数解析） |
+| 加子命令 | `main`（L1075，249 行，手写参数解析） |
 
 ### 注意
 
@@ -346,17 +347,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 
 ## 四、`stego.py`
 
-1307 行 / 38 个顶层对象 / 7 个分区。
+1427 行 / 36 个顶层对象 / 7 个分区。
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
-| 魔数 | 48–219 | 172 | `MAGIC` / `binwalk` / `_gif_end` / `tail_data` / `strings` / `mark_suspect` |
-| 图片 | 220–420 | 201 | `lsb_extract` / `lsb_scan` / `png_chunks` / `png_text` / `exif_info` / `qr_scan` |
-| ZIP | 421–503 | 83 | `zip_entries` / `zip_comment` / `zip_fake_encrypt` / `zip_extract` |
-| 音频 | 504–529 | 26 | `spectrum`（要 `ffmpeg`） |
-| 点阵网格（grid） | 530–1047 | **518** | `_png_canvas` / `canvas_of` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
-| 杂项 | 1048–1092 | 45 | `entropy` / `meta` / `hexdump` |
-| CLI | 1093–1307 | 215 | `main`（209 行） |
+| 魔数 | 50–221 | 172 | `read` / `binwalk` / `_gif_end` / `tail_data` / `strings` / `mark_suspect` |
+| 图片 | 222–463 | 242 | `open_img` / `lsb_extract` / `lsb_scan` / `png_chunks` / `png_text` / `exif_info` / `qr_scan` |
+| ZIP | 464–546 | 83 | `zip_entries` / `zip_comment` / `zip_fake_encrypt` / `zip_extract` |
+| 音频 | 547–572 | 26 | `spectrum`（要 `ffmpeg`） |
+| 点阵网格（grid） | 573–1147 | **575** | `_png_canvas` / `canvas_of` / `_png_encode_rgb` / `inverted_copy` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
+| 杂项 | 1148–1192 | 45 | `entropy` / `meta` / `hexdump` |
+| CLI | 1193–1427 | 235 | `main`（233 行） |
 
 ### 改代码时从哪下手
 
@@ -365,13 +366,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1148
 | 加一种容器格式的解析 | 照 `ZIP` 区那样，`xxx_entries` / `xxx_extract` 成对写 |
 | grid 读错格子 | `_otsu_split`（阈值）+ `_fit_axis`（格宽）；两个都有实测依据，改动前先看注释 |
 | LSB 看不出东西 | `lsb_scan`（按通道/位序枚举）+ `longest_printable`（挑最像人话的） |
-| 加子命令 | `main`（L1095） |
+| 加子命令 | `main`（L1195） |
 
 ### 注意
 
-- **grid 区 518 行、8 个函数是一条完整链路**：纯标准库解 PNG → 二值化 →
-  测格宽 → 读 0/1。`_png_canvas` / `canvas_of` **只被 `grid_read` 调用**，
-  所以放在 grid 区是对的，不要因为"它解的是图片"就挪去「图片」区。
+- **grid 区 575 行、9 个函数是一条完整链路**：纯标准库解 PNG → 二值化 →
+  测格宽 → 读 0/1。`_png_canvas` / `canvas_of` 原本只被 `grid_read` 调用，
+  所以放在 grid 区是对的。2026-11 给 `qr` 加反色重试时又在这里加了
+  `_png_encode_rgb`（PNG 编码，和 `_png_canvas` 配成一对）和 `inverted_copy`
+  （反转像素），于是 `canvas_of` 多了一个调用方。
+  **编码器紧挨解码器是刻意的**——不要因为「它服务的是 qr」就把这两个单独
+  挪去「图片」区，那样 PNG 的读和写会分处两章。
 - `qr_scan` 原来误放在「音频」区（大概和 `spectrum` 一起加的），2026-11
   已归入「图片」。
 - **纯标准库解 PNG**：位深 1/2/4/8/16，颜色类型 0/2/3/4/6，非隔行；
