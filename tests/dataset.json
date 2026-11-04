@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 204,
+  "count": 205,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -4251,6 +4251,28 @@
     "brute"
    ],
    "note": "末尾带换行的同一串：_common_ratio 会被 ASCII 空白顶过阈值，mojibake 曾被跳过"
+  },
+  {
+   "id": "codec-roundtrip-007",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "mojibake",
+    "孨偼堦惗巹傪朰傟側偄",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "君は一生私を忘れない"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "mojibake",
+    "cross-encoding"
+   ],
+   "note": "Shift_JIS 被当 GBK 读：必须 encode(gbk) → decode(cp932) 才对。目标编码若写死 UTF-8 就解不出（AIU #003 标题）"
   }
  ]
 }

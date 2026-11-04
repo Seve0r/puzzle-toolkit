@@ -66,6 +66,26 @@ import unicodedata
 ENCODERS = {}
 DECODERS = {}
 
+# `-q` 的静默开关，由 main() 设置。诊断提示一律走 _hint()。
+_QUIET = False
+
+
+def _hint(msg):
+    """诊断提示的统一出口（「解释」类信息，`-q` 时静默）。
+
+    和 sys.stderr.write 分工，两者不能混：
+      · _hint()      用了哪对编码、损失率、分段还原了几段 —— 可以不要
+      · stderr.write 失败原因、数据损坏警告 —— 不能不要，脚本靠它排查
+
+    先 flush stdout 再写 stderr：stdout 带缓冲、stderr 不带，
+    不 flush 的话提示会跑到结果后面去。
+    """
+    if _QUIET:
+        return
+    sys.stdout.flush()
+    sys.stderr.write(msg)
+    sys.stderr.flush()
+
 
 def enc_name(*names):
     def wrap(fn):
@@ -1555,12 +1575,10 @@ def _d_mojibake(s):
     if lat:
         p, lsrc, ltgt, lout = lat[0]
         others = ["%s→%s(%s)" % (r[1], r[2], r[3]) for r in lat[1:3]]
-        sys.stdout.flush()
-        sys.stderr.write(
+        _hint(
             "\n  [西欧字符] 按 %s 编回字节、按 %s 解（可读度 %.0f%%）%s\n"
             % (lsrc, ltgt, p * 100,
                "；另有 " + "、".join(others) if others else ""))
-        sys.stderr.flush()
         return lout
 
     # ---- 二级：换成非 UTF-8 的目标编码再试
@@ -1568,14 +1586,11 @@ def _d_mojibake(s):
     if cross:
         p, cenc, ctgt, cout = cross[0]
         others = ["%s→%s" % (r[1], r[2]) for r in cross[1:]]
-        # stdout 有缓冲、stderr 没有，不 flush 会跑到结果后面去
-        sys.stdout.flush()
-        sys.stderr.write(
+        _hint(
             "\n  [跨编码] 按 %s 编回字节、按 %s 解"
             "（可读度 %.0f%% → %.0f%%）%s\n"
             % (cenc, ctgt, _common_ratio(s) * 100, p * 100,
                "；另有等价解 " + "、".join(others[:3]) if others else ""))
-        sys.stderr.flush()
         return cout
     # ---- 三级：输入本身含 U+FFFD（复制/转存时就丢了字节）。整段一起 encode
     # 必然失败（U+FFFD 不在任何编码里），但缺失处两侧的字节是完好的，
@@ -1583,12 +1598,10 @@ def _d_mojibake(s):
     sp = mojibake_split(s)
     if sp:
         sout, pair, sok, stotal = sp
-        sys.stdout.flush()
-        sys.stderr.write(
+        _hint(
             "\n  [分段还原] 按 %s 解；原文有 %d 处字节缺失（输出里标 ?），"
             "成功还原 %d/%d 段\n"
             % (pair, s.count("\ufffd"), sok, stotal))
-        sys.stderr.flush()
         return sout
     if rejected is not None:
         renc, rout = rejected
@@ -2482,8 +2495,10 @@ def read_input(args, want_bytes=False):
 
 
 def main():
+    global _QUIET
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
+    _QUIET = quiet
     best = "--best" in argv
     # 和文モールス表是片假名，但默认输出平假名；--katakana 保留片假名
     katakana = "--katakana" in argv
@@ -2715,12 +2730,10 @@ def main():
             except ValueError as e:
                 print("失败：%s" % e)
                 return 1
-            sys.stdout.flush()
-            sys.stderr.write(
+            _hint(
                 "\n  [显式] 按 %s 编回字节 → 按 %s 解%s\n"
                 % (src, tgt,
                    "（未指定的那一侧用了默认值）" if not (mb_from and mb_to) else ""))
-            sys.stderr.flush()
             print(out)
             return 0
         # dec mojibake --best：谜题里数据本身残缺时，强制给出最佳猜测，
@@ -2728,20 +2741,19 @@ def main():
         if cmd.startswith("dec") and name == "mojibake" and best:
             out, ratio, bad, enc = mojibake_best(text)
             print(out.replace("\ufffd", "?"))
-            # stdout 带缓冲、stderr 不带，不 flush 的话提示会跑到结果前面
-            sys.stdout.flush()
+            # _hint 里会先 flush stdout，所以下面的提示不会跑到结果前面
             if "(分段)" in enc:
-                sys.stderr.write(
+                _hint(
                     "\n  [分段还原] 按 %s 解；原文 %d 处字节缺失\n"
                     % (enc.replace("(分段)", "").replace("\u2192", " 编回字节、按 "),
                        bad))
             elif "\u2192" in enc:
                 # 跨编码无损解出：enc 形如 gb18030→shift_jis
-                sys.stderr.write(
+                _hint(
                     "\n  [跨编码] 按 %s 解，完整无损\n"
                     % enc.replace("\u2192", " 编回字节、按 "))
             elif ratio > 0:
-                sys.stderr.write(
+                _hint(
                     "\n  [提示] 损失 %.1f%%（%d 处缺失，假设 %s）\n"
                     % (ratio * 100, bad, enc))
             return 0
@@ -2754,15 +2766,14 @@ def main():
             # stderr 不进管道，所以重定向/管道时结果依然是干净的。
             if layers:
                 for n, (enc, ratio, rd) in enumerate(layers, 1):
-                    sys.stderr.write(
+                    _hint(
                         "  第 %d 层  %-12s 损失 %5.1f%%  可读率 %3.0f%%%s\n"
                         % (n, enc, ratio * 100, rd * 100,
                            "  ←采信" if n == used else ""))
-            sys.stderr.write(
+            _hint(
                 "  采信第 %d 层（可读率 %.0f%%，阈值 %d%%）%s\n\n"
                 % (used, readability(out) * 100, deep,
                    "；残片若仍乱，可能是混合层数，需手工切段" if layers else ""))
-            sys.stderr.flush()
             print(out.replace("\ufffd", "?"))
             sys.stdout.flush()
             return 0
