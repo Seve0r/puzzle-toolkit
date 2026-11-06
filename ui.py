@@ -23,12 +23,15 @@ puzzle-toolkit 的本地图形界面（浏览器版，纯标准库）。
 import argparse
 import base64
 import contextlib
+import hmac
 import io
 import json
 import os
+import secrets
 import sys
 import tempfile
 import threading
+import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -41,6 +44,11 @@ import hashcrypto  # noqa: E402
 import stego       # noqa: E402
 import num         # noqa: E402
 import ui_params   # noqa: E402  参数表也在这里
+
+
+# 访问口令。None = 不校验（默认，本机自用）；非 None 时每个请求都要带对，
+# 否则 401。由 main() 根据 --token 决定：给值用你给的，不给值就随机生成。
+_EXPECT_TOKEN = None
 
 
 # ---------------------------------------------------------------- 进制面板
@@ -536,7 +544,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authed(self):
+        """口令校验。没开口令（本地单机）时恒真。
+
+        两种带法都认：
+          · `X-Token` 头     —— 页面里的 JS 用这个
+          · `?token=xxx`     —— 首次访问、直接敲地址时用
+        """
+        if _EXPECT_TOKEN is None:
+            return True
+        got = self.headers.get("X-Token")
+        if got and hmac.compare_digest(got, _EXPECT_TOKEN):
+            return True
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        token = (q.get("token") or [None])[0]
+        return bool(token) and hmac.compare_digest(token, _EXPECT_TOKEN)
+
+    def _deny(self):
+        body = (
+            "<!DOCTYPE html><meta charset='utf-8'>"
+            "<title>需要口令</title>"
+            "<body style='font:16px/1.7 system-ui,sans-serif;"
+            "max-width:640px;margin:12vh auto;padding:0 20px'>"
+            "<h2>需要访问口令</h2>"
+            "<p>这个界面开了口令保护。在地址后面加上 "
+            "<code>?token=你的口令</code> 再打开一次，浏览器会记住它。</p>"
+            "</body>")
+        self._send(401, body, "text/html; charset=utf-8")
+
     def do_GET(self):
+        if not self._authed():
+            self._deny()
+            return
         path = self.path.split("?")[0]
         if path in ("/", "/index.html"):
             self._send(200, PAGE, "text/html; charset=utf-8")
@@ -565,6 +604,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, json.dumps({"ok": False, "error": "not found"}))
 
     def do_POST(self):
+        if not self._authed():
+            self._deny()
+            return
         if self.path.split("?")[0] != "/api/run":
             self._send(404, json.dumps({"ok": False, "error": "not found"}))
             return
@@ -805,6 +847,28 @@ const $ = (id) => document.getElementById(id);
 const input = $("input"), output = $("output"), encSel = $("enc"),
       search = $("search"), cands = $("cands"), log = $("log");
 
+// 访问口令：首次访问地址带 ?token=xxx，取到就存进 localStorage，
+// 之后直接打开同一个地址即可（不用每次都带）。同一 IP:端口算同一个 origin。
+const TOKEN = (() => {
+  try {
+    const t = new URL(location.href).searchParams.get("token");
+    if (t) { localStorage.setItem("pt_token", t); return t; }
+    return localStorage.getItem("pt_token") || "";
+  } catch (e) { return ""; }
+})();
+
+function authHeaders(extra) {
+  const h = Object.assign({}, extra || {});
+  if (TOKEN) h["X-Token"] = TOKEN;
+  return h;
+}
+
+function httpError(r) {
+  if (r.status === 401)
+    return "需要口令：在地址后面加 ?token=你的口令 再打开一次";
+  return "HTTP " + r.status;
+}
+
 let ENCODINGS = [], PARAMSPEC = {}, TABS = [], currentTab = "codec";
 
 function say(msg, kind) {
@@ -823,8 +887,8 @@ function setBusy(b) {
 
 async function loadList() {
   try {
-    const r = await fetch("/api/list");
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    const r = await fetch("/api/list", {headers: authHeaders()});
+    if (!r.ok) throw new Error(httpError(r));
     const data = await r.json();
     if (data.error) throw new Error(data.error);
     ENCODINGS = data.encodings || [];
@@ -896,9 +960,10 @@ async function call(payload) {
   try {
     const r = await fetch("/api/run", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: authHeaders({"Content-Type": "application/json"}),
       body: JSON.stringify(payload),
     });
+    if (r.status === 401) return {ok: false, error: httpError(r)};
     return await r.json();
   } catch (e) {
     return { ok: false, error: "请求失败：" + e };
@@ -1331,18 +1396,34 @@ input.focus();
 
 
 def main():
+    global _EXPECT_TOKEN
+
     ap = argparse.ArgumentParser(description="puzzle-toolkit 的本地图形界面")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--host", default="127.0.0.1",
                     help="默认只监听本机；想让手机访问用 0.0.0.0")
     ap.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    ap.add_argument("--token", nargs="?", const="", default=None, metavar="口令",
+                    help="启用访问口令：给值 = 固定口令（重启不变）；"
+                         "不给值 = 每次启动随机生成。默认不启用（本机自用）")
     args = ap.parse_args()
+
+    if args.token is not None:
+        # `--token 我的口令` 用给的；光写 `--token` 时 const="" → 随机生成。
+        # 随机值走 token_urlsafe：URL 安全字符，直接拼进地址不用转义。
+        _EXPECT_TOKEN = args.token or secrets.token_urlsafe(18)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     url = "http://%s:%d/" % ("127.0.0.1" if args.host == "0.0.0.0" else args.host,
                              args.port)
     print("puzzle-toolkit UI 已启动：%s" % url)
+    if _EXPECT_TOKEN:
+        print("访问口令：%s" % _EXPECT_TOKEN)
+        print("  带口令的地址：%s?token=%s" % (url, _EXPECT_TOKEN))
+        if args.host == "0.0.0.0":
+            print("  ★ 已对公网开放：口令是唯一一道门，别贴到公开的地方")
     print("按 Ctrl+C 停止")
+    sys.stdout.flush()          # nohup 重定向到文件时是块缓冲，不 flush 会看不到
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

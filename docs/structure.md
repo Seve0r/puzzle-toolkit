@@ -414,17 +414,18 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1357 行）
+### `ui.py`（1438 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
-| `run_action(payload)` | L375 | 唯一后端入口，按 `tab` 分发到各页 |
-| `_encoding_names()` | L116 | 把注册表按「同一概念」去重（并查集），下拉框用 |
-| `_run_mojibake` | L284 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `run_action(payload)` | L383 | 唯一后端入口，按 `tab` 分发到各页 |
+| `_encoding_names()` | L124 | 把注册表按「同一概念」去重（并查集），下拉框用 |
+| `_run_mojibake` | L292 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `Handler._authed()` | L547 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | ~L1161 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `doRun()` | ~L1251 | 收集控件值 → POST `/api/run` |
 
 ### `ui_params.py`（355 行）
 
