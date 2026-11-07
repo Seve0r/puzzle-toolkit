@@ -295,6 +295,15 @@
 
 ### 修复
 
+- **界面的 mojibake「目标编码」下拉框漏了 utf-8**。`MOJIBAKE_TARGETS` 是给
+  **自动跨编码枚举**用的常量：`mojibake_rank` 已经把 UTF-8 当常驻假设跑过一遍，
+  所以它不在那个列表里——这本身没错。但界面直接把它当下拉选项，于是最常用的
+  那种显式组合「源 gbk → 目标 utf-8」（`浜哄彧鑳界湅` → `人只能看`）**在界面上
+  选不到**，而 CLI 的 `--to utf-8` 一直是支持的。
+  现在在 `ui_params.py` 里统一补上（放在 try/except 之后，真实 codec 和兜底
+  清单两条路径都覆盖），utf-8 排在下拉第二项。
+  顺带发现兜底分支原本就写了 utf-8、正常分支却没有——两条路径本来就不一致。
+
 - **`stego <子命令> --help` 打出来的是别的程序的帮助**。`path = argv[1]`
   把 `--help` 当成了文件名：`stego qr --help` 原样传给 zbarimg，于是打印的
   是 zbarimg 的用法；其它子命令则报「No such file or directory: '--help'」。

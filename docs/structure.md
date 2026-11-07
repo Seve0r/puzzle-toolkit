@@ -427,12 +427,19 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
 | 内嵌 JS `doRun()` | ~L1251 | 收集控件值 → POST `/api/run` |
 
-### `ui_params.py`（355 行）
+### `ui_params.py`（364 行）
 
 纯数据：`TABS`（5 个页签）+ `PARAMS`（每页每个动作的参数表）。
 
-**不 import codec**——编码下拉的候选由调用方传进来（`_enc_choices(names)`），
-`ui_params.py` 自己只负责排版。
+**只在可选路径上 import codec**——为了取 `MOJIBAKE_ENCODINGS` / `MOJIBAKE_TARGETS`
+那两份清单，不自己抄一份（抄了必然慢慢分叉，codec 加了编码界面永远选不到、
+还不报错）。`except` 分支留了兜底清单，codec 不在同目录时仍能启动。
+编码下拉的候选本身由调用方传进来（`_enc_choices(names)`）。
+
+**注意 `_MOJIBAKE_TGT` 在 try/except 之后被改写过一次**：界面上的目标编码要
+包含 `utf-8`，而 `MOJIBAKE_TARGETS` 是给自动跨编码枚举用的、不含它（UTF-8 在
+`mojibake_rank` 里已是常驻假设）。别在 `codec` 侧加 utf-8 来"修"这个问题，
+那会让自动枚举多跑一轮重复假设。
 
 ### ★ 最容易踩的坑：参数在 `params` 里
 

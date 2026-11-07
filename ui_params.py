@@ -116,6 +116,15 @@ except Exception:                       # codec 不在同目录时给个能跑�
     _MOJIBAKE_SRC = ["gb18030", "gbk", "shift_jis", "big5", "euc-kr"]
     _MOJIBAKE_TGT = ["utf-8", "gb18030", "gbk", "shift_jis", "big5"]
 
+# 界面上的「目标编码」必须包含 utf-8，而 MOJIBAKE_TARGETS 里没有它 ——
+# 那个常量是给**自动跨编码枚举**用的：mojibake_rank 已经把 UTF-8 当常驻
+# 假设跑过一遍，不必在 src × tgt 里再枚举一次。
+# 但界面上「源 gbk → 目标 utf-8」恰恰是最常用的一种显式组合（UTF-8 文本
+# 被当 GBK 读，也就是 浜哄彧鑳界湅 → 人只能看），下拉里没有就等于这个
+# 组合在界面上压根用不了 —— 而 CLI 的 `--to utf-8` 一直是支持的。
+# 放在 try/except 之后统一补，两条路径（真实 codec / 兜底清单）都覆盖。
+_MOJIBAKE_TGT = ["utf-8"] + [e for e in _MOJIBAKE_TGT if e != "utf-8"]
+
 # 下拉里显示的友好名。没列到的就直接显示编码名本身。
 _ENC_LABEL = {
     "gb18030": "gb18030（GBK 超集）",
