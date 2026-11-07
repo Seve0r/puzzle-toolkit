@@ -229,8 +229,28 @@ python3 codec.py enc utf16be "Hello" | python3 codec.py enc hex        # 十六�
 
 ### 只有解码方向的
 
-`mojibake`（还原乱码——**故意没有反向**，"制造乱码"容易让人误用）、
 `braillebits`（8 点原始位串，输出是多视图，没有唯一反向）。
+
+### 需要额外参数的反向
+
+`mojibake` 和 `convert` 也有反向，但光给文本不够——还得知道**编码对**或
+**字符编码**：
+
+```bash
+codec.py enc mojibake '君は一生私を忘れない' --from gbk --to shift_jis
+# → 孨偼堦惗巹傪朰傟側偄        （原文按 shift_jis 编码，再按 gbk 解）
+
+codec.py enc convert '人只能看' -r 16 -e utf-8
+# → e4babae58faae883bde79c8b    （换 -e gbk 就是另一串：8 字节）
+```
+
+所以它们不进 `ENCODERS` 注册表（表里的编码器只接一个字符串），而是
+`main()` 里的独立分支，`codec list` 也统计不到。
+
+**反向为什么有用**：解出一串东西后，最硬的判据不是「看起来像中文」，而是
+「按我猜的编码对能不能把它造回原样」。造不回去，说明猜错了。
+
+`mojibake` 的反向早先是故意不做的（怕「制造乱码」被误用），但验证需求更实际。
 
 ### 自反的两个
 

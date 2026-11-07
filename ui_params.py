@@ -204,12 +204,14 @@ PARAMS = {
         {
             "key": "from", "type": "choice", "label": "源编码", "default": "",
             "choices": _enc_choices(_MOJIBAKE_SRC),
-            "hint": "当初「把字节解成乱码」用的那个编码。留空则自动判断",
+            "hint": "乱码那一侧声称的编码。解码时用来把乱码编回字节；"
+                    "编码（制造乱码）时按它把字节解成乱码。留空则自动判断",
         },
         {
             "key": "to", "type": "choice", "label": "目标编码", "default": "",
             "choices": _enc_choices(_MOJIBAKE_TGT),
-            "hint": "当初应该用来解的那一个。两个都选就不猜了",
+            "hint": "原文真实的编码。两个都选就不猜了；"
+                    "制造乱码时两个都必须选（否则不知道该按哪种编码生成）",
         },
     ],
     # ---------------- classic ----------------

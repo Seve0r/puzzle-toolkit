@@ -506,6 +506,38 @@ def run_action(payload):
                                 "log": "\n".join(notes)}
                     return {"ok": True, "result": r["result"],
                             "log": "\n".join(notes)}
+                # enc 方向的 convert / mojibake：和 decode 共用同一组参数，
+                # 只是方向相反。不加这两个分支就会被下面的 table.get 拦成
+                # 「这个方向不支持」——而界面上那两个按钮本来就摆在那儿。
+                if action == "encode" and name == "convert":
+                    _p = payload.get("params") or {}
+                    _radix = _p.get("radix") or payload.get("radix") or 16
+                    _enc = (_p.get("encoding") or payload.get("encoding")
+                            or "utf-8").strip()
+                    r = codec.convert_encode(text, int(_radix), _enc)
+                    if not r["ok"]:
+                        return {"ok": False, "error": r["error"]}
+                    return {"ok": True, "result": r["result"],
+                            "log": "进制：%d　字符编码：%s　字节数：%d"
+                                   % (int(_radix), r["encoding"], len(r["bytes"]))}
+
+                if action == "encode" and name == "mojibake":
+                    _p = payload.get("params") or {}
+                    s = str(_p.get("from") or payload.get("from") or "").strip()
+                    t = str(_p.get("to") or payload.get("to") or "").strip()
+                    if not (s and t):
+                        return {"ok": False,
+                                "error": "制造乱码要同时给出两个编码：\n"
+                                         "  · 源编码 = 乱码那一侧声称的编码\n"
+                                         "  · 目标编码 = 原文真实的编码\n"
+                                         "两个下拉框都在上面，选完再点「编码」。"}
+                    try:
+                        out = codec.mojibake_encode(text, s, t)
+                    except ValueError as e:
+                        return {"ok": False, "error": str(e)}
+                    return {"ok": True, "result": out,
+                            "log": "原文按 %s 编码 → 再按 %s 解" % (t, s)}
+
                 table = codec.DECODERS if action == "decode" else codec.ENCODERS
                 fn = table.get(name)
                 if not fn:

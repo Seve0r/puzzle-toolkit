@@ -1553,6 +1553,36 @@ def mojibake_explicit(s, src, tgt):
             % (len(raw), tgt, e))
 
 
+def mojibake_encode(text, src, tgt):
+    """制造乱码：把原文按 `tgt` 编成字节，再按 `src` 解。
+
+    `mojibake_explicit` 的反向，参数语义完全一致（src = 乱码那一侧声称的
+    编码，tgt = 原文真实的编码）：
+
+        mojibake_encode('君は一生私を忘れない', 'gbk', 'shift_jis')
+        → '孨偼堦惗巹傪朰傟側偄'
+
+    以前这里故意不做（怕「制造乱码」被误用）。但反向验证是刚需：一个还原
+    结果对不对，最硬的判据就是「按你猜的编码对能不能把它造回去」。也用来
+    给回归用例生成测试数据——手抄乱码串太容易错一个字。
+    """
+    focus = _mb_clean(text)
+    try:
+        raw = focus.encode(tgt)
+    except (UnicodeEncodeError, LookupError) as e:
+        raise ValueError(
+            "按 %s 编码失败：%s\n"
+            "（%s 表示不了原文里的某些字符。日文优先用 cp932——它是 Shift_JIS "
+            "的超集，能覆盖 ㈹ / 半角片假名这类机种依存文字）" % (tgt, e, tgt))
+    try:
+        return raw.decode(src)
+    except (UnicodeDecodeError, LookupError) as e:
+        raise ValueError(
+            "按 %s 解码失败：%s\n"
+            "（这堆字节在 %s 看来不合法。多半是编码对填反了：源编码是乱码那"
+            "一侧的，目标编码才是原文的）" % (src, e, src))
+
+
 @dec_name("mojibake", "garbled", "乱码")
 def _d_mojibake(s):
     """被误读文本的还原（如「浜哄彧」→「人只」）。
@@ -2513,6 +2543,46 @@ def convert_decode(text, radix=16, encoding="auto"):
     return res
 
 
+def bytes_to_radix(raw, radix=16):
+    """bytes → 指定进制的字符串。`radix_to_bytes` 的反向。"""
+    r = int(radix)
+    if r == 16:
+        return raw.hex()
+    if r == 2:
+        return " ".join(format(b, "08b") for b in raw)
+    if r == 8:
+        return " ".join(format(b, "o") for b in raw)
+    if r == 10:
+        return " ".join(str(b) for b in raw)
+    if r == 36:
+        return "".join(_B36_ALPHA[b // 36] + _B36_ALPHA[b % 36] for b in raw)
+    raise ValueError("不支持的进制：%s（2/8/10/16/36）" % radix)
+
+
+def convert_encode(text, radix=16, encoding="utf-8"):
+    """文本 → 字节 → 进制表示。`convert_decode` 的反向。
+
+    和 `enc hex` / `enc bin` 那批的区别：那批把字符编码写死成 UTF-8，
+    这里可以指定。同一句中文按 GBK 编出来是另一串字节，进制表示也就不同——
+    谜题里经常要靠这个反推「作者当初用的是哪种编码」。
+    """
+    enc = (encoding or "utf-8").strip()
+    if enc in ("auto", ""):
+        # 编码方向没有「自动」可言：得先知道按哪个编码转成字节。
+        enc = "utf-8"
+    try:
+        raw = text.encode(enc)
+    except (UnicodeEncodeError, LookupError) as e:
+        return {"ok": False, "error": "按 %s 编码失败：%s" % (enc, e)}
+    if not raw:
+        return {"ok": False, "error": "编码出来是空的"}
+    return {"ok": True,
+            "result": bytes_to_radix(raw, radix),
+            "encoding": enc,
+            "bytes": list(raw),
+            "how": enc}
+
+
 # ---------------------------------------------------------------- CLI
 
 def read_input(args, want_bytes=False):
@@ -2789,6 +2859,52 @@ def main():
         if not text:
             text = ""
         table = DECODERS if cmd.startswith("dec") else ENCODERS
+
+        # enc mojibake：制造乱码。mojibake_explicit 的反向，用来验证
+        # 「解出来的结果靠不靠谱」——最硬的判据就是能不能把它造回去。
+        if cmd.startswith("enc") and name == "mojibake":
+            if not (mb_from and mb_to):
+                print("制造乱码要同时给出两个编码：\n"
+                      "  --from <乱码那一侧声称的编码>   --to <原文真实的编码>\n"
+                      "例：codec.py enc mojibake '君は一生私を忘れない' "
+                      "--from gbk --to shift_jis")
+                return 2
+            try:
+                out = mojibake_encode(text, mb_from, mb_to)
+            except ValueError as e:
+                print("失败：%s" % e)
+                return 1
+            _hint("\n  [制造乱码] 原文按 %s 编码 → 再按 %s 解\n"
+                  % (mb_to, mb_from))
+            print(out)
+            return 0
+
+        # enc convert：文本 → 字节 → 进制表示。convert_decode 的反向。
+        if cmd.startswith("enc") and name == "convert":
+            res = convert_encode(text, radix_opt, enc_opt)
+            if not res["ok"]:
+                print("失败：%s" % res["error"])
+                return 1
+            _hint("\n  进制：%d　字符编码：%s　字节数：%d\n"
+                  % (radix_opt, res["encoding"], len(res["bytes"])))
+            print(res["result"])
+            return 0
+
+        # dec convert：和上面正好相反。`convert` 那个独立子命令也做这件事，
+        # 这里补一份只为对称——`dec mojibake` / `enc mojibake` 成对出现，
+        # convert 却只有 `enc convert` 有反向，用起来得记「这个有那个没有」。
+        if cmd.startswith("dec") and name == "convert":
+            res = convert_decode(text, radix_opt, enc_opt)
+            if not res["ok"]:
+                print("失败：%s" % res["error"])
+                return 1
+            _hint("\n  进制：%d　字符编码：%s　字节数：%d\n"
+                  % (radix_opt, res["how"], len(res["bytes"])))
+            if res.get("zw"):
+                _hint("  [注意] %s\n" % res["zw"])
+            print(res["result"])
+            return 0
+
         # dec mojibake --from X --to Y：显式编码对，不猜。
         # 只给一侧时另一侧取默认（源 gb18030 / 目标 utf-8），并在 stderr 说清。
         if cmd.startswith("dec") and name == "mojibake" and (mb_from or mb_to):

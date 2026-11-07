@@ -194,8 +194,10 @@ python3 codec.py enc hex -f picture.png
 | `codec dec mojibake --deep [N]` | 多层乱码反复还原，直到正常文字占比 ≥ N%（默认 50） |
 | `codec dec mojibake --best <文本>` | 数据本身残缺时强制输出最佳猜测，缺失处标 `?`，并给出损失率 |
 | `codec dec mojibake --from A --to B` | 显式指定乱码的编码对，不猜（如 `--from gbk --to shift_jis`） |
+| `codec enc mojibake <文本> --from A --to B` | **反向：制造乱码**——原文按 B 编成字节、再按 A 解。反向验证的硬判据就是「能不能把结果造回去」 |
 | `codec grid <文本>` | 切矩阵枚举读法（行优先/列优先/蛇形/反转），可加 `--rows` `--cols` `--width` |
 | `codec convert <数据> -r R [-e E]` | **自己指定「字符编码 + 进制」**。`-r/--radix` 取 2/8/10/16/36，`-e/--encoding` 取 auto/utf-8/gbk/gb18030/big5/shift_jis/ascii/latin-1。`auto` 只表示「工具替你挑了一个能解的」，**不代表这批字节只有这一种读法** |
+| `codec enc convert <文本> -r R [-e E]` | **反向**：文本按 `-e` 编码成字节、再转成进制串（`-e` 默认 utf-8）。和 `enc hex` 的区别是字符编码可指定：同一句中文换 GBK 就是另一串字节 |
 | `codec blocks <文本>` | 定长块按进制转字节，如 `blocks -w 2 -r 36`（两位 base36 = 一字节） |
 
 `base36` 和 `block36` 不是一回事：前者把**整串**当一个 base36 大整数，
@@ -205,7 +207,10 @@ python3 codec.py enc hex -f picture.png
 支持的编码（base16/32/58/62/64/85/91、hex、二进制、URL、HTML 实体、Unicode 转义、
 摩斯、和文摩斯、盲文、gzip/zlib/bz2、UTF-16/32、GBK、punycode、mojibake…）去重后
 共 **37 个编码概念**，其中 **35 个是双向的**（`enc` 能编回去）；
-只有 `mojibake`（还原乱码，故意不给逆）和 `braillebits`（8 点位串多视图）是单向的。
+只有 `braillebits`（8 点位串多视图）是单向的。
+`mojibake` 和 `convert` 的反向也要额外参数（编码对 / 字符编码），所以不进
+`codec list` 的统计，而是单独写成 `enc mojibake --from A --to B` /
+`enc convert -r R -e E`。
 `utf16` / `utf32` / `uu` / `gzip` 的编码结果不是可读文本，用 latin-1 承载，
 接着套一层 `enc b64` 或 `enc hex` 就能复制走。
 完整列表用 `codec list`。

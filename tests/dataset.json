@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 209,
+  "count": 211,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -4411,6 +4411,58 @@
     "deep"
    ],
    "note": "同一串但末尾多一个换行（粘贴时很容易带上）：38 字节报「结尾截断」，39 字节变成「非法续接字节」，症状完全不同——入口必须 strip ASCII 空白"
+  },
+  {
+   "id": "codec-roundtrip-010",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "mojibake",
+    "君は一生私を忘れない",
+    "--from",
+    "gbk",
+    "--to",
+    "shift_jis",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "孨偼堦惗巹傪朰傟側偄"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "mojibake",
+    "encode"
+   ],
+   "note": "制造乱码：原文按 shift_jis 编成字节、再按 gbk 解。这是 codec-roundtrip-007 的逆运算，成对存在才好验证"
+  },
+  {
+   "id": "codec-roundtrip-011",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "convert",
+    "人只能看",
+    "-r",
+    "16",
+    "-e",
+    "utf-8",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "e4babae58faae883bde79c8b"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "convert",
+    "encode"
+   ],
+   "note": "指定编码的进制编码。对比 enc hex：那个写死 UTF-8，换 -e gbk 会得到完全不同的字节串"
   }
  ]
 }

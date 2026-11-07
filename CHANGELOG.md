@@ -11,6 +11,33 @@
 
 ### 新增
 
+- **`mojibake` 和 `convert` 加反向（编码方向）**。以前这两个只有解码：
+  `dec mojibake` 还原乱码、`convert` 把进制串变文本。想反向验证
+  「解出来的结果对不对」就没辙——而最硬的判据恰恰是「按你猜的编码对能不能
+  把它造回原样」。
+
+  ```bash
+  codec.py enc mojibake '君は一生私を忘れない' --from gbk --to shift_jis
+  # → 孨偼堦惗巹傪朰傟側偄
+
+  codec.py enc convert '人只能看' -r 16 -e utf-8
+  # → e4babae58faae883bde79c8b
+  ```
+
+  - `mojibake_encode(text, src, tgt)` 就是 `text.encode(tgt).decode(src)`，
+    参数语义和 `mojibake_explicit` 完全一致（src = 乱码那一侧，tgt = 原文那一侧）
+  - `bytes_to_radix()` + `convert_encode()`：文本按指定编码变字节再转进制。
+    和 `enc hex` 那批的区别是**字符编码可指定**（那批写死 UTF-8）
+  - 四个方向现在对称：`dec/enc mojibake`、`dec/enc convert`。`dec convert`
+    是这次补的——原来只有独立的 `convert` 子命令，反向叫 `enc convert` 就
+    没法对称
+  - 界面上点「编码」对这两个也生效（之前被拦成「这个方向不支持」），
+    参数复用同一组控件
+  - 二者不进 `ENCODERS` 注册表（表里的编码器只接一个字符串），所以
+    `codec list` 的双向统计不变
+
+  回归补 `codec-roundtrip-010/011`，和 007 成对（正反方向各一条）。
+
 - **`ui.py --token`：给图形界面加访问口令**。之前要公网访问只能把端口裸暴露，
   而界面**完全没有鉴权**——谁扫到都能用，`brute` 还是计算密集型，等于把 CPU
   借给陌生人（且内容是 HTTP 明文）。
