@@ -1190,6 +1190,20 @@ def _encode_back(s, enc):
     return bytes(out)
 
 
+# 粘贴进命令行、管道或网页输入框的文本，末尾很容易带上换行/空格。
+# 而 UTF-8 严格解码对「末尾多一个字节」极其敏感：本来 38 字节只是
+# 「结尾被截断」（unexpected end of data），多一个 \n 就变成
+# 「非法续接字节」（invalid continuation byte）——症状完全不同，
+# 很容易被误判成「数据本身损坏」，而实际只是多了个不可见字符。
+# 只去 ASCII 空白：全角空格（U+3000）在乱码里可能是真数据，不能碰。
+_MB_ASCII_SPACE = " \t\r\n\f\v"
+
+
+def _mb_clean(s):
+    """mojibake 所有入口的公共前置：去掉首尾 ASCII 空白。"""
+    return s.strip(_MB_ASCII_SPACE)
+
+
 def mojibake_rank(s):
     """枚举「UTF-8 被误读成别的编码」的所有可能，按 U+FFFD 损失率排序。
 
@@ -1506,6 +1520,7 @@ def mojibake_explicit(s, src, tgt):
     自动路径摸不清时用它。典型：GBK 编的日文被当作 GBK 显示 = 这堆字，
     正确读法是 `--from gbk --to shift_jis`。
     """
+    s = _mb_clean(s)
     # 含 U+FFFD 时整段必然编不回去（U+FFFD 不在任何编码里），但缺失处两侧的
     # 字节是好的：分段转，转不了的段原样留着。缺失位置用 ? 标出。
     if "\ufffd" in s:
@@ -1526,7 +1541,16 @@ def mojibake_explicit(s, src, tgt):
     try:
         return raw.decode(tgt)
     except (UnicodeDecodeError, LookupError) as e:
-        raise ValueError("%d 字节按 %s 解不开：%s" % (len(raw), tgt, e))
+        # 这条报错以前只有「N 字节解不开：<异常>」，使用者看到「invalid
+        # continuation byte」只会以为是数据损坏。实际最常见的原因其实是
+        # 粘贴时末尾多带了个换行——显式编码对逐字节对齐，多一个 \n 就报这个。
+        raise ValueError(
+            "%d 字节按 %s 解不开：%s\n"
+            "两种常见原因，按顺序排查：\n"
+            "  · 输入末尾多了空白（粘贴带的换行/空格）：显式编码对逐字节对齐，"
+            "多一个 \\n 也会这样报，去掉再试\n"
+            "  · 数据本身某处丢了字节：改用「最佳猜测」(--best) 或 --deep"
+            % (len(raw), tgt, e))
 
 
 @dec_name("mojibake", "garbled", "乱码")
@@ -1545,6 +1569,7 @@ def _d_mojibake(s):
 
     两级都不成，才报「数据可能残缺」。
     """
+    s = _mb_clean(s)
     if all(ord(c) < 128 for c in s):
         raise ValueError("纯 ASCII，不可能是被误读的结果")
     # 一两个字不够下结论：单字 茻 会被无损「解」成 踈（字节碰巧合法），
@@ -1714,6 +1739,7 @@ def mojibake_best(s):
 
     跨编码能无损解出时优先用它，此时损失率记 0、编码名写成 `源→目标`。
     """
+    s = _mb_clean(s)
     rows = mojibake_rank(s)
     if rows:
         ratio, bad, enc, out = rows[0]
@@ -1762,6 +1788,28 @@ def readability(s):
     return sum(1 for u in units if u) / len(units)
 
 
+def _mb_layer(s):
+    """跑一层还原，返回 (损失率, 编码名, 结果)；一层都解不动时返回 None。
+
+    从 mojibake_deep 的循环体里抽出来：分段还原时每一段都要跑同一套
+    「先试 UTF-8 假设、不行再试中日韩跨编码」的顺序。
+    """
+    rows = mojibake_rank(s)
+    # 一层 UTF-8 假设不成立时，这一层可能就是「中日韩编码互相误读」——
+    # 不试的话 --deep 只会在原地打转，跑满 5 层仍然交回原文。
+    cross = [] if (rows and rows[0][0] <= 0.02) else mojibake_cross(s)
+    if rows and rows[0][0] <= 0.02:
+        ratio, _bad, enc, out = rows[0]
+        return ratio, enc, out
+    if cross:
+        _, cenc, ctgt, out = cross[0]
+        return 0.0, "%s→%s" % (cenc, ctgt), out
+    if rows:
+        ratio, _bad, enc, out = rows[0]
+        return ratio, enc, out
+    return None
+
+
 def mojibake_deep(s, threshold=50, max_rounds=5):
     """反复还原，直到「正常文字占比」达到 threshold（0~100）为止。
 
@@ -1781,7 +1829,7 @@ def mojibake_deep(s, threshold=50, max_rounds=5):
     情况必须人工切段。所以这里 max_rounds 默认 5 层封顶。
     """
     lo = max(0, min(100, int(threshold)))
-    cur = s
+    cur = _mb_clean(s)
     layers = []
     # (可读率, 内容, 层号)
     best = (readability(cur), cur, 0)
@@ -1789,19 +1837,40 @@ def mojibake_deep(s, threshold=50, max_rounds=5):
         # 每层开头先看当前是否已经够用——阈值 0 时应当直接原样返回
         if readability(cur) * 100 >= lo:
             break
-        rows = mojibake_rank(cur)
-        # 一层 UTF-8 假设不成立时，这一层可能就是「中日韩编码互相误读」——
-        # 不试的话 --deep 只会在原地打转，跑满 5 层仍然交回原文。
-        cross = [] if (rows and rows[0][0] <= 0.02) else mojibake_cross(cur)
-        if rows and rows[0][0] <= 0.02:
-            ratio, bad, enc, out = rows[0]
-        elif cross:
-            _, cenc, ctgt, out = cross[0]
-            ratio, enc = 0.0, "%s→%s" % (cenc, ctgt)
-        elif rows:
-            ratio, bad, enc, out = rows[0]
+        if "\ufffd" in cur:
+            # 当前文本含 U+FFFD，说明上一轮解码在某处丢了字节。
+            # 这时候**不能整段编回去**：gb18030 也给 U+FFFD 留了编码位
+            # （84 31 a4 37），整段转会把这条「此处无数据」的标记当成 4 个
+            # 真实字节解出来，在正确答案后面拖一条垃圾尾巴——
+            # 实测目标 `?迄今已有??余?` 被解成 `?迄今已有??余幄1?7`。
+            # 按 U+FFFD 切段、各段分别还原，丢失位置原样保留。
+            pieces, encs, ratios = [], [], []
+            changed = False
+            for seg in cur.split("\ufffd"):
+                if not seg:
+                    # 连续/结尾的 U+FFFD 会切出空段。跳过它们，否则 join
+                    # 时会在结果末尾凭空多补一个分隔符（实测多出一个 ?）。
+                    continue
+                got = _mb_layer(seg)
+                if got is None:
+                    pieces.append(seg)          # 这一段救不了，原样留着
+                    continue
+                r, e, o = got
+                if o != seg:
+                    changed = True
+                pieces.append(o)
+                encs.append(e)
+                ratios.append(r)
+            if not changed:
+                break
+            out = "\ufffd".join(pieces)
+            enc = ("分段还原(%s)" % "+".join(encs[:2])) if encs else "分段还原"
+            ratio = max(ratios) if ratios else 0.0
         else:
-            break
+            got = _mb_layer(cur)
+            if got is None:
+                break
+            ratio, enc, out = got
         if out == cur:
             break
         cur = out

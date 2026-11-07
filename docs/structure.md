@@ -36,11 +36,11 @@
 | 盲文 | 853–940 | 88 | 3 | 2 解码 + 1 编码 + 5 张表 |
 | 压缩流与字符编码 | 941–1049 | 109 | 12 | zlib/uu + utf16 + gbk |
 | UTF-32 | 1050–1101 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1102–1816 | **715** | 17 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 1817–2167 | 351 | 7 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2168–2233 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2234–2446 | 213 | 6 | `convert` |
-| CLI | 2447–2801 | 355 | 2 | `read_input` → `main` |
+| **乱码还原** | 1102–1885 | **784** | 19 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 1886–2236 | 351 | 7 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2237–2302 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2303–2515 | 213 | 6 | `convert` |
+| CLI | 2516–2870 | 355 | 2 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -86,7 +86,7 @@
 
 【UTF-32】L1050-1101       _u32_input（输入归一）+ utf32/be/le
 
-【评分 / 识别】L1817-2167
+【评分 / 识别】L1886-2236
   score                    可读性打分（比例类，短串会失真）
   acceptable               长度骤减 / 控制字符的否决
   structural_candidates    结构指纹：这串像什么编码
@@ -95,9 +95,9 @@
   auto                     递归剥皮，默认深度 3
   COMMON_EN / COMMON_CN / CJK_RE / STRUCT_BONUS / LOOSE_ORDER / MIN_OUT_RATIO
 
-【矩阵重排】L2168-2233     _blocks / _read / grid_variants
+【矩阵重排】L2237-2302     _blocks / _read / grid_variants
 
-【编码 × 进制】L2234-2446
+【编码 × 进制】L2303-2515
   _RADIX_*（字符集、标签、分隔符）
   _radix_clean / _radix_bad_chars   ← 先去分隔符，再校验字符集
   radix_to_bytes                     ← 报错顺序：字符集 → 长度 → 范围
@@ -105,7 +105,7 @@
   bytes_to_text                      ← auto 是「挑一个」不是「它就是」
   convert_decode                     ← CLI 与界面共用
 
-【CLI】L2447-2801
+【CLI】L2516-2870
   read_input    多吃一个参数：`-f` 文件 / 管道 / argv 拼接
   main          手写参数解析 + 子命令分发（没有通用 opt 库）
 ```
@@ -118,10 +118,10 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1533）
+#### 3.1 调度顺序（`_d_mojibake`, L1557）
 
 ```
-_d_mojibake(s)
+_d_mojibake(s)                ← 进来先 _mb_clean(s)：去掉首尾 ASCII 空白
  ├─ 纯 ASCII                        → 直接拒绝（不可能是误读）
  ├─ 长度 < 3                        → 直接拒绝（单字会被"无损"凑出假结果）
  │
@@ -185,7 +185,20 @@ _d_mojibake(s)
 | `text_encoding_name(s)` | 给解出来的文本贴编码标签，用于报告。纯 ASCII 时写「与编码无关」 |
 | `auto_with_mojibake(text, depth)` | `auto` 的完整版：没找到可靠路径时再认真试一次 mojibake。**界面也走这条**，不能只在 CLI 里加 |
 | `mojibake_best(text)` | 宽松还原：不管损失多大都返回最佳假设，缺失处标 `?` |
-| `mojibake_deep(text, threshold)` | 反复还原直到 `readability` 达标（`--deep`） |
+| `mojibake_deep(text, threshold)` | 反复还原直到 `readability` 达标（`--deep`）。**每层若含 U+FFFD 就按它切段分别还原**，见下 |
+| `_mb_layer(s)` | 跑一层：先 UTF-8 假设、不行再试跨编码。从 deep 的循环体里抽出来的——分段还原时每段都要跑同一套顺序 |
+| `_mb_clean(s)` | 所有 mojibake 入口的公共前置：去首尾 **ASCII** 空白（全角空格 U+3000 不碰，它在乱码里可能是真数据） |
+
+**为什么每层要检查 U+FFFD**：`gb18030` 给 U+FFFD 也留了编码位
+（`84 31 a4 37`）。整段编回去时，这个「此处无数据」的标记会被当成 4 个
+真实字节解出来，在正确答案后面拖一条垃圾尾巴——实测目标
+`?迄今已有??余?` 被解成 `?迄今已有??余幄1?7`。所以含 U+FFFD 时必须
+按它切段，丢失位置原样保留。
+
+**为什么入口要 strip 空白**：粘贴进命令行/输入框的文本很容易带换行。
+显式编码对逐字节对齐，末尾多 1 字节后果差别很大：38 字节报
+「结尾被截断」（unexpected end of data），39 字节就变成「非法续接字节」
+（invalid continuation byte）——后者看起来像数据损坏，实际只是多了个 `\n`。
 
 #### 3.5 模块级常量
 
@@ -213,12 +226,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L1917 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L1986 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1634）/ `bytes_to_text`（L2362） |
+| 报告里的编码名不对 | `text_encoding_name`（L1659）/ `bytes_to_text`（L2431） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2288）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2497）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2357）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2566）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---

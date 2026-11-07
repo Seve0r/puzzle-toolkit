@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 207,
+  "count": 209,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -4365,6 +4365,52 @@
     "zbarimg"
    ],
    "note": "--no-invert 关掉自动反色：同一张反色图应该认不出，证明开关真的生效"
+  },
+  {
+   "id": "codec-roundtrip-008",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "mojibake",
+    "--deep",
+    "80",
+    "纾嬬缚娴犲﹤鍑￠張澶涙嫹閿熸垝缍戦獮鏉"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "?迄今已有??余?"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "mojibake",
+    "deep"
+   ],
+   "note": "两层误读 + 中间丢字节：第一层解完含 U+FFFD，必须按它分段继续。否则 gb18030 会把 U+FFFD 编成 4 个垃圾字节，结果尾部多出「幄1?7」"
+  },
+  {
+   "id": "codec-roundtrip-009",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "mojibake",
+    "--deep",
+    "80",
+    "纾嬬缚娴犲﹤鍑￠張澶涙嫹閿熸垝缍戦獮鏉\n"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "?迄今已有??余?"
+   },
+   "tags": [
+    "roundtrip",
+    "codec",
+    "mojibake",
+    "deep"
+   ],
+   "note": "同一串但末尾多一个换行（粘贴时很容易带上）：38 字节报「结尾截断」，39 字节变成「非法续接字节」，症状完全不同——入口必须 strip ASCII 空白"
   }
  ]
 }
