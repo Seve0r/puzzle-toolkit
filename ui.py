@@ -318,24 +318,50 @@ def _run_mojibake(text, payload, log):
 
     src = str(pick("from") or "").strip()
     tgt = str(pick("to") or "").strip()
-    mode = str(pick("mode") or "normal").strip()
+    mode = str(pick("mode") or "").strip()
+    if not mode:
+        # ★ 前端 doDecodeOrEncode() **不把 mode 放进 params**：它把界面上那个
+        #   合成值拆成顶层的两个键再发（best → payload.best = true，
+        #   deep → payload.deep = 阈值），然后 delete pv.mode。
+        #   之前这里直接 `pick("mode") or "normal"`，于是 params 里永远没有
+        #   mode → 永远取到 normal → 「最佳猜测 / 深度」**一次都没生效过**。
+        #   表现出来就是：选了最佳猜测，报的却是普通模式的错。
+        #   注意不能用 params.deep 判断：int 控件是无条件传值的，普通模式下
+        #   它也带着默认 50，用它判断会把普通模式也拖进多层还原。
+        if payload.get("best"):
+            mode = "best"
+        elif payload.get("deep") not in (None, ""):
+            mode = "deep"
+        else:
+            mode = "normal"
     if src or tgt:
         s = src or "gb18030"
         t = tgt or "utf-8"
         try:
             out = codec.mojibake_explicit(text, s, t)
         except ValueError as e:
-            # 显式指定是最严格的方式：只要有一个字节不属于该编码就整体失败。
-            # 很多「解不开」其实是数据本身缺了字节，不是方向填错了。
-            return {"ok": False,
-                    "error": "%s\n\n显式指定编码对不做任何容错，一个字节不对就整体失败。"
-                             "若怀疑数据本身有损坏，把「还原模式」换成「最佳猜测」。"
-                             % e,
+            if mode in ("best", "deep"):
+                # 显式路径失败，但用户明确选了「最佳猜测 / 深度」。
+                # 直接报错会让人以为 mode 没生效——它确实没生效，而且从报错
+                # 里完全看不出是「编码对」这两个下拉框把 mode 顶掉了，只会
+                # 反复去点 mode 那个下拉框。所以这里退回 mode 继续跑，
+                # 在日志里交代这次转的弯。
+                log.write("按 %s 编回字节 → 按 %s 解失败，改用「%s」模式\n"
+                          % (s, t, "最佳猜测" if mode == "best" else "深度还原"))
+            else:
+                return {"ok": False,
+                        "error": "%s\n\n你指定了编码对（源编码=%s，目标编码=%s）。"
+                                 "注意它优先于「还原模式」：只要这两个下拉框有一个"
+                                 "不是「不指定（自动）」，「最佳猜测 / 深度」就不生效。\n"
+                                 "想让它自动猜：把「源编码」和「目标编码」都改回"
+                                 "「不指定（自动）」，再选还原模式。"
+                                 % (e, s, t),
+                        "log": log.getvalue()}
+        else:
+            log.write("按 %s 编回字节 → 按 %s 解%s"
+                      % (s, t, "（未填的那侧用了默认值）" if not (src and tgt) else ""))
+            return {"ok": True, "result": out.replace("\ufffd", "?"),
                     "log": log.getvalue()}
-        log.write("按 %s 编回字节 → 按 %s 解%s"
-                  % (s, t, "（未填的那侧用了默认值）" if not (src and tgt) else ""))
-        return {"ok": True, "result": out.replace("\ufffd", "?"),
-                "log": log.getvalue()}
 
     # `deep` 是 int 控件且默认 50，paramValues() 对 int 会**无条件**传值，
     # 所以不能靠「deep 有没有值」判断要不要走多层还原——那样普通模式也会被
@@ -1059,7 +1085,8 @@ async function doAuto() {
     $("outmeta").textContent = "疑似";
     say((res.partial_note || "自动识别把握不大") +
         "\n? 处是丢失的字节。" +
-        "\n建议使用 mojibake 模式的「最佳猜测」。", "warn");
+        "\n建议改用 mojibake 模式的「最佳猜测」（只解一层）；" +
+        "若疑似是多层乱码，改用「多层还原」。", "warn");
     return;
   }
   output.value = "";
