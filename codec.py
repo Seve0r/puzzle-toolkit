@@ -2113,6 +2113,23 @@ def structural_candidates(text):
     # base58 字符集排除了 0OIl，特征比较强
     if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{6,}", compact) and not re.fullmatch(r"[0-9a-fA-F]+", compact):
         cands.append("base58")
+    # Ascii85 / RFC1924-base85：字符集几乎盖满可打印 ASCII，**没有**像 base64
+    # 那样能一眼认出的签名，所以这里不追求「认出是哪种 base85」，只保证它进
+    # 候选 —— 具体是 ascii85 还是 base85 交给解码器的结果去分。
+    #   约束 1：全部落在 33..117（`!`~`u`，a85 的合法区间）。
+    #   约束 2：原文**不含空白**。自然语言几乎必有空格（`Hello, World!` 这种
+    #           去掉空格后也符合 33..117、标点也够数），而 base85 密文是连续的。
+    #   约束 3：至少 4 个非字母数字字符，进一步压掉「几个单词拼在一起」的情况。
+    #   分流：b85 的字符集是固定 85 个，**不含** ' . / " : \ 这几个；a85 是
+    #         连续区间，全都包含。出现任意一个就只可能是 ascii85。
+    if (len(compact) >= 8
+            and len(compact) == len(t)
+            and all(33 <= ord(c) <= 117 for c in compact)
+            and sum(1 for c in compact if not c.isalnum()) >= 4):
+        if any(c in "'./\":\\" for c in compact):
+            cands.append("ascii85")
+        else:
+            cands.append("base85")
     return cands
 
 
