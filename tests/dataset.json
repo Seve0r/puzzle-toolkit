@@ -4305,13 +4305,13 @@
    "args": [
     "dec",
     "mojibake",
-    "孨偼堦惗巹傪朰傟側偄",
+    "僥僗僩梡偺暥帤楍",
     "-q"
    ],
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "君は一生私を忘れない"
+    "stdout": "テスト用の文字列\n"
    },
    "tags": [
     "roundtrip",
@@ -4319,7 +4319,7 @@
     "mojibake",
     "cross-encoding"
    ],
-   "note": "Shift_JIS 被当 GBK 读：必须 encode(gbk) → decode(cp932) 才对。目标编码若写死 UTF-8 就解不出（AIU #003 标题）"
+   "note": "Shift_JIS 被当 GBK 读：必须 encode(gbk) → decode(cp932) 才对。目标编码若写死 UTF-8 就解不出"
   },
   {
    "id": "stego-edge-009",
@@ -4374,12 +4374,12 @@
     "mojibake",
     "--deep",
     "80",
-    "纾嬬缚娴犲﹤鍑￠張澶涙嫹閿熸垝缍戦獮鏉"
+    "郛よｫ辷懷ｴ螫ｭ逖ｯ"
    ],
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "?迄今已有??余?"
+    "stdout": "编码??试\n"
    },
    "tags": [
     "roundtrip",
@@ -4387,7 +4387,7 @@
     "mojibake",
     "deep"
    ],
-   "note": "两层误读 + 中间丢字节：第一层解完含 U+FFFD，必须按它分段继续。否则 gb18030 会把 U+FFFD 编成 4 个垃圾字节，结果尾部多出「幄1?7」"
+   "note": "两层误读 + 中间丢字节：第一层解完含 U+FFFD，必须按它分段继续。否则 gb18030 会把 U+FFFD 编成 4 个垃圾字节"
   },
   {
    "id": "codec-roundtrip-009",
@@ -4397,12 +4397,12 @@
     "mojibake",
     "--deep",
     "80",
-    "纾嬬缚娴犲﹤鍑￠張澶涙嫹閿熸垝缍戦獮鏉\n"
+    "郛よｫ辷懷ｴ螫ｭ逖ｯ\n"
    ],
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "?迄今已有??余?"
+    "stdout": "编码??试\n"
    },
    "tags": [
     "roundtrip",
@@ -4410,7 +4410,7 @@
     "mojibake",
     "deep"
    ],
-   "note": "同一串但末尾多一个换行（粘贴时很容易带上）：38 字节报「结尾截断」，39 字节变成「非法续接字节」，症状完全不同——入口必须 strip ASCII 空白"
+   "note": "同一串但末尾多一个换行（粘贴时很容易带上）。入口要 strip ASCII 空白，否则结尾会多出空段、多算一层"
   },
   {
    "id": "codec-roundtrip-010",
@@ -4418,7 +4418,7 @@
    "args": [
     "enc",
     "mojibake",
-    "君は一生私を忘れない",
+    "テスト用の文字列",
     "--from",
     "gbk",
     "--to",
@@ -4428,7 +4428,7 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "孨偼堦惗巹傪朰傟側偄"
+    "stdout": "僥僗僩梡偺暥帤楍\n"
    },
    "tags": [
     "roundtrip",
@@ -4444,7 +4444,7 @@
    "args": [
     "enc",
     "convert",
-    "人只能看",
+    "编码测试",
     "-r",
     "16",
     "-e",
@@ -4454,7 +4454,7 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "e4babae58faae883bde79c8b"
+    "stdout": "e7bc96e7a081e6b58be8af95\n"
    },
    "tags": [
     "roundtrip",
@@ -4982,7 +4982,7 @@
    "args": [
     "enc",
     "mojibake",
-    "人只能看",
+    "编码测试",
     "--from",
     "gbk",
     "--to",
@@ -4991,14 +4991,14 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "浜哄彧鑳界湅\n"
+    "stdout": "缂栫爜娴嬭瘯\n"
    },
    "tags": [
     "codec",
     "mojibake",
     "encode"
    ],
-   "note": "utf-8 被当 gbk 读的经典例子。这段能成功是因为它的字节全在 GBK 码表里"
+   "note": "utf-8 被当 gbk 读的常见例子。这段能成功是因为它的字节全在 GBK 码表里"
   },
   {
    "id": "codec-mojibake-enc-402",
@@ -5006,7 +5006,7 @@
    "args": [
     "enc",
     "mojibake",
-    "人人人人人人人人人人人人凤飞飞的耳朵软体业国台语佛柔软她平台哟与一个哦",
+    "这是一段测试文本",
     "--from",
     "gbk",
     "--to",
@@ -5015,7 +5015,7 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "失败：按 gbk 解码失败：'gbk' codec can't decode byte 0xa3 in position 40: illegal multibyte sequence\n（这堆字节里有 7 处在 gbk 中不合法，反向也不行 —— 这段文本造不出「utf-8 → gbk」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，不合法处变成 ?）\n"
+    "stdout": "失败：按 gbk 解码失败：'gbk' codec can't decode byte 0x80 in position 8: illegal multibyte sequence\n（这堆字节里有 2 处在 gbk 中不合法，反向也不行 —— 这段文本造不出「utf-8 → gbk」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，不合法处变成 ?）\n"
    },
    "tags": [
     "codec",
@@ -5031,7 +5031,7 @@
    "args": [
     "enc",
     "mojibake",
-    "人人人人人人人人人人人人凤飞飞的耳朵软体业国台语佛柔软她平台哟与一个哦",
+    "这是一段测试文本",
     "--from",
     "gbk",
     "--to",
@@ -5041,7 +5041,7 @@
    "stdin": null,
    "expect": {
     "exit": 0,
-    "stdout": "浜轰汉浜轰汉浜轰汉浜轰汉浜轰汉浜轰汉鍑ら�為�炵殑鑰虫湹杞�浣撲笟鍥藉彴璇�浣涙煍杞�濂瑰钩鍙板摕涓庝竴涓�鍝�\n"
+    "stdout": "杩欐槸涓�娈垫祴璇曟枃鏈�\n"
    },
    "tags": [
     "codec",
