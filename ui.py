@@ -532,9 +532,15 @@ def run_action(payload):
                                          "  · 目标编码 = 原文真实的编码\n"
                                          "两个下拉框都在上面，选完再点「编码」。"}
                     try:
-                        out = codec.mojibake_encode(text, s, t)
+                        out = codec.mojibake_encode(
+                            text, s, t,
+                            lossy=bool(_p.get("lossy") or payload.get("lossy")))
                     except ValueError as e:
                         return {"ok": False, "error": str(e)}
+                    if "\ufffd" in out:
+                        return {"ok": True, "result": out,
+                                "log": "允许有损：%d 处不合法字节已变成 ?"
+                                       % out.count("\ufffd")}
                     return {"ok": True, "result": out,
                             "log": "原文按 %s 编码 → 再按 %s 解" % (t, s)}
 

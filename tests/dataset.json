@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 235,
+  "count": 238,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -4975,6 +4975,81 @@
     "error"
    ],
    "note": "不认识的变体要报错并列出全部可选项"
+  },
+  {
+   "id": "codec-mojibake-enc-401",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "mojibake",
+    "人只能看",
+    "--from",
+    "gbk",
+    "--to",
+    "utf-8"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "浜哄彧鑳界湅\n"
+   },
+   "tags": [
+    "codec",
+    "mojibake",
+    "encode"
+   ],
+   "note": "utf-8 被当 gbk 读的经典例子。这段能成功是因为它的字节全在 GBK 码表里"
+  },
+  {
+   "id": "codec-mojibake-enc-402",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "mojibake",
+    "人人人人人人人人人人人人凤飞飞的耳朵软体业国台语佛柔软她平台哟与一个哦",
+    "--from",
+    "gbk",
+    "--to",
+    "utf-8"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "失败：按 gbk 解码失败：'gbk' codec can't decode byte 0xa3 in position 40: illegal multibyte sequence\n（这堆字节里有 7 处在 gbk 中不合法，反向也不行 —— 这段文本造不出「utf-8 → gbk」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，不合法处变成 ?）\n"
+   },
+   "tags": [
+    "codec",
+    "mojibake",
+    "encode",
+    "error"
+   ],
+   "note": "35 字长串有 7 组字节不在 GBK 码表，造不出这个方向的乱码。提示必须说清是「字节不合法」而不是「编码对填反了」"
+  },
+  {
+   "id": "codec-mojibake-enc-403",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "mojibake",
+    "人人人人人人人人人人人人凤飞飞的耳朵软体业国台语佛柔软她平台哟与一个哦",
+    "--from",
+    "gbk",
+    "--to",
+    "utf-8",
+    "--lossy"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "浜轰汉浜轰汉浜轰汉浜轰汉浜轰汉浜轰汉鍑ら�為�炵殑鑰虫湹杞�浣撲笟鍥藉彴璇�浣涙煍杞�濂瑰钩鍙板摕涓庝竴涓�鍝�\n"
+   },
+   "tags": [
+    "codec",
+    "mojibake",
+    "encode",
+    "lossy"
+   ],
+   "note": "--lossy 强行生成，不合法处变 U+FFFD"
   }
  ]
 }

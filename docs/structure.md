@@ -8,13 +8,13 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 3003 | 181 | 16 | `main` 347 行 | 编码识别与解码 |
+| `codec.py` | 3039 | 181 | 16 | `main` 347 行 | 编码识别与解码 |
 | `classic.py` | 1552 | 99 | 18 | `main` 258 行 | 古典密码 |
 | `hashcrypto.py` | 1154 | 49 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1427 | 53 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1766 | 37 | 4 | `run_action` 176 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
-| `ui_params.py` | 483 | 21 | 8 | — | 界面参数表（纯数据，不 import codec） |
+| `ui.py` | 1772 | 37 | 4 | `run_action` 176 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui_params.py` | 489 | 21 | 8 | — | 界面参数表（纯数据，不 import codec） |
 
 ---
 
@@ -36,11 +36,11 @@
 | 盲文 | 853–940 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
 | 压缩流与字符编码 | 941–1049 | 109 | 12 | zlib/uu + utf16 + gbk |
 | UTF-32 | 1050–1101 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1102–1915 | 814 | 27 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 1916–2283 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2284–2349 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2350–2602 | 253 | 13 | `convert` |
-| CLI | 2603–3003 | 401 | 3 | `read_input` → `main` |
+| **乱码还原** | 1102–1942 | 841 | 27 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 1943–2310 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2311–2376 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2377–2629 | 253 | 13 | `convert` |
+| CLI | 2630–3039 | 410 | 3 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -86,7 +86,7 @@
 
 【UTF-32】L1050-1101       _u32_input（输入归一）+ utf32/be/le
 
-【评分 / 识别】L1916-2283
+【评分 / 识别】L1943-2310
   score                    可读性打分（比例类，短串会失真）
   acceptable               长度骤减 / 控制字符的否决
   structural_candidates    结构指纹：这串像什么编码
@@ -95,7 +95,7 @@
   auto                     递归剥皮，默认深度 3
   COMMON_EN / COMMON_CN / CJK_RE / STRUCT_BONUS / LOOSE_ORDER / MIN_OUT_RATIO
 
-【矩阵重排】L2284-2349     _blocks / _read / grid_variants
+【矩阵重排】L2311-2376     _blocks / _read / grid_variants
 
 【编码 × 进制】L2350-2602
   _RADIX_*（字符集、标签、分隔符）
@@ -105,7 +105,7 @@
   bytes_to_text                      ← auto 是「挑一个」不是「它就是」
   convert_decode                     ← CLI 与界面共用
 
-【CLI】L2603-3003
+【CLI】L2630-3039
   read_input    多吃一个参数：`-f` 文件 / 管道 / argv 拼接
   main          手写参数解析 + 子命令分发（没有通用 opt 库）
 ```
@@ -118,7 +118,7 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1587）
+#### 3.1 调度顺序（`_d_mojibake`, L1614）
 
 ```
 _d_mojibake(s)                ← 进来先 _mb_clean(s)：去掉首尾 ASCII 空白
@@ -226,12 +226,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2016 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2043 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1689）/ `bytes_to_text`（L2478） |
+| 报告里的编码名不对 | `text_encoding_name`（L1716）/ `bytes_to_text`（L2505） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2404）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2636）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2431）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2680）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---
@@ -308,7 +308,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
 | 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
 | 加进 auto | `auto`（L1195 附近），把新密码接进它的候选循环 |
-| 加子命令 | `main`（L1248，258 行，手写参数解析） |
+| 加子命令 | `main`（L2680，258 行，手写参数解析） |
 
 ### 注意
 
@@ -344,7 +344,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 加一种哈希算法 | `HASHLIB_ALGOS`（能用 hashlib 的）+ `HASH_SIGNS`（靠长度/前缀识别的） |
 | 破解慢 | `brute_force` / `_brute_worker`（多进程），掩码字符集在 `MASK_SETS` |
 | 加 RSA 攻击 | `RSA` 区；`_iroot` 用二分 + `isqrt`，**别用 `x ** (1/k)`**（浮点精度不够） |
-| 加子命令 | `main`（L722），283 行手写解析 |
+| 加子命令 | `main`（L2680），283 行手写解析 |
 
 ### 注意
 
@@ -380,7 +380,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 加一种容器格式的解析 | 照 `ZIP` 区那样，`xxx_entries` / `xxx_extract` 成对写 |
 | grid 读错格子 | `_otsu_split`（阈值）+ `_fit_axis`（格宽）；两个都有实测依据，改动前先看注释 |
 | LSB 看不出东西 | `lsb_scan`（按通道/位序枚举）+ `longest_printable`（挑最像人话的） |
-| 加子命令 | `main`（L1195） |
+| 加子命令 | `main`（L2680） |
 
 ### 注意
 
@@ -428,7 +428,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1766 行）
+### `ui.py`（1772 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
 
@@ -445,7 +445,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | 内嵌 JS `updateSymOut` | L1404 | 结果框下方回显（符号直接画、字母按变体画回符号） |
 | 内嵌 JS `pigpenLive` | L1439 | 实时双向换算，输入即出结果 |
 
-### `ui_params.py`（483 行）
+### `ui_params.py`（489 行）
 
 纯数据：`TABS`（5 个页签）+ `PARAMS`（每页每个动作的参数表）。
 

@@ -1553,7 +1553,7 @@ def mojibake_explicit(s, src, tgt):
             % (len(raw), tgt, e))
 
 
-def mojibake_encode(text, src, tgt):
+def mojibake_encode(text, src, tgt, lossy=False):
     """制造乱码：把原文按 `tgt` 编成字节，再按 `src` 解。
 
     `mojibake_explicit` 的反向，参数语义完全一致（src = 乱码那一侧声称的
@@ -1561,6 +1561,12 @@ def mojibake_encode(text, src, tgt):
 
         mojibake_encode('君は一生私を忘れない', 'gbk', 'shift_jis')
         → '孨偼堦惗巹傪朰傟側偄'
+
+    ★ **不是任意文本都能造任意方向的乱码**。原文按 tgt 编出来的字节，必须
+      全部落在 src 的码表里才解得回来。比如一段汉字的 UTF-8 字节，有些 2 字节
+      组合根本不在 GBK 码表（实测 52 组里能有 5 组不合法），这时「utf-8 被当
+      gbk 读」这种乱码就**造不出来** —— 现实里也不会发生（能发生说明字节本来
+      就合法）。`lossy=True` 强行生成，不合法处变成 U+FFFD。
 
     以前这里故意不做（怕「制造乱码」被误用）。但反向验证是刚需：一个还原
     结果对不对，最硬的判据就是「按你猜的编码对能不能把它造回去」。也用来
@@ -1577,10 +1583,31 @@ def mojibake_encode(text, src, tgt):
     try:
         return raw.decode(src)
     except (UnicodeDecodeError, LookupError) as e:
+        # 两种情况必须分开说。以前一律提示「多半是编码对填反了」，但实测更常见
+        # 的是「这段文本的字节真的不在 src 码表里」—— 那种情况换方向也没用，
+        # 按提示反过来填只会更困惑。判据：反向编解码能不能走通。
+        if not isinstance(e, UnicodeDecodeError):
+            raise ValueError("按 %s 解码失败：%s\n（没有这个编码，检查拼写）"
+                             % (src, e))
+        bad = raw.decode(src, errors="replace").count("\ufffd")
+        if lossy:
+            return raw.decode(src, errors="replace")
+        rev_ok = False
+        try:
+            text.encode(src).decode(tgt)
+            rev_ok = True
+        except Exception:
+            pass
+        if rev_ok:
+            raise ValueError(
+                "按 %s 解码失败：%s\n"
+                "（这堆字节里有 %d 处在 %s 中不合法，所以这个方向造不出完整乱码。"
+                "反向倒可以：--from %s --to %s）" % (src, e, bad, src, tgt, src))
         raise ValueError(
             "按 %s 解码失败：%s\n"
-            "（这堆字节在 %s 看来不合法。多半是编码对填反了：源编码是乱码那"
-            "一侧的，目标编码才是原文的）" % (src, e, src))
+            "（这堆字节里有 %d 处在 %s 中不合法，反向也不行 —— 这段文本造不出"
+            "「%s → %s」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，"
+            "不合法处变成 ?）" % (src, e, bad, src, tgt, src))
 
 
 @dec_name("mojibake", "garbled", "乱码")
@@ -2706,6 +2733,11 @@ def main():
     # --from <源编码> / --to <目标编码>：显式指定乱码的编码对，完全不猜。
     # 自动路径摸不清时（或已知作者用的编码）用它，结果可复现。
     mb_from = mb_to = None
+    # --lossy：允许有损制造乱码（不合法字节 → ?）。默认不生成残缺结果 ——
+    # 「造出来的乱码解回去少了字」比直接报错更难发现，尤其当它被当成回归
+    # 用例的输入时。
+    mb_lossy = "--lossy" in argv
+    argv = [a for a in argv if a != "--lossy"]
     for flag, key in (("--from", "f"), ("--to", "t")):
         while flag in argv:
             i = argv.index(flag)
@@ -2887,12 +2919,16 @@ def main():
                       "--from gbk --to shift_jis")
                 return 2
             try:
-                out = mojibake_encode(text, mb_from, mb_to)
+                out = mojibake_encode(text, mb_from, mb_to, lossy=mb_lossy)
             except ValueError as e:
                 print("失败：%s" % e)
                 return 1
-            _hint("\n  [制造乱码] 原文按 %s 编码 → 再按 %s 解\n"
-                  % (mb_to, mb_from))
+            if mb_lossy and "\ufffd" in out:
+                _hint("\n  [制造乱码] --lossy：%d 处不合法字节已变成 ?\n"
+                      % out.count("\ufffd"))
+            else:
+                _hint("\n  [制造乱码] 原文按 %s 编码 → 再按 %s 解\n"
+                      % (mb_to, mb_from))
             print(out)
             return 0
 
