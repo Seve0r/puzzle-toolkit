@@ -237,11 +237,11 @@ python3 codec.py enc utf16be "Hello" | python3 codec.py enc hex        # 十六�
 **字符编码**：
 
 ```bash
-codec.py enc mojibake '君は一生私を忘れない' --from gbk --to shift_jis
-# → 孨偼堦惗巹傪朰傟側偄        （原文按 shift_jis 编码，再按 gbk 解）
+codec.py enc mojibake 'テスト用の文字列' --from gbk --to shift_jis
+# → 僥僗僩梡偺暥帤楍        （原文按 shift_jis 编码，再按 gbk 解）
 
-codec.py enc convert '人只能看' -r 16 -e utf-8
-# → e4babae58faae883bde79c8b    （换 -e gbk 就是另一串：8 字节）
+codec.py enc convert '编码测试' -r 16 -e utf-8
+# → e7bc96e7a081e6b58be8af95    （换 -e gbk 就是另一串：8 字节）
 ```
 
 所以它们不进 `ENCODERS` 注册表（表里的编码器只接一个字符串），而是
@@ -256,7 +256,7 @@ codec.py enc convert '人只能看' -r 16 -e utf-8
 
 `atbash` 和 `rot47` 解两次回到原文，所以 `enc` 和 `dec` 是同一个函数。
 
-## mojibake：`浜哄彧鑳界湅` → `人只能看`
+## mojibake：`缂栫爜娴嬭瘯` → `编码测试`
 
 UTF-8 的中文被当成 GBK 读了一遍，是 ARG 里最常见的乱码。还原方向反直觉：
 **先 `encode('gbk')` 拿回原始字节，再 `decode('utf-8')`**。
@@ -298,7 +298,7 @@ $ codec.py dec mojibake 'ÎÄ¼þÃû×Ö.txt'
 | | 输入端长什么样 | 前提 |
 |---|---|---|
 | UTF-8 被当 GBK | `浣犲ソ`（汉字乱码） | 原文以汉字为主 |
-| 中日韩互读 | `孨偼堦惗`（汉字乱码） | 原文以汉字为主 |
+| 中日韩互读 | `僥僗僩梡`（汉字乱码） | 原文以汉字为主 |
 | **字节被当西欧码** | `²âÊÔ`（**西欧字母**） | 原文全在 Latin-1 范围 |
 
 最后这类一个汉字都没有，前两类的门槛直接把它挡在门外，所以是单独一条路。
@@ -326,10 +326,10 @@ $ codec.py dec mojibake 'ÎÄ¼þÃû×Ö.txt'
 Shift_JIS 读**（或反过来）。这类乱码用 UTF-8 是彻底解不出来的——字节流在
 UTF-8 眼里全是非法序列，只会碎成一堆 `?`。
 
-典型（Bilibili ARG 里真实遇到的）：
+典型：
 
 ```
-孨偼堦惗巹傪朰傟側偄  →  君は一生私を忘れない
+僥僗僩梡偺暥帤楍  →  テスト用の文字列
 ```
 
 方向是 `encode('gbk')` 拿回字节，再 `decode('shift_jis')`。
@@ -360,8 +360,8 @@ UTF-8 眼里全是非法序列，只会碎成一堆 `?`。
 自动认不出、或你已知作者用的编码时，别让它猜：
 
 ```bash
-python3 codec.py dec mojibake --from gbk --to shift_jis '孨偼堦惗巹傪朰傟側偄'
-# 君は一生私を忘れない
+python3 codec.py dec mojibake --from gbk --to shift_jis '僥僗僩梡偺暥帤楍'
+# テスト用の文字列
 ```
 
 含义是「这段文字原本是按 `<源>` 编成字节的，被当 `<目标>` 解了」。只给一侧
@@ -463,7 +463,7 @@ python3 codec.py dec mojibake --deep 85 -f 原文.txt   # 解得更彻底
 它逐层打印损失率和可读率，标出采信第几层。「正常文字占比」= 汉字看是否
 GB2312 常用、假名算正常（ASCII 不算，否则解过头的 ASCII 噪音会被算成高可读率）。
 
-跨编码那一级也会参与，所以 `--deep` 对 `孨偼堦惗巹傪朰傟側偄` 这类同样一步到位。
+跨编码那一级也会参与，所以 `--deep` 对 `僥僗僩梡偺暥帤楍` 这类同样一步到位。
 
 **可读率不是单调的**：一串双层乱码实测是 33.7% → 36.4% → 88.5% → 0%，
 所以取的是全局最高那层而不是最后那层，解过头会自动退回。
@@ -473,15 +473,15 @@ GB2312 常用、假名算正常（ASCII 不算，否则解过头的 ASCII 噪音
 手工切段，分别用 `--best` 处理。
 
 
-## Punycode：`XN--L8JEXE7NOG3971A` → `あの子がきらい`
+## Punycode：`XN--28JM5B5A8K5K8CRA` → `これはテストです`
 
 把非 ASCII 文本塞进纯 ASCII 域名的编码，IDN（`.jp` 的日文域名那种）就用它。
 固定带 `xn--` 前缀，属于**可逆编码**，性质接近 Base64 而不是加密。
 
 ```bash
-python3 codec.py dec punycode 'XN--L8JEXE7NOG3971A'   # あの子がきらい
+python3 codec.py dec punycode 'XN--28JM5B5A8K5K8CRA'   # これはテストです
 python3 codec.py dec punycode -f 四条.txt              # 多行批量，一段一行输出
-python3 codec.py enc punycode 'あの子がきらい'          # xn--l8jexe7nog3971a
+python3 codec.py enc punycode 'これはテストです'         # xn--28jm5b5a8k5k8cra
 ```
 
 `auto` 会自动认出 `xn--` 前缀。
@@ -489,19 +489,19 @@ python3 codec.py enc punycode 'あの子がきらい'          # xn--l8jexe7nog3
 **两个坑**：
 
 1. **不能用 `idna` codec 解**。`idna` 会当成完整域名做校验，谜题数据里带逗号
-   （例如 `XN--,-47TL2MZE6MYDZA3P` 解出 `おはよう,ニセモノ`）或空格就一律报错。
+   （例如 `XN--,-47TL2MZE6MYDZA3P` 这种带逗号的）或空格就一律报错。
    必须剥掉前缀后直接走 `punycode` codec。
 2. **必须抢在 base64url 前面**。这类串长度常是 4 的倍数、字符集又落在
    base64url 里（`-` 是合法字符），不优先识别就会被 base64url 抢走，解出乱码。
 
-实测样例（ERIKO #003）：
+样例（注意 `xn--` 前缀大小写不影响识别，但**必须保留**）：
 
 | Punycode | 明文 |
 |---|---|
-| `XN--L8JEXE7NOG3971A` | あの子がきらい |
-| `XN--,-47TL2MZE6MYDZA3P` | おはよう,ニセモノ |
-| `XN--N8JPD2B0B8RJB` | わたしがきらい |
-| `XN--68JP3C3G5ILDWA3N` | わたしはニセモノ |
+| `XN--28JM5B5A8K5K8CRA` | これはテストです |
+| `XN--28J2A3AR1P` | こんにちは |
+| `XN--L8JIR6I4G` | ありがとう |
+| `XN--VCK8CUC4A2869A6ULUZQ` | サンプル文字列 |
 
 
 ## 和文モールス（`dec wabun`）

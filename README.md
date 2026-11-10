@@ -166,8 +166,8 @@ python3 codec.py enc hex -f picture.png
 | 大量 `0000` 的 8 位分组 | `codec auto`（UTF-32） |
 | 点划序列 | `codec auto`（摩斯） |
 | 像英语但读不通 | `classic auto` |
-| 中文正常但读不通（`浜哄彧`） | `codec dec mojibake`，解完还乱就加 `--deep` |
-| 一堆生僻汉字但不像中文（`孨偼堦惗`） | `codec dec mojibake`（GBK 编的日文被当 GBK 读） |
+| 中文正常但读不通（`缂栫爜娴嬭瘯`） | `codec dec mojibake`，解完还乱就加 `--deep` |
+| 一堆生僻汉字但不像中文（`偙偙偼僥僗`） | `codec dec mojibake`（日文按 Shift_JIS 存、被当 GBK 读了） |
 | 一份文件里混着几种编码 | 先手工切分，每次喂一段 |
 | 一个数要换进制（`ff` ↔ `255`、十进制大数 ↔ hex） | `num.py` |
 | 32/40/64 位 hex | `hc identify` → `hc crack`（字典）或 `hc mask`（纯数字/已知格式） |
@@ -190,7 +190,7 @@ python3 codec.py enc hex -f picture.png
 | `codec dec <编码名> <文本>` | 用指定编码解码 |
 | `codec enc <编码名> <文本>` | 用指定编码编码 |
 | `codec list` | 列出全部支持的编码名 |
-| `codec dec mojibake <文本>` | 还原乱码（`浜哄彧` → `人只`）。UTF-8 被当 GBK 读、中日韩编码互相误读都认 |
+| `codec dec mojibake <文本>` | 还原乱码（`缂栫爜` → `编码`）。UTF-8 被当 GBK 读、中日韩编码互相误读都认 |
 | `codec dec mojibake --deep [N]` | 多层乱码反复还原，直到正常文字占比 ≥ N%（默认 50） |
 | `codec dec mojibake --best <文本>` | 数据本身残缺时强制输出最佳猜测，缺失处标 `?`，并给出损失率 |
 | `codec dec mojibake --from A --to B` | 显式指定乱码的编码对，不猜（如 `--from gbk --to shift_jis`） |

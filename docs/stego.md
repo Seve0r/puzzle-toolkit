@@ -129,8 +129,9 @@ python3 $S grid puzzle.png | python3 codec.py auto    -f /dev/stdin
 - 输入 PNG 走**内置解码器**（不装 Pillow 也能用），但只支持非隔行；JPEG/WebP/GIF
   要装 Pillow。
 
-**实测**（ERIKO #009 那张）：427×159、格宽 12.94、32×11 格，读到 352 位；
-`grid | codec dec bin` 得 `禁食洗净祷告刺冠饮圣天堂之门`，全程 0.2 秒。
+**实测**：一张 32×11 格的点阵图，格宽自动测出 12.94px，读 352 位，
+`grid | codec dec bin` 一步出结果，0.2 秒内。格宽/相位不用手调，
+图边留白被误数成一格时才需要 `--cols` / `--rows` 钉住。
 
 ## 环境依赖
 
