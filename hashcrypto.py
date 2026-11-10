@@ -126,7 +126,7 @@ admin root toor letmein1 password1 password123 admin123 root123 test123
 qwerty123 1q2w3e4r 1q2w3e zaq12wsx qazxsw asdf1234 zxcv1234 iloveyou1
 princess1 sunshine1 football1 baseball1 superman1 starwars1 whatever1
 welcome1 hello123 abc12345 a1b2c3d4 changeme default temp 12345678910
-qwertyui asdfghjkl zxcvbnm1 passw0rd p@ssw0rd P@ssw0rd  Pa$$w0rd 
+qwertyui asdfghjkl zxcvbnm1 passw0rd p@ssw0rd P@ssw0rd  Pa$$w0rd
 """.split()
 
 

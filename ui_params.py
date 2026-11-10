@@ -29,6 +29,92 @@ suffix     type=int 时的单位后缀
 
 
 # ---------------------------------------------------------------------------
+# 符号选择器的数据（目前只有猪圈密码用）。
+#
+# 形状**从 classic.py 取**，不在这里重抄一份。踩过：为了出预览图，我在临时脚本
+# 里把「哪个槽位画哪条边」重算了两遍，改一版形状要同步改三处，漏一处就会让
+# 界面上的符号跟命令行认的不是同一个字母 —— 而且完全无声，不会报错。
+#
+# 坐标归一化在 0..1 的方框里，前端乘按钮尺寸即可，跟具体像素无关；
+# row/col 是它在所属组块里的格位（X 形只用 3x3 的上/左/右/下）。
+# ---------------------------------------------------------------------------
+try:
+    import classic as _classic
+except Exception:                      # classic.py 不在同目录时给个空面板
+    _classic = None
+
+
+_X_CELL = {1: (0, 1), 2: (1, 0), 3: (1, 2), 4: (2, 1)}   # 上、左、右、下
+
+
+def _pigpen_slots_json():
+    if _classic is None:
+        return []
+    out = []
+    for sid, _ch, _dot in _classic.PIGPEN_SLOTS:
+        segs, dot = _classic.pigpen_segments(sid)
+        base = _classic.pigpen_base(sid)
+        if base.startswith("g"):
+            n = int(base[1:]) - 1
+            row, col = n // 3, n % 3
+            group = 0 if sid == base else 1
+        else:
+            row, col = _X_CELL[int(base[1:])]
+            group = 2 if sid == base else 3
+        out.append({
+            "id": sid,
+            "glyph": _classic.PIGPEN_GLYPH[sid],
+            "segs": [[list(a), list(b)] for a, b in segs],
+            "dot": [round(dot[0], 3), round(dot[1], 3)] if dot else None,
+            "group": group, "row": row, "col": col,
+        })
+    return out
+
+
+PIGPEN_UI_SLOTS = _pigpen_slots_json()
+PIGPEN_GROUP_NAMES = ["井字", "井字·点", "X 形", "X 形·点"]
+
+
+def _pigpen_maps_json():
+    """变体 → {字母: 槽位名}。
+
+    结果栏要把**解出来的字母**按当前变体画回符号（对原题确认用），所以这份
+    映射得跟 classic.PIGPEN_VARIANTS 同源；在这里重写一遍的话，加变体时会
+    出现「下拉里有、结果栏却不认」的半截状态。
+
+    ★ PIGPEN_VARIANTS 的值是 `[(字母, 槽位), ...]`，**不是**槽位列表。
+      早先这里按 `enumerate(order)` 生成，把整个元组当成了槽位名，于是前端
+      `SY_BY_ID[("A","g1")]` 全查不到 —— 症状是所有符号解成 `?`，不报错。
+      下面这条断言就是防这个：值必须是字符串。
+    """
+    if _classic is None:
+        return {}
+    out = {v: {L: sid for L, sid in pairs}
+           for v, pairs in _classic.PIGPEN_VARIANTS.items()}
+    bad = [(v, L, sid) for v, m in out.items() for L, sid in m.items()
+           if not isinstance(sid, str)]
+    if bad:
+        raise ValueError("变体映射的槽位名必须是字符串，收到：%r" % (bad[:3],))
+    return out
+
+
+PIGPEN_UI_MAPS = _pigpen_maps_json()
+
+# 变体下拉的中文名。表里没有的直接显示 key，所以 classic.py 加变体不会漏展示。
+PIGPEN_VARIANT_LABEL = {
+    "original": "标准（井字 → 井字带点 → X → X带点）",
+    "rot-cross": "X 组旋转",
+    "grid-cross": "井字 → X → 井字带点 → X带点",
+    "dotted": "带点组优先",
+    "cross": "X 组优先",
+    "sandi": "交替填充（Sandi Kotak）",
+    "sandi-rot": "交替 + X 组旋转",
+    "agrippa": "Agrippa（只用 18 个图形，无 J K Q U）",
+    "labuse": "La Buse（无 W X Y Z）",
+}
+
+
+# ---------------------------------------------------------------------------
 # 四个选项卡。codec 的「功能」就是编码名（由 codec.py 的注册表来），
 # 其余三个的「功能」是脚本的子命令，得在这里列。
 #
@@ -55,6 +141,7 @@ TABS = [
             {"name": "adfgx", "label": "ADFGX"},
             {"name": "keyboard", "label": "键盘错位"},
             {"name": "t9", "label": "手机九宫格 T9"},
+            {"name": "pigpen", "label": "猪圈密码（符号替换）"},
             {"name": "auto", "label": "全部试一遍"},
         ],
     },
@@ -237,7 +324,7 @@ PARAMS = {
     ],
     "classic/playfair": [
         {"key": "key", "type": "text", "label": "关键词", "placeholder": "如 MONARCHY"},
-        {"key": "enc", "type": "check", "label": "加密方向"},
+        {"key": "enc", "type": "check", "label": "加密"},
         {"key": "clean", "type": "check", "label": "去掉填充的 X"},
     ],
     "classic/adfgx": [
@@ -249,6 +336,25 @@ PARAMS = {
          "choices": [("qwerty", "QWERTY"), ("dvorak", "Dvorak"), ("azerty", "AZERTY")]},
         {"key": "shift", "type": "choice", "label": "方向", "default": "-1",
          "choices": [("-1", "往左还原"), ("1", "往右还原")]},
+    ],
+    # 猪圈：符号本身就是密文，所以「点符号」不是参数，而是往主输入框里写字符。
+    # 后端因此只需要认一种输入（文本），不用为符号单开一条提交通道。
+    #
+    # ★ 没有「加密」开关：方向由输入自己决定（有符号就是解码、纯字母就是编码），
+    #   前端边打边算。让用户选方向既多余又容易选反 —— 选反了会得到一串看着
+    #   像答案的垃圾，比报错还难发现。
+    "classic/pigpen": [
+        {"key": "variant", "type": "choice", "label": "变体", "default": "original",
+         "choices": [(k, PIGPEN_VARIANT_LABEL.get(k, k))
+                     for k in (_classic.PIGPEN_VARIANTS if _classic else ["original"])],
+         "hint": "各变体共用同一套 26 个图形，区别只在「图形按什么顺序填进 A–Z」；"
+                 "认不出是哪一种时逐个试，标准版对不上再换"},
+        {"key": "pick", "type": "symbols", "label": "点符号",
+         "groups": PIGPEN_GROUP_NAMES, "slots": PIGPEN_UI_SLOTS,
+         "maps": PIGPEN_UI_MAPS,
+         "live": True,      # 输入变化就双向自动换算，不用点「执行」
+         "hint": "照题目从左到右点，符号会写进上面的输入框；"
+                 "反过来直接打字就是加密，结果和图形都会实时跟着变"},
     ],
 
     # ---------------- hashcrypto ----------------
@@ -277,7 +383,7 @@ PARAMS = {
          "placeholder": "16 字节 = 32 位 hex", "hint": "ECB 模式不需要 IV"},
         {"key": "mode", "type": "choice", "label": "模式", "default": "cbc",
          "choices": [("cbc", "CBC"), ("ecb", "ECB"), ("ctr", "CTR"), ("gcm", "GCM")]},
-        {"key": "enc", "type": "check", "label": "加密方向"},
+        {"key": "enc", "type": "check", "label": "加密"},
     ],
     "hashcrypto/rc4": [
         {"key": "key", "type": "text", "label": "密钥", "hint": "普通文本，不是 hex"},
@@ -359,12 +465,19 @@ PARAMS = {
 _CLASSIC_REVERSIBLE = (
     "caesar", "vigenere", "affine", "bacon", "railfence", "columnar",
     "atbash", "a1z26", "polybius", "playfair", "adfgx", "keyboard", "t9",
+    # 故意不含 pigpen：它方向由输入自动判定（前端实时算），不需要开关
 )
+
+# 不勾「加密方向」时真的会爆破（一次给一堆候选）的只有这几个。其余手法不勾
+# 只是普通解码 —— 以前统一写「不勾 = 解码/爆破」，于是维吉尼亚、培根、Atbash、
+# 波利比奥斯、普莱菲尔、ADFGX、键盘错位旁边都挂着一句它们做不到的事。
+_CLASSIC_BRUTE = {"caesar", "affine", "railfence", "columnar", "t9"}
 
 for _name in _CLASSIC_REVERSIBLE:
     _lst = PARAMS.setdefault("classic/" + _name, [])
     if not any(p.get("key") == "enc" for p in _lst):
         _lst.append({
-            "key": "enc", "type": "check", "label": "加密方向",
-            "hint": "不勾 = 解码/爆破",
+            "key": "enc", "type": "check", "label": "加密",
+            "hint": ("不勾 = 解码/爆破" if _name in _CLASSIC_BRUTE
+                     else "勾上 = 明文 → 密文"),
         })

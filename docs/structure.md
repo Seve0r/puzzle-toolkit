@@ -8,13 +8,13 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 2745 | 156 | 16 | `main` | 编码识别与解码 |
-| `classic.py` | 1285 | 71 | 17 | `main` 237 行 | 古典密码 |
-| `hashcrypto.py` | 1154 | 38 | 8 | `main` 283 行 | 哈希与现代密码 |
-| `stego.py` | 1307 | 38 | 7 | `main` 209 行 | 文件隐写 |
-| `num.py` | 227 | 10 | 0 | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1357 | 13 | — | `run_action` | 本地界面（HTTP + 内嵌 HTML/JS） |
-| `ui_params.py` | 355 | 8 | — | — | 界面参数表（纯数据，不 import codec） |
+| `codec.py` | 2986 | 181 | 16 | `main` 347 行 | 编码识别与解码 |
+| `classic.py` | 1552 | 99 | 18 | `main` 258 行 | 古典密码 |
+| `hashcrypto.py` | 1154 | 49 | 8 | `main` 283 行 | 哈希与现代密码 |
+| `stego.py` | 1427 | 53 | 7 | `main` 229 行 | 文件隐写 |
+| `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
+| `ui.py` | 1766 | 37 | 4 | `run_action` 176 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui_params.py` | 483 | 21 | 8 | — | 界面参数表（纯数据，不 import codec） |
 
 ---
 
@@ -274,11 +274,11 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 
 ## 二、`classic.py`
 
-1323 行 / 51 个顶层对象 / 17 个分区。
+1552 行 / 99 个顶层对象 / 18 个分区。
 
 **结构特点：一个密码一个区，`xxx_dec` 和 `xxx_enc` 相邻。** 这点和 `codec.py`
 相反——codec 曾经把编码器全堆在文件末尾（2026-11 才归位），classic 从一开始
-就是配对的，9 组编解码全部紧挨。
+就是配对的，10 组编解码全部紧挨。
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
@@ -297,8 +297,9 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | ADFGX | 842–893 | 52 | 方阵 + 双向 |
 | 键盘错位 | 894–928 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
 | T9 九宫格 | 929–978 | 50 | `t9_encode` / `t9` |
-| auto | 979–1031 | 53 | `auto` + `affine_enc_free` |
-| CLI | 1032–1323 | 292 | `show_list` / `main` |
+| 猪圈（符号替换） | 979–1193 | 215 | `PIGPEN_SLOTS` / `PIGPEN_SHAPE` / `PIGPEN_EDGES` / `pigpen_segments` / `PIGPEN_VARIANTS`（9 个）/ `pigpen_encode` / `pigpen_decode` |
+| auto | 1194–1246 | 53 | `auto` + `affine_enc_free` |
+| CLI | 1247–1551 | 305 | `show_list` / `main` |
 
 ### 改代码时从哪下手
 
@@ -306,8 +307,8 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 |---|---|
 | 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
 | 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
-| 加进 auto | `auto`（L981 附近），把新密码接进它的候选循环 |
-| 加子命令 | `main`（L1075，249 行，手写参数解析） |
+| 加进 auto | `auto`（L1195 附近），把新密码接进它的候选循环 |
+| 加子命令 | `main`（L1248，258 行，手写参数解析） |
 
 ### 注意
 
@@ -427,7 +428,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1497 行）
+### `ui.py`（1766 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
 
@@ -438,11 +439,23 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 | `_run_mojibake` | L292 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
 | `Handler._authed()` | L605 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | ~L1310 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `doRun()` | L1568 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `buildSymbolPad` | L1279 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
+| 内嵌 JS `updateSymPrev` | L1374 | 输入框下方的实时图形预览 |
+| 内嵌 JS `updateSymOut` | L1404 | 结果框下方回显（符号直接画、字母按变体画回符号） |
+| 内嵌 JS `pigpenLive` | L1439 | 实时双向换算，输入即出结果 |
 
-### `ui_params.py`（370 行）
+### `ui_params.py`（483 行）
 
 纯数据：`TABS`（5 个页签）+ `PARAMS`（每页每个动作的参数表）。
+
+**`symbols` 控件类型**（目前只有猪圈用）：参数表里给 26 个槽位的图形数据，
+前端画成可点的 SVG 方块，点击把近似字符写进**主输入框**而不是当成参数提交
+（`paramValues()` 会显式跳过这个类型）。带 `"live": True` 的动作走实时双向
+换算，输入一变就出结果，不用点「执行」。
+
+形状数据从 `classic.PIGPEN_*` 导入，**不在这里重算** —— 两份形状定义迟早分叉，
+分叉后界面点出来的符号跟命令行认的不是同一个字母，而且不报错。
 
 **只在可选路径上 import codec**——为了取 `MOJIBAKE_ENCODINGS` / `MOJIBAKE_TARGETS`
 那两份清单，不自己抄一份（抄了必然慢慢分叉，codec 加了编码界面永远选不到、

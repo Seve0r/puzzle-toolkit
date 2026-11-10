@@ -248,9 +248,25 @@ python3 codec.py enc hex -f picture.png
 | `classic adfgx --key K [--trans K] <文本>` | ADFGX 方阵 |
 | `classic keyboard [--layout qwerty\|dvorak\|azerty] <文本>` | 键盘错位还原 |
 | `classic t9 <文本>` | 手机九宫格；解码列候选，`--enc` 出数字串 |
+| `classic pigpen [--variant V] <文本>` | 猪圈密码（共济会符号）；符号与字母双向，`--variant` 选 9 种变体 |
 
-上表里除了 `auto` / `vigcrack` / `sub`（本身就是破解器），其余 **12 个都可逆**，
+上表里除了 `auto` / `vigcrack` / `sub`（本身就是破解器），其余 **13 个都可逆**，
 加 `--enc` 就是加密方向。加密 `caesar` / `affine` 要显式给参数。
+
+`pigpen` 比较特别：它是**双向同一入口**，不需要 `--enc`。输入是符号就解成字母、
+是字母就编成符号（界面里也是实时自动判方向）。图形在终端里用近似字符表示
+（井字组借制表符、X 组借三角），带点符号加中点后缀 —— 猪圈符号本身没有
+Unicode 编码，这串字符只是能看能粘的替代品：
+
+```bash
+classic.py pigpen --enc "HELLO WORLD"     # ⊓ □ └· └· ⊏·  ▽· ⊏· ┌· └· ⊐
+classic.py pigpen "⊓ □ └· └· ⊏·  ▽· ⊏· ┌· └· ⊐"    # HELLO WORLD
+```
+
+变体是**同一套 26 个图形按不同顺序填进 A–Z**，`--variant` 可选
+`original` / `rot-cross` / `grid-cross` / `dotted` / `cross` / `sandi` /
+`sandi-rot` / `agrippa` / `labuse`。后两种不是 26 个字母全用（agrippa 缺
+J K Q U，labuse 缺 W X Y Z），碰不到的图形解出来是 `?`。
 
 ### hashcrypto.py —— 哈希与现代密码
 

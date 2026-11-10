@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 211,
+  "count": 235,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -4463,6 +4463,518 @@
     "encode"
    ],
    "note": "指定编码的进制编码。对比 enc hex：那个写死 UTF-8，换 -e gbk 会得到完全不同的字节串"
+  },
+  {
+   "id": "classic-pigpen-001",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "HELLO"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "⊓ □ └· └· ⊏·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "encode"
+   ],
+   "note": "字母 → 猪圈符号。符号是终端近似表示（井字组用制表符、X 组用三角），真正的图形在界面上用 SVG 画"
+  },
+  {
+   "id": "classic-pigpen-002",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "⊓ □ └· └· ⊏·"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode"
+   ],
+   "note": "符号 → 字母。直接把上面编码的结果粘回来就能还原"
+  },
+  {
+   "id": "classic-pigpen-003",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "g8g5gd3gd3gd6"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode",
+    "slot"
+   ],
+   "note": "槽位名连写也能解。槽位名是「图形」的标识，不随变体变"
+  },
+  {
+   "id": "classic-pigpen-004",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "g8 g5 gd3 gd3 gd6"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode",
+    "slot"
+   ],
+   "note": "槽位名带空格"
+  },
+  {
+   "id": "classic-pigpen-005",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "┘ ⊔ └ ⊐ □ ⊏ ┐ ⊓ ┌ ┘· ⊔· └· ⊐· □· ⊏· ┐· ⊓· ┌· ▽ ▷ ◁ △ ▽· ▷· ◁· △·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "encode"
+   ],
+   "note": "全 26 符号。左九个是井字格、右九个是井字带点、四个三角、四个带点三角"
+  },
+  {
+   "id": "classic-pigpen-006",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "-h"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "pigpen      [--variant NAME] <text>  猪圈密码（符号替换），--enc 反过来出图形\n\n通用：\n  --enc            编码方向（默认解码）\n  -q/--quiet       只输出结果\n  -f/--file FILE   从文件读输入（长密文/多行必备，路径支持 ~）\n  -n N             只显示前 N 个候选（默认 10）\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "help"
+   ],
+   "note": "子命令帮助"
+  },
+  {
+   "id": "classic-pigpen-101",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "HELLO WORLD"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "⊓ □ └· └· ⊏·  ▽· ⊏· ┌· └· ⊐\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "encode"
+   ],
+   "note": "词边界用双空格保留（符号之间是单空格）。以前直接丢空格，长密文会连成一片"
+  },
+  {
+   "id": "classic-pigpen-102",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "ABJLLLLPGEEEE"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "┘ ⊔ ┘· └· └· └· └· ┐· ┐ □ □ □ □\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "encode"
+   ],
+   "note": "重复字母（LLLL）与带点符号（J/P）混合的编码"
+  },
+  {
+   "id": "classic-pigpen-201",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "⊓ □ └· └· ⊏·  ▽· ⊏· ┌· └· ⊐"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO WORLD\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode"
+   ],
+   "note": "双空格是词边界，解出 HELLO WORLD。这跟 --enc 的输出格式对称，粘回来就能还原词界"
+  },
+  {
+   "id": "classic-pigpen-202",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "⊓□└·└·⊏·"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HELLO\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode"
+   ],
+   "note": "符号连写也能解（正则逐个认），不要求空格分隔"
+  },
+  {
+   "id": "classic-pigpen-203",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "g8 g5  gd3 gd3 gd6"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "HE LLO\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "decode",
+    "slot"
+   ],
+   "note": "槽位名同样按双空格分词组"
+  },
+  {
+   "id": "classic-pigpen-301",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "original"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "▽ ▷ ◁ △ ▽· ▷· ◁· △·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "original"
+   ],
+   "note": "变体 original 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-302",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "rot-cross"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "▽ ▷ △ ◁ ▽· ▷· △· ◁·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "rot-cross"
+   ],
+   "note": "变体 rot-cross 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-303",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "grid-cross"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "⊏· ┐· ⊓· ┌· ▽· ▷· ◁· △·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "grid-cross"
+   ],
+   "note": "变体 grid-cross 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-304",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "dotted"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "⊏ ┐ ⊓ ┌ ┘· ⊔· └· ⊐·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "dotted"
+   ],
+   "note": "变体 dotted 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-305",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "cross"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "⊔· └· ⊐· □· ⊏· ┐· ⊓· ┌·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "cross"
+   ],
+   "note": "变体 cross 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-306",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "sandi"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "▽ ▽· ▷ ▷· ◁ ◁· △ △·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "sandi"
+   ],
+   "note": "变体 sandi 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-307",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "sandi-rot"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "▽ ▽· ▷ ▷· △ △· ◁ ◁·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "sandi-rot"
+   ],
+   "note": "变体 sandi-rot 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-308",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "agrippa"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "┐· ⊓· ┌·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "agrippa"
+   ],
+   "note": "变体 agrippa 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-309",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STUVWXYZ",
+    "--variant",
+    "labuse"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "▽· ▽ ◁· ◁\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "labuse"
+   ],
+   "note": "变体 labuse 下 S-Z 的图形。各变体共用同一套形状，只是字母填充顺序不同"
+  },
+  {
+   "id": "classic-pigpen-311",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "▽ ▷ ◁ △",
+    "--variant",
+    "agrippa"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "????\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "idle"
+   ],
+   "note": "agrippa 不用 X 组，闲置图形解成 ?，不能抛 KeyError 把整个解码打断"
+  },
+  {
+   "id": "classic-pigpen-312",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "STV",
+    "--variant",
+    "agrippa"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "┐· ⊓· ┌·\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "agrippa"
+   ],
+   "note": "agrippa 缺 J K Q U，S/T/V 仍能正确编到 gd7/gd8/gd9。以前按「第 i 个槽位=chr(65+i)」推字母，缺字母时整段错位、这里会输出空"
+  },
+  {
+   "id": "classic-pigpen-313",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--enc",
+    "WXYZ",
+    "--variant",
+    "labuse"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "variant",
+    "idle"
+   ],
+   "note": "labuse 没有 W X Y Z，编码时直接跳过"
+  },
+  {
+   "id": "classic-pigpen-314",
+   "script": "classic.py",
+   "args": [
+    "pigpen",
+    "--variant",
+    "nope",
+    "g1"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "出错：没有 'nope' 这个变体；可选：agrippa、cross、dotted、grid-cross、labuse、original、rot-cross、sandi、sandi-rot\n"
+   },
+   "tags": [
+    "classic",
+    "pigpen",
+    "error"
+   ],
+   "note": "不认识的变体要报错并列出全部可选项"
   }
  ]
 }

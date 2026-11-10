@@ -19,6 +19,7 @@
   adfgx       --key KEY [--trans KEY] <text>
   keyboard    [--layout qwerty|dvorak|azerty] <text>  键盘错位还原
   t9          <digits>            手机九宫格，列出所有可能
+  pigpen      [--variant NAME] <text>  猪圈密码（符号替换），--enc 反过来出图形
   auto        <text>              全部跑一遍，按英文契合度列出
 
 通用：
@@ -976,6 +977,221 @@ def t9(text, limit=200):
     return [(s,) for s in combos]
 
 
+# ------------------------------------------------------------------ 猪圈（符号替换）
+
+# 26 个图形槽位，分四组：井字九格无点 / 井字九格带点 / X 形四角无点 / X 形
+# 四角带点。★ 槽位名绑定的是**图形**，不是字母 —— 猪圈的各个「变体」用的是
+# 同一套 26 个图形，区别只在「按什么顺序填进 A-Z」（见 PIGPEN_VARIANTS）。
+# 槽位和字母绑死的话，加一个变体就得重抄 26 条数据；绑图形的话变体只是一行顺序。
+#
+# 井字组的画法有规律：格子在第 1 行就不画上边、第 3 行不画下边、第 1 列不画
+# 左边、第 3 列不画右边（外边界省略）。于是 g1(左上)=┘、g5(中心)=□、g9(右下)=┌。
+# 下面的近似字符就是按这个规律挑的，跟标准对照表逐格对得上。
+#
+# ★ 这些只是**终端里的近似表示**，猪圈符号本身没有 Unicode 编码（不存在那套
+#   字符）。界面那边会按「画哪几条边」用 SVG 精确绘制，两边不必长得一样，
+#   能互相认出来即可。带点的符号加一个中点后缀（┘·），解析时按整串匹配。
+_PIGPEN_GRID = ["┘", "⊔", "└", "⊐", "□", "⊏", "┐", "⊓", "┌"]
+# X 形只有四个三角，顺序是「上、左、右、下」——不是顺时针，这是历史惯例
+# （原版 S=上、T=左、U=右、V=下）。改成顺时针会让后半段字母整段错位。
+_PIGPEN_CROSS = ["▽", "▷", "◁", "△"]
+_PIGPEN_DOT = "·"
+
+PIGPEN_SLOTS = (
+    [("g%d" % (i + 1), ch, 0) for i, ch in enumerate(_PIGPEN_GRID)]
+    + [("gd%d" % (i + 1), ch, 1) for i, ch in enumerate(_PIGPEN_GRID)]
+    + [("x%d" % (i + 1), ch, 0) for i, ch in enumerate(_PIGPEN_CROSS)]
+    + [("xd%d" % (i + 1), ch, 1) for i, ch in enumerate(_PIGPEN_CROSS)]
+)
+
+PIGPEN_GLYPH = {
+    sid: ch + (_PIGPEN_DOT if dot else "") for sid, ch, dot in PIGPEN_SLOTS
+}
+
+# 形状数据：每条边用归一化坐标描述（方框 0..1，中心是 0.5,0.5）。井字组画方框
+# 的某几条边，X 组画「四角指向中心」的两条斜线。
+#
+# ★ 这是**唯一**的形状定义。命令行要出图、界面要画按钮，都从这里取 —— 别处
+#   不许再自己算一遍。踩过：为了出预览图，我在临时脚本里把这段几何重算了两次
+#   （一次 PNG 一次 HTML），改一版形状就得同步改三处，迟早对不上。
+PIGPEN_EDGES = {
+    "T": ((0.0, 0.0), (1.0, 0.0)),
+    "R": ((1.0, 0.0), (1.0, 1.0)),
+    "B": ((0.0, 1.0), (1.0, 1.0)),
+    "L": ((0.0, 0.0), (0.0, 1.0)),
+    "TL": ((0.0, 0.0), (0.5, 0.5)),
+    "TR": ((1.0, 0.0), (0.5, 0.5)),
+    "BR": ((1.0, 1.0), (0.5, 0.5)),
+    "BL": ((0.0, 1.0), (0.5, 0.5)),
+}
+
+PIGPEN_SHAPE = {
+    # 井字九格：格子在第 1 行不画上边、第 3 行不画下边、第 1 列不画左边、
+    # 第 3 列不画右边（外边界省略）。于是左上格 g1 只剩右边和下边，是 ┘。
+    "g1": ("R", "B"), "g2": ("L", "R", "B"), "g3": ("L", "B"),
+    "g4": ("T", "R", "B"), "g5": ("T", "R", "B", "L"), "g6": ("T", "L", "B"),
+    "g7": ("T", "R"), "g8": ("T", "L", "R"), "g9": ("T", "L"),
+    # X 形四三角：各画两条指向中心的斜线，顺序是上、左、右、下
+    "x1": ("TL", "TR"), "x2": ("TL", "BL"),
+    "x3": ("TR", "BR"), "x4": ("BL", "BR"),
+}
+
+# X 组带点时点的位置 = 该三角的**重心**（顶点在中心 0.5,0.5，另两个在方框角上，
+# 重心因此落在距中心 1/3 处，即 0.167 / 0.833）。
+#
+# ★ 不能放中心：那里正好是四条斜线的交点，点会跟线粘成一团。
+# ★ 也不能凭感觉放 0.3 这种「中间值」：看着像是在三角里，实际只进去 0.2，
+#   按钮一小点就悬在开口边缘线上。按重心算出来的位置距斜线 0.235，点边缘
+#   还有余量，任何尺寸下都不会贴线 —— 这是几何决定的，不是调参调出来的。
+_PIGPEN_X_DOT = {"x1": (0.5, 0.167), "x2": (0.167, 0.5),
+                 "x3": (0.833, 0.5), "x4": (0.5, 0.833)}
+
+
+def pigpen_base(slot):
+    """带点槽位 → 无点兄弟：gd3 → g3，xd1 → x1。形状两者共用。"""
+    if slot.startswith("gd"):
+        return "g" + slot[2:]
+    if slot.startswith("xd"):
+        return "x" + slot[2:]
+    return slot
+
+
+def pigpen_segments(slot):
+    """返回 (线段列表, 点坐标)，坐标都归一化到 0..1 的方框内；无点则点为 None。
+
+    线段元素是 ((x1, y1), (x2, y2))。界面拿它直接生成 SVG，命令行要画字符图
+    也从这里取 —— 形状只有这一处定义。
+    """
+    base = pigpen_base(slot)
+    segs = [PIGPEN_EDGES[e] for e in PIGPEN_SHAPE[base]]
+    if slot == base:                      # 无点
+        return segs, None
+    return segs, _PIGPEN_X_DOT.get(base, (0.5, 0.5))
+
+# 变体：各变体用的是**同一套 26 个图形**，区别只在「按什么顺序填进 A-Z」。
+#
+# 下面每行字符串的含义是「按图形固定顺序（g1..g9, gd1..gd9, x1..x4, xd1..xd4）
+# 依次填进去的字母」，'-' 表示那个图形在这个变体里闲置。写成字母串而不是直接
+# 排 26 个槽位名，是为了能跟 dcode 的对照表**逐字符核对** —— 手抄 26 个槽位名
+# 错一格根本看不出来，错一格就是整段字母错位。
+#
+# 数据来源：dcode.fr 收录的 9 个变体。
+_PIGPEN_FILL = [sid for sid, _ch, _d in PIGPEN_SLOTS]
+
+
+def _pigpen_variant(letters):
+    """「图形顺序 → 字母串」翻成 _pigpen_map 要的 [(字母, 槽位), ...]。
+
+    返回按字母排序的列表。**必须带着字母一起存**，不能只存槽位顺序：
+    有的变体不是 26 个字母全用，只存顺序的话就推不出缺的是哪几个字母。
+    """
+    if len(letters) != len(_PIGPEN_FILL):
+        raise ValueError("变体字母串要 %d 个字符，收到 %d 个"
+                         % (len(_PIGPEN_FILL), len(letters)))
+    pairs = [(ch.upper(), sid) for sid, ch in zip(_PIGPEN_FILL, letters)
+             if ch.isalpha()]
+    return sorted(pairs)
+
+
+PIGPEN_VARIANTS = {
+    # 原始：井字 → 井字带点 → X → X带点，各按阅读顺序
+    "original": _pigpen_variant("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    # X 组内部旋转（U/V 与 Y/Z 对调）
+    "rot-cross": _pigpen_variant("ABCDEFGHIJKLMNOPQRSTVUWXZY"),
+    # 井字 → X → 井字带点 → X带点
+    "grid-cross": _pigpen_variant("ABCDEFGHINOPQRSTUVJKLMWXYZ"),
+    # 带点组整体提前
+    "dotted": _pigpen_variant("NOPQRSTUVWXYZABCDEFGHIJKLM"),
+    # X 组整体提前
+    "cross": _pigpen_variant("IJKLMNOPQRSTUVWXYZABCDEFGH"),
+    # 两组交替填（印尼叫 Sandi Kotak）
+    "sandi": _pigpen_variant("ACEGIKMOQBDFHJLNPRSUWYTVXZ"),
+    # 上一条 + X 组旋转
+    "sandi-rot": _pigpen_variant("ACEGIKMOQBDFHJLNPRSUYWTVZX"),
+    # Agrippa：只用 18 个图形，J K Q U 没有对应符号
+    "agrippa": _pigpen_variant("ABCDEFGHILMNOPRSTV--------"),
+    # La Buse：缺 W X Y Z，且 X 组只用一半
+    "labuse": _pigpen_variant("BDFHJLNPRACEGIKMOQT-V-S-U-"),
+}
+
+_PIGPEN_ID_RE = re.compile(r"(?:gd|xd|g|x)\d+")
+
+
+def _pigpen_map(variant="original"):
+    """返回 (槽位→字母, 字母→槽位) 两张表。
+
+    变体存的是 [(字母, 槽位), ...]，**不能**用「第 i 个槽位 = chr(65+i)」来推字母：
+    agrippa / labuse 不是 26 个字母全用（缺 J K Q U 或 W X Y Z），按位置推会让
+    字母整体错位，S/T/V 这种就变成查不到、编码输出空字符串。
+    """
+    pairs = PIGPEN_VARIANTS.get(variant)
+    if pairs is None:
+        raise ValueError("没有 %r 这个变体；可选：%s"
+                         % (variant, "、".join(sorted(PIGPEN_VARIANTS))))
+    return ({sid: L for L, sid in pairs}, {L: sid for L, sid in pairs})
+
+
+def _pigpen_slots(text):
+    """把任意写法抽成槽位序列：`g1g5x1`、`g1 g5 x1`、`┘ □ ▽` 都能吃。
+
+    图形替换**长的先做**（`┘·` 必须在 `┘` 之前），否则带点符号会被没带点的
+    抢先吃掉一半，剩下一个孤零零的中点。
+    """
+    s = text
+    for sid in sorted(PIGPEN_GLYPH, key=lambda k: -len(PIGPEN_GLYPH[k])):
+        s = s.replace(PIGPEN_GLYPH[sid], " %s " % sid)
+    out = []
+    for tok in _PIGPEN_ID_RE.findall(s):
+        if tok not in PIGPEN_GLYPH:
+            raise ValueError("没有这个槽位：%s" % tok)
+        out.append(tok)
+    return out
+
+
+def pigpen_decode(text, variant="original"):
+    """猪圈符号 → 字母。
+
+    空白按**双空格**当词边界：两个以上连续空白切段，段内连写、段间补一个
+    空格。这跟 pigpen_encode 的输出格式对称，`--enc` 出来的串直接粘回来就能
+    还原词界。单个空格仍只当符号间隔 —— 题目里的符号本来就是一个个分开写的，
+    要是把单空格也当词界，解出来会变成「H E L L O」。
+    """
+    to_letter, _ = _pigpen_map(variant)
+    words = []
+    for seg in re.split(r"\s{2,}", text):
+        # 有的变体（agrippa / labuse）不是 26 个图形全用，碰到闲置图形给 ?，
+        # 不能直接下标 —— 那会 KeyError，整个解码挂掉
+        w = "".join(to_letter.get(s, "?") for s in _pigpen_slots(seg))
+        if w:
+            words.append(w)
+    return " ".join(words)
+
+
+def pigpen_encode(text, variant="original", as_ids=False):
+    """字母 → 猪圈符号。
+
+    `as_ids=True` 输出槽位名（`g1 g5`）而不是图形。界面上用户是点按钮选出
+    槽位的，槽位名才是那条链路里真正流通的东西 —— 图形只是给人看的皮。
+
+    原文的空格保留成**双空格**（符号之间是单空格），否则长密文会连成一片、
+    看不出词边界。解码方向不还原空格 —— 猪圈本来就常把空格省掉，能做到的
+    只是「编码时别把词界弄丢」。
+    """
+    _, to_slot = _pigpen_map(variant)
+    groups, cur = [], []
+    for c in text.upper():
+        if c in to_slot:
+            cur.append(to_slot[c])
+        elif c.isspace() and cur:
+            groups.append(cur)
+            cur = []
+    if cur:
+        groups.append(cur)
+    join = (lambda g: " ".join(g)) if as_ids else (
+        lambda g: " ".join(PIGPEN_GLYPH[s] for s in g))
+    return "  ".join(join(g) for g in groups)
+
+
 # ------------------------------------------------------------------ auto
 
 def auto(text, top=10):
@@ -1104,6 +1320,7 @@ def main():
     layout = opt("--layout", str, "qwerty")
     kb_shift = opt("--shift", int, -1)     # 原先根本没解析，界面传了也白传
     trans_key = opt("--trans", str, None)
+    pen_var = opt("--variant", str, "original")
     old = "--old" in argv
     argv = [x for x in argv if x != "--old"]
     do_dec = "--dec" in argv
@@ -1301,6 +1518,18 @@ def main():
             rows = t9(text, limit=500)
             for r in rows[:50]:
                 print("  " + r[0])
+            return 0
+
+        if cmd == "pigpen":
+            if enc:
+                print(pigpen_encode(text, pen_var))
+                # 槽位名走 stderr：图形给人看，槽位名能回灌给解码、也能拿去写
+                # 测试，两个都留着才闭环。跟本项目「结果走 stdout、说明走
+                # stderr」的约定一致。
+                sys.stderr.write("槽位：%s\n"
+                                 % pigpen_encode(text, pen_var, as_ids=True))
+                return 0
+            print(pigpen_decode(text, pen_var))
             return 0
 
         if cmd == "auto":

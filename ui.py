@@ -743,6 +743,39 @@ PAGE = r"""<!DOCTYPE html>
     border:1px solid var(--line); border-radius:4px; font-size:12px;
   }
   .bar.sub .suffix { color:var(--dim); margin-left:-3px; }
+  /* 符号选择器（猪圈）：四块 3 列小格并排，位置本身带信息，别改成一行排 */
+  .sypad { display:flex; gap:12px; align-items:flex-start; }
+  .sygrp {
+    display:grid; grid-template-columns:repeat(3, 30px);
+    grid-template-rows:14px repeat(3, 30px); gap:3px;
+  }
+  .sygrp .syt {
+    grid-column:1 / -1; grid-row:1; font-size:10px;
+    color:var(--dim); line-height:14px; white-space:nowrap;
+  }
+  .syb {
+    background:#171a20; border:1px solid var(--line); border-radius:5px;
+    color:var(--fg); padding:0; cursor:pointer; min-width:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .syb:hover { background:#222933; border-color:var(--accent); }
+  .syb:active { background:#1d2632; }
+  /* 符号预览条：贴在输入框正下方，把近似字符画成真图形。
+     textarea 只能放文本，所以这里是「看得见的图 + 能编辑的文本」并存，
+     不是把输入框换成富文本（那会波及所有选项卡）。 */
+  .symprev {
+    display:none; padding:6px 8px; background:#171a20;
+    border:1px solid var(--line); border-top:none;
+    border-radius:0 0 4px 4px; max-height:104px; overflow:auto;
+  }
+  .symprev.on { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .symprev .sypv {
+    display:inline-flex; width:26px; height:26px; align-items:center;
+    justify-content:center; background:#1f242b; border:1px solid var(--line);
+    border-radius:4px; flex:0 0 auto;
+  }
+  /* 结果栏里词与词之间的空隙：符号之间没有空格就全挤在一起了 */
+  .symprev .sysep { width:12px; flex:0 0 auto; }
   button.act {
     background:#2d3540; color:var(--fg); border:1px solid var(--line);
     padding:6px 13px; border-radius:5px; cursor:pointer; font-size:13px;
@@ -883,6 +916,7 @@ PAGE = r"""<!DOCTYPE html>
   <div class="pane">
     <label>输入 <span class="tag" id="inmeta"></span></label>
     <textarea id="input" spellcheck="false" placeholder="把密文粘到这里，或从下面选一个文件…"></textarea>
+    <div id="symprev" class="symprev"></div>
     <div class="filrow">
       <input type="file" id="file">
       <span class="hint" id="filehint">读取文件时会替换上面的内容</span>
@@ -893,6 +927,7 @@ PAGE = r"""<!DOCTYPE html>
     <div id="cands"></div>
     <textarea id="output" readonly spellcheck="false"
               placeholder="结果显示在这里。点候选里的任意一行可以把它填到输入框。"></textarea>
+    <div id="symout" class="symprev"></div>
     <div id="numout"></div>
     <div id="preview"></div>
   </div>
@@ -904,6 +939,17 @@ PAGE = r"""<!DOCTYPE html>
 const $ = (id) => document.getElementById(id);
 const input = $("input"), output = $("output"), encSel = $("enc"),
       search = $("search"), cands = $("cands"), log = $("log");
+
+// 结果框每次被写入都顺手刷新下面的符号回显。赋值点散在 9 处（成功 / 失败 /
+// 候选点选 / 进制 / 自动识别…），逐个补调用一定漏，所以在 value 上挂钩子，
+// 一处覆盖全部。updateSymOut 靠函数声明提升，这里先挂没问题。
+const _OUT_DESC = Object.getOwnPropertyDescriptor(
+  HTMLTextAreaElement.prototype, "value");
+Object.defineProperty(output, "value", {
+  configurable: true,
+  get() { return _OUT_DESC.get.call(this); },
+  set(v) { _OUT_DESC.set.call(this, v); updateSymOut(); },
+});
 
 // 访问口令：首次访问地址带 ?token=xxx，取到就存进 localStorage，
 // 之后直接打开同一个地址即可（不用每次都带）。同一 IP:端口算同一个 origin。
@@ -951,6 +997,7 @@ async function loadList() {
     if (data.error) throw new Error(data.error);
     ENCODINGS = data.encodings || [];
     PARAMSPEC = data.params || {};
+    SY_BY_GLYPH = null; SY_BY_ID = null;   // 参数表换了，符号索引得重建
     TABS = data.tabs || [];
     if (!TABS.length)
       throw new Error(data.warning || "ui_params.py 是本目录下的旧版本");
@@ -1148,9 +1195,16 @@ function renderParams() {
   const spec = PARAMSPEC[paramKey()] || [];
   box.innerHTML = "";
   box.classList.toggle("on", spec.length > 0);
+  // 切换动作时同步预览条：当前动作没有 symbols 参数就要把它清空
+  updateSymPrev();
+  updateSymOut();            // 变体换了之后结果栏的符号也要重画
   if (!spec.length) return;
   for (const p of spec) {
-    const field = document.createElement("label");
+    // ★ 符号选择器必须用 div 包，不能用 label。label 会把内部**任何位置**的
+    //   点击转发给它关联的第一个可标记元素，而 button 正好是 labelable ——
+    //   于是点哪个方块、甚至点旁边的说明文字，触发的都是第一个按钮（A=┘）。
+    //   症状：面板上随便点哪儿都出一个 ┘。
+    const field = document.createElement(p.type === "symbols" ? "div" : "label");
     field.className = "pfield";
     field.dataset.key = p.key;
     if (p.show_if) field.dataset.showif = JSON.stringify(p.show_if);
@@ -1175,6 +1229,9 @@ function renderParams() {
       ctl = document.createElement("input");
       ctl.type = "checkbox";
       ctl.checked = !!p.default;
+    } else if (p.type === "symbols") {
+      // 符号选择器：按钮本身就是输入手段，不产生参数值（见 paramValues）
+      ctl = buildSymbolPad(p);
     } else if (p.type === "int") {
       ctl = document.createElement("input");
       ctl.type = "number";
@@ -1210,6 +1267,205 @@ function renderParams() {
   refreshParamVis();
 }
 
+// ---- 符号选择器：把 slots 数据画成 SVG 按钮网格 ----
+//
+// 点一下往**主输入框**追加一个近似字符（⊓ □ └· 这些），不当参数提交 ——
+// 符号本身就是密文，走主输入最自然，后端因此只需要认一种输入（文本）。
+// 回解码时 classic.py 的 _pigpen_slots 会把近似字符换回槽位名，链条是通的。
+//
+// 形状数据由 ui_params.py 从 classic.PIGPEN_* 导出，坐标归一化在 0..1 方框里；
+// 这里只负责乘按钮尺寸，**不自己算「哪条边该画」** —— 两份形状定义迟早会分叉，
+// 分叉后界面点出来的符号跟命令行认的不是同一个字母，而且不会报错。
+function buildSymbolPad(p) {
+  const wrap = document.createElement("div");
+  wrap.className = "sypad";
+  const names = p.groups || [];
+  const byGroup = new Map();
+  for (const sp of (p.slots || [])) {
+    if (!byGroup.has(sp.group)) byGroup.set(sp.group, []);
+    byGroup.get(sp.group).push(sp);
+  }
+  for (const [gi, list] of [...byGroup.entries()].sort((a, b) => a[0] - b[0])) {
+    const cell = document.createElement("div");
+    cell.className = "sygrp";
+    const cap = document.createElement("div");
+    cap.className = "syt";
+    cap.textContent = names[gi] || ("组 " + gi);
+    cell.appendChild(cap);
+    // X 形只有四个槽位，散在 3x3 的上/左/右/下 —— 空位留白是有意的：
+    // 位置本身就是线索（上三角就在上面），排成一行反而要逐个认形状。
+    for (const sp of list.sort((a, b) => (a.row * 3 + a.col) - (b.row * 3 + b.col))) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "syb";
+      b.title = sp.glyph + "（" + sp.id + "）";
+      b.innerHTML = syGlyph(sp, 26);
+      b.style.gridRow = String(sp.row + 2);      // 第 1 行留给组名
+      b.style.gridColumn = String(sp.col + 1);
+      b.addEventListener("click", () => {
+        const cur = input.value.replace(/\s+$/, "");
+        input.value = (cur ? cur + " " : "") + sp.glyph;
+        input.dispatchEvent(new Event("input"));
+        input.focus();
+      });
+      cell.appendChild(b);
+    }
+    wrap.appendChild(cell);
+  }
+  return wrap;
+}
+
+function syGlyph(sp, size) {
+  // 内边距按面板比例取（原版 40px 按钮配 7px → 30px 该是 5px）。
+  // 写成固定 6 会让符号区偏小一个像素级，X 组的点就更容易显得贴边。
+  const pad = Math.round(size * 0.175), inner = size - pad * 2;
+  const px = (v) => (pad + v * inner).toFixed(1);
+  let d = "";
+  for (const [a, b] of (sp.segs || []))
+    d += "M" + px(a[0]) + "," + px(a[1]) + "L" + px(b[0]) + "," + px(b[1]);
+  let s = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' +
+          size + ' ' + size + '" aria-hidden="true">' +
+          '<path d="' + d + '" fill="none" stroke="currentColor"' +
+          ' stroke-width="1.7" stroke-linecap="round"/>';
+  if (sp.dot)
+    s += '<circle cx="' + px(sp.dot[0]) + '" cy="' + px(sp.dot[1]) +
+         '" r="2.1" fill="currentColor"/>';
+  return s + "</svg>";
+}
+
+// ---- 符号预览条：把输入框里的近似字符实时画成 SVG ----
+//
+// 为什么不做进输入框：textarea 只能放文本。换成 contenteditable 虽然能实现
+// 「输入框里直接是图」，但输入框是全站共用的（编码 / 古典 / 哈希 / 隐写 /
+// 进制都靠它），value 读取、粘贴、光标、撤销全要跟着重写 —— 代价远大于收益。
+// 这里让**文本留在输入框、图形贴在它下面**，两边实时同步。
+let SY_BY_GLYPH = null, SY_BY_ID = null;
+const SY_MAX_SHOW = 200;      // 粘一大段乱码时别把界面拖死
+
+function syIndex() {
+  if (SY_BY_GLYPH) return;
+  SY_BY_GLYPH = {}; SY_BY_ID = {};
+  for (const k in PARAMSPEC) {
+    for (const p of (PARAMSPEC[k] || [])) {
+      if (p.type !== "symbols") continue;
+      for (const sp of (p.slots || [])) {
+        SY_BY_GLYPH[sp.glyph] = sp;
+        SY_BY_ID[sp.id] = sp;
+      }
+    }
+  }
+}
+
+// 解析规则必须和 classic.py 的 _pigpen_slots 一致：近似字符**长的先换**
+// （└· 要在 └ 之前），否则带点符号会被没带点的吃掉一半，剩个孤零零的中点。
+function syTokens(text) {
+  syIndex();
+  let s = text;
+  for (const g of Object.keys(SY_BY_GLYPH).sort((a, b) => b.length - a.length))
+    if (s.indexOf(g) >= 0)
+      s = s.split(g).join(" \u0001" + SY_BY_GLYPH[g].id + "\u0001 ");
+  const out = [];
+  const re = /(?:gd|xd|g|x)\d+/g;
+  let m;
+  while ((m = re.exec(s))) if (SY_BY_ID[m[0]]) out.push(SY_BY_ID[m[0]]);
+  return out;
+}
+
+function updateSymPrev() {
+  const box = $("symprev");
+  if (!box) return;
+  const on = (PARAMSPEC[paramKey()] || []).some(p => p.type === "symbols");
+  const toks = on ? syTokens(input.value) : [];
+  box.classList.toggle("on", toks.length > 0);
+  box.innerHTML = toks.slice(0, SY_MAX_SHOW).map(sp =>
+    '<span class="sypv" title="' + sp.id + '">' + syGlyph(sp, 20) +
+    "</span>").join("");
+}
+
+// ---- 符号动作的公共取数 ----
+function symSpec() {
+  return (PARAMSPEC[paramKey()] || []).find(p => p.type === "symbols");
+}
+
+// 当前变体对应的「字母 → 槽位」。变体下拉变了要重取，所以每次现读。
+function symMap(sym) {
+  const vsel = $("p_variant");
+  const v = (vsel && vsel.value) || "original";
+  return (sym && sym.maps && (sym.maps[v] || sym.maps.original)) || {};
+}
+
+// ---- 结果栏的符号回显 ----
+//
+// ★ 两个方向都得认，因为实时双向模式下结果可能是任何一种：
+//     输入符号 → 结果字母 → 这里把字母按变体画回符号（对原题确认）
+//     输入字母 → 结果符号 → 这里直接把符号画出来
+//   早先只处理了「字母 → 符号」这一种，于是加密之后结果栏是空的（结果是符号
+//   字符，认不出来），解码之后反倒有内容 —— 看起来像是方向反了。
+function updateSymOut() {
+  const box = $("symout");
+  if (!box || !output) return;
+  const sym = symSpec();
+  const text = output.value || "";
+  if (!sym || !text.trim()) {
+    box.classList.remove("on"); box.innerHTML = ""; return;
+  }
+  syIndex();
+  // 先按「符号」解析（编码方向的输出），解析不出来再按「字母 → 槽位」
+  let items = syTokens(text).map(sp => ({sp: sp, ch: ""}));
+  if (!items.length) {
+    const map = symMap(sym);
+    items = [];
+    for (const ch of text.toUpperCase()) {
+      if (map[ch] && SY_BY_ID[map[ch]]) items.push({sp: SY_BY_ID[map[ch]], ch: ch});
+      else if (/\s/.test(ch) && items.length) items.push({sp: null, ch: ""});
+    }
+  }
+  const parts = [];
+  for (const it of items.slice(0, SY_MAX_SHOW * 2)) {
+    if (!it.sp) { parts.push('<span class="sysep"></span>'); continue; }
+    const tip = it.ch ? (it.ch + " = " + it.sp.id) : it.sp.id;
+    parts.push('<span class="sypv" title="' + tip + '">' +
+               syGlyph(it.sp, 20) + "</span>");
+  }
+  box.classList.toggle("on", parts.length > 0);
+  box.innerHTML = parts.join("");
+}
+
+// ---- 实时双向换算：输入一变就出结果，不用点「执行」 ----
+//
+// 方向由输入自己判定：认出任何一个符号 → 解码；否则当成字母 → 编码。
+// 这样就不需要「加密」勾选框了，也不会因为勾反而拿到一串看着像答案的垃圾。
+// 编码格式跟后端 pigpen_encode 保持一致（符号之间空格分隔、词之间多一个空格）。
+function pigpenLive() {
+  const sym = symSpec();
+  if (!sym || !sym.live || !output) return false;
+  const raw = input.value;
+  if (!raw.trim()) { output.value = ""; return true; }
+  syIndex();
+  const toks = syTokens(raw);
+  if (toks.length) {                                  // 有符号 → 解码
+    const inv = {};
+    for (const [L, sid] of Object.entries(symMap(sym))) inv[sid] = L;
+    // 双空格当词边界，规则跟编码方向和 classic.py 的 pigpen_decode 一致。
+    // 单空格只能算符号之间的间隔 —— 题目里的符号本来就是一个个分开写的，
+    // 按单空格也分词的话会解出「H E L L O」。
+    const words = raw.split(/\s{2,}/)
+      .map(seg => syTokens(seg).map(sp => inv[sp.id] || "?").join(""))
+      .filter(Boolean);
+    output.value = words.join(" ");
+  } else {                                            // 没符号 → 编码
+    const map = symMap(sym);
+    const out = [];
+    for (const ch of raw.toUpperCase()) {
+      if (map[ch] && SY_BY_ID[map[ch]]) out.push(SY_BY_ID[map[ch]].glyph);
+      // 词边界用空串占位：join(" ") 之后正好是两个空格，跟后端一个格式
+      else if (/\s/.test(ch) && out.length && out[out.length - 1] !== "") out.push("");
+    }
+    output.value = out.join(" ");
+  }
+  return true;
+}
+
 function refreshParamVis() {
   for (const el of $("params").querySelectorAll(".pfield")) {
     const cond = el.dataset.showif;
@@ -1229,6 +1485,8 @@ function paramValues() {
   for (const p of (PARAMSPEC[paramKey()] || [])) {
     const ctl = $("p_" + p.key);
     if (!ctl) continue;
+    // 符号选择器的按钮直接把字符写进主输入框，本身没有值可提交
+    if (p.type === "symbols") continue;
     if (p.type === "check") {
       if (ctl.checked) out[p.key] = true;      // 只有勾上才作为开关发出
     } else if (p.type === "int") {
@@ -1309,6 +1567,12 @@ function switchTab(id) {
 // classic / hashcrypto / stego 的执行入口：参数由参数表收集，原样交给后端
 async function doRun() {
   if (currentTab === "num") return doNum();
+  // 实时符号动作（猪圈）在本地就算完了，不打后端：后端那条路是单向的，
+  // 方向得靠 enc 参数，而界面上已经不提供这个开关了。
+  if (pigpenLive()) {
+    say("已实时换算（输入一变就跟着变，不用点执行）", "ok");
+    return;
+  }
   const payload = {
     tab: currentTab,
     action: encSel.value,
@@ -1401,12 +1665,15 @@ $("btn-run").onclick = doRun;
 // 改下拉没反应，得在输入框里敲一下才会刷。
 $("params").addEventListener("change", () => {
   if (currentTab === "num") doNum();
+  pigpenLive();            // 换变体之后：重算结果，顺带刷新两边图形
 });
 
 search.oninput = fillFuncs;
 encSel.onchange = renderParams;
 
 input.addEventListener("input", updateMeta);
+input.addEventListener("input", updateSymPrev);
+input.addEventListener("input", pigpenLive);
 input.addEventListener("input", () => {
   if (currentTab !== "num") return;
   clearTimeout(numTimer);
@@ -1447,6 +1714,8 @@ $("file").onchange = async (e) => {
 document.body.dataset.tab = "codec";
 loadList();
 updateMeta();
+updateSymPrev();
+pigpenLive();
 input.focus();
 </script>
 </body>
