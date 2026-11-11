@@ -730,7 +730,14 @@ for _i, _ch in enumerate(_letters):
 POLYBIUS_REV = {v: k for k, v in POLYBIUS_GRID.items()}
 
 
-def polybius_decode(s, merge_ij=True):
+def polybius_decode(s):
+    """波利比奥斯方阵解码。
+
+    方阵固定 5×5：字母表是 `abcdefghiklmnopqrstuvwxyz`（**去掉 j**），
+    i/j 天然合一一格。所以以前那个 `merge_ij` 参数是个死参数 —— 传 False
+    也无从实现（没有 26 格的表可换），传 True 是唯一行为。删掉，别留一个
+    「看起来能调」却完全不起作用的旋钮。
+    """
     digits = re.sub(r"\D", "", s)
     if len(digits) % 2:
         raise ValueError("数字个数必须是偶数")
@@ -860,11 +867,23 @@ ADFGX_COLS = "ADFGX"
 
 def adfgx_dec(s, key, trans_key=None):
     sq = adfgx_square(key)
+    # 只允许 A/D/F/G/X，外加空白和常见分组标点。
+    # 原来两处都会**静默吞数据**：`if c in ADFGX_ROWS` 把任何非法字符滤掉，
+    # 而循环上界 `len(letters) - 1` 又把奇数长度的最后一个字母悄悄丢掉 ——
+    # `ADFXZQ`（Z/Q 混进来）和 `ADFXA`（少一位）解出的是同一个结果，
+    # 用户完全看不出自己输入有问题。
+    seps = set(" \t\r\n-_,;:|·、，；：")
+    bad = sorted(set(s.upper()) - set(ADFGX_ROWS) - seps)
+    if bad:
+        raise ValueError("ADFGX 串里混进了 A/D/F/G/X 以外的字符：%s"
+                         % " ".join(repr(c) for c in bad[:6]))
     letters = "".join(c for c in s.upper() if c in ADFGX_ROWS)
+    if len(letters) % 2:
+        raise ValueError("ADFGX 字母数是奇数（%d），每两个一组" % len(letters))
     if trans_key:
         letters = columnar_dec(letters, trans_key)
     out = []
-    for i in range(0, len(letters) - 1, 2):
+    for i in range(0, len(letters), 2):
         r = ADFGX_ROWS.index(letters[i])
         c = ADFGX_COLS.index(letters[i + 1])
         out.append(sq[r][c])
@@ -1295,6 +1314,16 @@ def _err(msg):
     sys.stderr.flush()
 
 
+def _bad(msg):
+    """参数不合法：报错并以用法错误的退出码（2）结束。
+
+    `main()` 里那些 `opt()` 是闭包，没法直接 return 到调用方；直接 `int()`
+    不接异常又会甩一屏 Python traceback。
+    """
+    _err(msg)
+    raise SystemExit(2)
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
@@ -1305,7 +1334,12 @@ def main():
     top = 10
     if "-n" in argv:
         i = argv.index("-n")
-        top = int(argv[i + 1])
+        if i + 1 >= len(argv):
+            _bad("-n 后面要跟一个数字（显示前 N 条）")
+        try:
+            top = int(argv[i + 1])
+        except ValueError:
+            _bad("-n 要跟一个数字，收到：%r" % argv[i + 1])
         argv = argv[:i] + argv[i + 1:]
 
     enc = "--enc" in argv or "-e" in argv
@@ -1315,7 +1349,12 @@ def main():
         nonlocal argv
         if name in argv:
             i = argv.index(name)
-            v = cast(argv[i + 1])
+            if i + 1 >= len(argv):
+                _bad("%s 后面要跟一个值" % name)
+            try:
+                v = cast(argv[i + 1])
+            except (TypeError, ValueError):
+                _bad("%s 的值不合法：%r" % (name, argv[i + 1]))
             argv = argv[:i] + argv[i + 2:]   # 同时吃掉选项名和它的值
             return v
         return default

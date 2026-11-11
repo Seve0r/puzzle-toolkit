@@ -213,6 +213,10 @@ classic.py pigpen --enc "HELLO WORLD"   # ⊓ □ └· └· ⊏·  ▽· ⊏·
 3. 字母频率明显不像单表替换（IC 明显低于 0.0667）→ 上 `vigcrack`
 4. 结果是 5×5 坐标、A/D/F/G/X 字母、或 AB/01 分组 → 分别是 `polybius`、`adfgx`、`bacon`
 
+`polybius` 的方阵**固定 5×5、i/j 合一格**（字母表 `abcdefghikl...`，去掉 j），
+没有 6×6 变体可切。以前函数签名上挂着个 `merge_ij=True` 的参数，但函数体里
+一次都没用过——传 `False` 也无从实现，纯属「看着能调、其实没用」的旋钮，已删。
+
 ## 没有内置的
 
 - **恩尼格玛**：状态机复杂，用现成工具（py-enigma）比自己写靠谱。

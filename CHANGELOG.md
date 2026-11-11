@@ -388,6 +388,47 @@
   补的回归：`codec-edge-009`（hex 奇数）、`010`（bin 末尾 NUL）、
   `011` / `012` / `013`（b58 正常 / 带空白 / 非法字符）。
 
+- **进制串里混进的非法字符不再被静默吞掉**。`bin` / `dec` / `oct` 三个解码器
+  原来分别用 `re.sub(r"[^01]")` 和 `re.findall(r"\d+")` 把不认识的字符**当成
+  分隔符丢掉**，于是：
+
+  ```bash
+  codec.py dec dec '0x48'        # 拆成 0 和 48 → \x00 + "0"
+  codec.py dec bin '01000001X'   # X 被丢掉 → "A"
+  codec.py dec bin '01000O01'    # OCR 把 0 认成 O → O 被丢弃 → 位数刚好凑 8 → 静默错位
+  ```
+
+  最后一条最要命：结果看着完全正常，但你解的是**错的位**。现在只允许数字和
+  显式分隔符（空白、`, ; : | . _ - +`、全角标点），别的字符一律报错并点名。
+
+- **`adfgx_dec` 有两处静默吞数据**。`classic.py adfgx` 解码时，`if c in ADFGX_ROWS`
+  把任何 A/D/F/G/X 以外的字符过滤掉，而循环上界写成 `len(letters) - 1` 又把
+  **奇数长度的最后一位**悄悄丢掉。于是这两种输入解出的是同一个结果：
+
+  ```bash
+  classic.py adfgx 'ADFXZQ' --key bunker   # Z/Q 被滤掉
+  classic.py adfgx 'ADFXA'  --key bunker   # 末尾 A 被丢掉
+  # 两者都得到 "um"，用户完全看不出自己输错了
+  ```
+
+  现在非法字符和奇数长度都直接报错；空白和 `- _ , ; : |` 这类分组标点仍照旧允许。
+
+- **`dec wabun` 的空格往返丢失**。编码时空格被写成一个单独的 `/` 再 join，
+  得到三个斜杠；解码端 `re.split(r"[/\s]+")` 又把连续斜杠一律归一 —— 于是
+  `ア ア` 编出来再解回去只剩 `ああ`，编码永远还原不了原文。
+  现在编码用**空 token** 占位、解码按**斜杠个数**还原：斜杠数 = 1 + 空格数。
+  `ア ア` → `--.--//--.--` → `あ あ`，真正能往返。
+
+- **`polybius_decode` 的 `merge_ij` 是死参数**。方阵固定 5×5（字母表去掉 j），
+  i/j 天然合一格，传 `False` 也无从实现。删掉，不留「看着能调、其实没用」的旋钮。
+
+- **四处 CLI 参数会甩 Python traceback**。`convert -r abc`、`dec hex -r xyz`、
+  `auto --depth abc`、`railfence --rails abc` —— 都是直接 `int()` 没接异常，
+  用户看到一屏内部栈而不是「这个值不对」。`classic.py` 的 `opt()` 是公共入口
+  （覆盖 `--key` / `--a` / `--b` / `--rails` / `--shift`），一并加了检查。
+
+  补的回归：`codec-edge-014/015/016`、`codec-error-007`、`classic-error-007`。
+
 - **错误信息统一改走 `stderr`**。五个脚本里只有 `num.py` 一直是这么做的，
   其余四个都把「失败：…」「缺少输入文本」「未知子命令」这类错误 `print` 到了
   `stdout` —— 而且 `codec.py` 自己内部还不统一（`convert` 走 stderr，

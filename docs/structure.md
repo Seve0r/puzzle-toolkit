@@ -8,8 +8,8 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 3065 | 182 | 16 | `main` 356 行 | 编码识别与解码 |
-| `classic.py` | 1559 | 100 | 18 | `main` 258 行 | 古典密码 |
+| `codec.py` | 3122 | 184 | 16 | `main` 356 行 | 编码识别与解码 |
+| `classic.py` | 1598 | 101 | 18 | `main` 258 行 | 古典密码 |
 | `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
@@ -26,21 +26,21 @@
 |---|---|---:|---:|---|
 | 文件头 | 1–63 | 63 | — | docstring（也就是 `--help` 的内容）+ import |
 | 基础设施 | 64–154 | 91 | 11 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口、`_hint`（`-q` 的静默出口） |
-| Base 系列 | 155–390 | 236 | 25 | base64/32/58/62/85/91/36 等 8 对 |
-| 进制 / 二进制串 | 391–496 | 106 | 10 | hex·bin·dec·oct·block36 |
-| Punycode | 497–545 | 49 | 4 | IDN 编码 |
-| 文本转义 | 546–624 | 79 | 10 | url / html / unicode / js / quoted-printable |
-| 字符替换 | 625–676 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
-| 摩斯 | 677–724 | 48 | 4 | 国际摩斯 + 两张表 |
-| 和文モールス | 725–878 | 154 | 11 | Wabun code + 6 张表/工具 |
-| 盲文 | 879–966 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
-| 压缩流与字符编码 | 967–1075 | 109 | 12 | zlib/uu + utf16 + gbk |
-| UTF-32 | 1076–1127 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1128–1968 | 841 | 27 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 1969–2336 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2337–2402 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2403–2655 | 253 | 13 | `convert` |
-| CLI | 2656–3065 | 410 | 3 | `read_input` → `main` |
+| Base 系列 | 155–413 | 259 | 27 | base64/32/58/62/85/91/36 等 8 对 |
+| 进制 / 二进制串 | 414–522 | 109 | 10 | hex·bin·dec·oct·block36 |
+| Punycode | 523–571 | 49 | 4 | IDN 编码 |
+| 文本转义 | 572–650 | 79 | 10 | url / html / unicode / js / quoted-printable |
+| 字符替换 | 651–702 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
+| 摩斯 | 703–750 | 48 | 4 | 国际摩斯 + 两张表 |
+| 和文モールス | 751–921 | 171 | 11 | Wabun code + 6 张表/工具 |
+| 盲文 | 922–1009 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
+| 压缩流与字符编码 | 1010–1118 | 109 | 12 | zlib/uu + utf16 + gbk |
+| UTF-32 | 1119–1170 | 52 | 7 | utf32/be/le |
+| **乱码还原** | 1171–2011 | 841 | 27 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 2012–2379 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2380–2445 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2446–2698 | 253 | 13 | `convert` |
+| CLI | 2699–3122 | 424 | 3 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -58,35 +58,35 @@
   as_text / _bin_str             bytes → str。_bin_str 用 latin-1 保证 1 字符 = 1 字节
   _QUIET / _hint(msg)            诊断提示的统一出口，`-q` 时静默；错误信息不走这里
 
-【Base 系列】L155-390
+【Base 系列】L155-413
   base64/b64 · base64url · base32/b32 · base32hex/b32hex · base16/hex
   base58/b58/base58btc · base62/b62 · base85/b85 · ascii85/a85
   base91/b91 · base36/b36
   常量：B58_ALPHABET、B62_SETS（三套字母表）、B91
 
-【进制 / 二进制串】L391-496
+【进制 / 二进制串】L414-522
   bin/binary · dec/decimal · oct/octal   ← 都是「一串数 → 字节」
   blocks_to_bytes + _B36_ALPHA + block36/b36x2   ← 「两位 base36 = 一字节」
   注意 base36 和 block36 不是一回事：前者整串当大整数，后者每两位一个字节
 
-【Punycode】L497-545       punycode/puny/idn
-【文本转义】L546-624       url · html · unicode · js · qp
-【字符替换】L625-676       _rot_n → rot13 / rot47 / atbash（自反：enc 就是再 dec 一次）
+【Punycode】L523-571       punycode/puny/idn
+【文本转义】L572-650       url · html · unicode · js · qp
+【字符替换】L651-702       _rot_n → rot13 / rot47 / atbash（自反：enc 就是再 dec 一次）
 
-【摩斯】L677-724           MORSE / MORSE_REV + morse
-【和文モールス】L725-878   WABUN / WABUN_REV / _WABUN_DAKU / _WABUN_HANDAKU
+【摩斯】L703-750           MORSE / MORSE_REV + morse
+【和文モールス】L751-921   WABUN / WABUN_REV / _WABUN_DAKU / _WABUN_HANDAKU
                            _kata2hira / _hira2kata / _wabun_near / _WABUN_SMALL
                            注意：没有小假名（ャュョッ）的独立符号，统一按大假名送
 
-【盲文】L879-966           braille（解+编）、braillebits（只解，点阵位流形态）
-【压缩流与字符编码】L967-1075
+【盲文】L922-1009           braille（解+编）、braillebits（只解，点阵位流形态）
+【压缩流与字符编码】L1010-1118
   compress（gzip/zlib/bz2/deflate/inflate 共用一对函数）· uu
   utf16/be/le · gbk
   二进制结果统一用 latin-1 承载（1 字符 = 1 字节），要落文件请套 enc hex
 
-【UTF-32】L1076-1127       _u32_input（输入归一）+ utf32/be/le
+【UTF-32】L1119-1170       _u32_input（输入归一）+ utf32/be/le
 
-【评分 / 识别】L1969-2336
+【评分 / 识别】L2012-2379
   score                    可读性打分（比例类，短串会失真）
   acceptable               长度骤减 / 控制字符的否决
   structural_candidates    结构指纹：这串像什么编码
@@ -95,9 +95,9 @@
   auto                     递归剥皮，默认深度 3
   COMMON_EN / COMMON_CN / CJK_RE / STRUCT_BONUS / LOOSE_ORDER / MIN_OUT_RATIO
 
-【矩阵重排】L2337-2402     _blocks / _read / grid_variants
+【矩阵重排】L2380-2445     _blocks / _read / grid_variants
 
-【编码 × 进制】L2403-2655
+【编码 × 进制】L2446-2698
   _RADIX_*（字符集、标签、分隔符）
   _radix_clean / _radix_bad_chars   ← 先去分隔符，再校验字符集
   radix_to_bytes                     ← 报错顺序：字符集 → 长度 → 范围
@@ -105,7 +105,7 @@
   bytes_to_text                      ← auto 是「挑一个」不是「它就是」
   convert_decode                     ← CLI 与界面共用
 
-【CLI】L2656-3065
+【CLI】L2699-3122
   read_input    多吃一个参数：`-f` 文件 / 管道 / argv 拼接
   main          手写参数解析 + 子命令分发（没有通用 opt 库）
 ```
@@ -118,7 +118,7 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1640）
+#### 3.1 调度顺序（`_d_mojibake`, L1683）
 
 ```
 _d_mojibake(s)                ← 进来先 _mb_clean(s)：去掉首尾 ASCII 空白
@@ -212,7 +212,7 @@ _MOJIBAKE_FAMILIES   上两者的族分组
 #### 3.6 实验开关
 
 ```python
-_ENABLE_LATIN1_MOJIBAKE = False   # L1194
+_ENABLE_LATIN1_MOJIBAKE = False   # L1237
 ```
 
 同时控制三处：`mojibake_latin1()`、`_encode_back()` 里的 NFC 归一、
@@ -226,12 +226,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1194
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2069 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2112 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1742）/ `bytes_to_text`（L2531） |
+| 报告里的编码名不对 | `text_encoding_name`（L1785）/ `bytes_to_text`（L2574） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2457）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2706）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2500）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2749）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---
@@ -274,7 +274,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1194
 
 ## 二、`classic.py`
 
-1559 行 / 100 个顶层对象 / 18 个分区。
+1598 行 / 101 个顶层对象 / 18 个分区。
 
 **结构特点：一个密码一个区，`xxx_dec` 和 `xxx_enc` 相邻。** 这点和 `codec.py`
 相反——codec 曾经把编码器全堆在文件末尾（2026-11 才归位），classic 从一开始
@@ -307,8 +307,8 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1194
 |---|---|
 | 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
 | 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
-| 加进 auto | `auto`（L1197 附近），把新密码接进它的候选循环 |
-| 加子命令 | `main`（L1298，258 行，手写参数解析） |
+| 加进 auto | `auto`（L1216 附近），把新密码接进它的候选循环 |
+| 加子命令 | `main`（L1327，258 行，手写参数解析） |
 
 ### 注意
 

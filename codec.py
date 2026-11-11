@@ -202,6 +202,29 @@ def _e_b32hex(s):
     return base64.b32hexencode(as_bytes(s)).decode()
 
 
+# 进制串里允许当分隔符用的字符：空白 + 各种视觉分隔符（含全角标点）。
+# bin / dec / oct 共用；hex 有自己的剥离规则（还要吃掉 0x / \x 前缀）。
+_RADIX_SEPS = set(" \t\r\n,;:|._-+·、，；：。\u3000")
+
+
+def _check_radix_chars(s, allowed, label):
+    """进制串里除了数字和分隔符，不许有别的东西。
+
+    踩过：`bin` / `dec` / `oct` 三个解码器原来用 `re.sub(r"[^01]")` 或
+    `re.findall(r"\\d+")` 把不认识的字符**静默丢掉**，于是
+
+      · `dec dec "0x48"` 被拆成 0 和 48，解出 `\\x00` 加 `0`
+      · `dec bin "01000O01"` 里的 O（OCR 把 0 认成 O）被当分隔符吃掉，
+        位数刚好凑成 8 的倍数就**静默错位**，结果看着像解对了
+
+    这两种都是「给不出正确结果时给一个看起来正常的错误结果」，比报错糟得多。
+    """
+    bad = sorted(set(s) - set(allowed) - _RADIX_SEPS)
+    if bad:
+        raise ValueError("%s里混进了不该有的字符：%s"
+                         % (label, " ".join(repr(c) for c in bad[:6])))
+
+
 @dec_name("base16", "hex")
 def _d_hex(s):
     s = re.sub(r"(0x|\\x|[\s:,])", "", s)
@@ -392,7 +415,8 @@ def _e_b36(s):
 
 @dec_name("bin", "binary")
 def _d_bin(s):
-    bits = re.sub(r"[^01]", "", s)
+    _check_radix_chars(s, "01", "二进制串")
+    bits = "".join(c for c in s if c in "01")
     if len(bits) % 8:
         raise ValueError("二进制位数 %d 不是 8 的倍数，每 8 位表示一个字节"
                          % len(bits))
@@ -411,6 +435,7 @@ def _e_bin(s):
 
 @dec_name("dec", "decimal")
 def _d_dec(s):
+    _check_radix_chars(s, "0123456789", "十进制串")
     nums = [int(x) for x in re.findall(r"\d+", s)]
     if not nums:
         raise ValueError("没有数字")
@@ -426,6 +451,7 @@ def _e_dec(s):
 
 @dec_name("oct", "octal")
 def _d_oct(s):
+    _check_radix_chars(s, "01234567", "八进制串")
     nums = [int(x, 8) for x in re.findall(r"[0-7]+", s)]
     if not nums or max(nums) > 255:
         raise ValueError("不是合法八进制")
@@ -800,12 +826,26 @@ def _d_wabun(s):
     t = (s.replace("·", ".").replace("•", ".").replace("・", ".")
           .replace("—", "-").replace("－", "-").replace("–", "-")
           .replace("−", "-").replace("_", "-"))
-    segs = [x for x in re.split(r"[/\s]+", t.strip()) if x]
-    if not segs:
+    # 空白一律当单斜杠：`/` 和空格两种写法在原文里含义相同。
+    t = re.sub(r"\s+", "/", t.strip())
+    if not t:
         raise ValueError("空输入")
+    # 保留分隔符切分：**斜杠个数 = 1 + 中间的空格数**（编码端用空 token 表示
+    # 空格，join 之后正好多一个斜杠）。原来 `re.split(r"[/\s]+")` 把连续斜杠
+    # 全归一，于是 `ア ア` 编出来的 `---///---` 解回来只剩 `ああ` —— 空格凭空
+    # 消失，编码永远还原不了原文。
+    segs = re.split(r"(/+)", t)
     out = []
     unknown = []
-    for idx, seg in enumerate(segs, 1):
+    idx = 0
+    for k, seg in enumerate(segs):
+        if k % 2:                       # 奇数位是分隔符
+            if len(seg) > 1:
+                out.append(" " * (len(seg) - 1))
+            continue
+        if not seg:
+            continue
+        idx += 1
         cands = WABUN_REV.get(seg)
         if not cands:
             out.append("?")                 # 表里没有这个码
@@ -858,22 +898,25 @@ def _e_wabun(s):
     """
     rev_daku = {v: k for k, v in _WABUN_DAKU.items()}
     rev_han = {v: k for k, v in _WABUN_HANDAKU.items()}
-    out = []
+    parts = []
     for ch in _hira2kata(s):
         ch = _WABUN_SMALL.get(ch, ch)
         if ch in rev_daku:
-            out.append(WABUN[rev_daku[ch]])
-            out.append(WABUN["゛"])
+            parts.append(WABUN[rev_daku[ch]])
+            parts.append(WABUN["゛"])
         elif ch in rev_han:
-            out.append(WABUN[rev_han[ch]])
-            out.append(WABUN["゜"])
+            parts.append(WABUN[rev_han[ch]])
+            parts.append(WABUN["゜"])
         elif ch in WABUN:
-            out.append(WABUN[ch])
+            parts.append(WABUN[ch])
         elif ch in " 　\n\t":
-            out.append("/")          # 词间分隔，解码端认
+            # 空格占一个**空 token**：join 之后就是两个斜杠，解码端据此还原。
+            # 原来 append("/") 再 join 会得到三个斜杠，而解码把连续斜杠全归一，
+            # 于是 `ア ア` 编出来解回去只剩 `ああ` —— 编码永远还原不了原文。
+            parts.append("")
         else:
             raise ValueError("和文モールス表里没有这个字符：%r" % ch)
-    return "/".join(out)
+    return "/".join(parts)
 
 
 # ---------------------------------------------------------------- 盲文
@@ -2735,7 +2778,14 @@ def main():
             if i + 1 >= len(argv):
                 _err("%s 后面要跟一个进制（2/8/10/16/36）" % flag)
                 return 2
-            radix_opt = int(argv[i + 1])
+            # 直接 int() 不接异常的话，`-r abc` 会甩一屏 Python traceback ——
+            # 用户看到的是内部栈，而不是「这个值不对」。
+            try:
+                radix_opt = int(argv[i + 1])
+            except ValueError:
+                _err("%s 要跟一个数字（2/8/10/16/36），收到：%r"
+                     % (flag, argv[i + 1]))
+                return 2
             argv = argv[:i] + argv[i + 2:]
             break
     enc_opt = "auto"
@@ -2753,7 +2803,14 @@ def main():
     for flag in ("--depth", "-d"):
         if flag in argv:
             i = argv.index(flag)
-            depth = int(argv[i + 1])
+            if i + 1 >= len(argv):
+                _err("%s 后面要跟一个数字（还原层数）" % flag)
+                return 2
+            try:
+                depth = int(argv[i + 1])
+            except ValueError:
+                _err("%s 要跟一个数字，收到：%r" % (flag, argv[i + 1]))
+                return 2
             argv = argv[:i] + argv[i + 2:]
 
     # --from <源编码> / --to <目标编码>：显式指定乱码的编码对，完全不猜。

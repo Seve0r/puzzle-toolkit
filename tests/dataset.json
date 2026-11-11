@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 243,
+  "count": 250,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -5221,6 +5221,165 @@
     "b58"
    ],
    "note": "非法字符给明确提示并点名易混字符，不再抛 substring not found"
+  },
+  {
+   "id": "codec-edge-014",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "wabun",
+    "--.--//--.--",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "あ あ"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "wabun"
+   ],
+   "note": "斜杠个数 = 1 + 空格数。原来连续斜杠全归一，`ア ア` 编出来再解回去空格凭空消失，编码永远还原不了原文"
+  },
+  {
+   "id": "codec-edge-015",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "bin",
+    "01000001X",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "二进制串里混进了不该有的字符：'X'"
+    ]
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "bin"
+   ],
+   "note": "非 0/1 字符报错而不是静默丢弃。OCR 把 0 认成 O 时，O 会被当成分隔符吃掉，位数刚好凑成 8 的倍数就静默错位"
+  },
+  {
+   "id": "codec-edge-016",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "dec",
+    "0x48",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "十进制串里混进了不该有的字符"
+    ]
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "dec"
+   ],
+   "note": "原来 re.findall(r\"\\d+\") 把 0x48 拆成 0 和 48，解出 \\x00 加 0"
+  },
+  {
+   "id": "codec-error-007",
+   "script": "codec.py",
+   "args": [
+    "convert",
+    "ff",
+    "-r",
+    "abc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "-r 要跟一个数字"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "convert"
+   ],
+   "note": "参数不是数字时报人话，不甩 Python traceback"
+  },
+  {
+   "id": "classic-error-007",
+   "script": "classic.py",
+   "args": [
+    "railfence",
+    "abc",
+    "--rails",
+    "abc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--rails 的值不合法"
+    ]
+   },
+   "tags": [
+    "error",
+    "classic",
+    "railfence"
+   ],
+   "note": "opt() 的 cast 失败要报人话；原来直接 int('abc') 抛 traceback"
+  },
+  {
+   "id": "classic-error-008",
+   "script": "classic.py",
+   "args": [
+    "adfgx",
+    "ADFXZQ",
+    "--key",
+    "bunker"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "ADFGX 串里混进了 A/D/F/G/X 以外的字符"
+    ]
+   },
+   "tags": [
+    "error",
+    "classic",
+    "adfgx"
+   ],
+   "note": "非 ADFGX 字符报错而不是静默过滤。原来 ADFXZQ 会把 ZQ 滤掉、解出和 ADFX 一样的结果"
+  },
+  {
+   "id": "classic-error-009",
+   "script": "classic.py",
+   "args": [
+    "adfgx",
+    "ADFXA",
+    "--key",
+    "bunker"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "ADFGX 字母数是奇数（5）"
+    ]
+   },
+   "tags": [
+    "error",
+    "classic",
+    "adfgx"
+   ],
+   "note": "奇数长度报错。原来循环上界写成 len(letters)-1，会把最后一位悄悄丢掉"
   }
  ]
 }
