@@ -346,6 +346,15 @@
 
 ### 修复
 
+- **`ui.py` 把脚本的退出码丢了，报错全当成功**。`_run_subcommand` 直接调
+  `module.main()` 却不要返回值，而 `main()` 的返回值就是退出码（CLI 入口是
+  `sys.exit(main(...))`）。于是 classic / hashcrypto / stego 里那些
+  `_err(...); return 1` 全被吞掉：`code` 恒为 0 → 接口回 `ok: true` → 界面把
+  报错当成功显示（结果框空着，错误只出现在底部日志里，看着像「解出来是空的」）。
+
+  实测 `classic adfgx 'ADFXZQ'`（非法字符）：修复前 `ok=true`，修复后
+  `ok=false` 并带错误文本。这条是修 adfgx 时顺着线上接口的返回值发现的。
+
 - **`ui.py` 监听非本机地址时口令形同虚设**。`--host 0.0.0.0` 不给 `--token`
   时，`_EXPECT_TOKEN` 一直是 `None`，`_authed()` 恒真 —— 等于把整套解码工具
   挂在公网上。README 那行早就写着「必须配 `--token`」，但那只是文档承诺，

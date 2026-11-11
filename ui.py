@@ -256,7 +256,12 @@ def _run_subcommand(module, action, params, operand, extra=None):
         sys.argv = [module.__name__ + ".py"] + argv
         with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
             try:
-                module.main()
+                # main() 的返回值就是退出码（CLI 入口是 `sys.exit(main(...))`）。
+                # 这里把它的返回值丢了，于是脚本明明 `return 1` 报了错，code 仍
+                # 是 0 —— 接口回 `ok: true`，界面就把报错当成功显示：结果框空着、
+                # 错误只出现在底部日志里，看着像「解出来是空的」。
+                rv = module.main()
+                code = rv if isinstance(rv, int) else 0
             except SystemExit as e:
                 code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
             except Exception as e:          # 脚本没接住的异常，别让界面白屏

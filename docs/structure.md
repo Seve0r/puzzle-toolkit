@@ -13,7 +13,7 @@
 | `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1846 | 39 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui.py` | 1851 | 39 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | — | 界面参数表（纯数据，不 import codec） |
 
 ---
@@ -428,7 +428,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1846 行）
+### `ui.py`（1851 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
 
