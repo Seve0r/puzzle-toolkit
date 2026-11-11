@@ -8,12 +8,12 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 3039 | 181 | 16 | `main` 347 行 | 编码识别与解码 |
+| `codec.py` | 3039 | 181 | 16 | `main` 356 行 | 编码识别与解码 |
 | `classic.py` | 1552 | 99 | 18 | `main` 258 行 | 古典密码 |
 | `hashcrypto.py` | 1154 | 49 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1427 | 53 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1772 | 37 | 4 | `run_action` 176 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui.py` | 1846 | 39 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | — | 界面参数表（纯数据，不 import codec） |
 
 ---
@@ -428,22 +428,23 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1168
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1772 行）
+### `ui.py`（1846 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
-| `run_action(payload)` | L409 | 唯一后端入口，按 `tab` 分发到各页 |
-| `_encoding_names()` | L124 | 把注册表按「同一概念」去重（并查集），下拉框用 |
-| `_run_mojibake` | L292 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
-| `Handler._authed()` | L605 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
+| `run_action(payload)` | L430 | 唯一后端入口，按 `tab` 分发到各页 |
+| `_encoding_names()` | L145 | 把注册表按「同一概念」去重（并查集），下拉框用 |
+| `_run_mojibake` | L313 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `Handler._authed()` | L638 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
+| `_is_local_host()` | L66 | 判断监听地址是不是只有本机能连（决定要不要强制口令） |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | L1568 | 收集控件值 → POST `/api/run` |
-| 内嵌 JS `buildSymbolPad` | L1279 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
-| 内嵌 JS `updateSymPrev` | L1374 | 输入框下方的实时图形预览 |
-| 内嵌 JS `updateSymOut` | L1404 | 结果框下方回显（符号直接画、字母按变体画回符号） |
-| 内嵌 JS `pigpenLive` | L1439 | 实时双向换算，输入即出结果 |
+| 内嵌 JS `doRun()` | L1626 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `buildSymbolPad` | L1337 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
+| 内嵌 JS `updateSymPrev` | L1432 | 输入框下方的实时图形预览 |
+| 内嵌 JS `updateSymOut` | L1462 | 结果框下方回显（符号直接画、字母按变体画回符号） |
+| 内嵌 JS `pigpenLive` | L1497 | 实时双向换算，输入即出结果 |
 
 ### `ui_params.py`（489 行）
 

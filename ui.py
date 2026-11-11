@@ -46,9 +46,30 @@ import num         # noqa: E402
 import ui_params   # noqa: E402  参数表也在这里
 
 
-# 访问口令。None = 不校验（默认，本机自用）；非 None 时每个请求都要带对，
-# 否则 401。由 main() 根据 --token 决定：给值用你给的，不给值就随机生成。
+# 访问口令。None = 不校验（仅限本机）；非 None 时每个请求都要带对，否则 401。
+# 由 main() 决定：给值用你给的，不给值就随机生成；监听非本机地址时强制生成。
 _EXPECT_TOKEN = None
+
+# 请求体上限。纯文本请求正常只有几 KB，真正吃大小的是 stego 的文件上传：
+# 前端把整个文件读成 base64 塞进 JSON，**base64 会膨胀 4/3**，所以 64 MB 的
+# body 只装得下约 48 MB 的原始文件。
+#
+# 上限不能照「文本够用」来定。踩过：一开始按文本量级设成 8 MB，等于把 stego
+# 能传的文件砍到 6 MB，大 PNG / MP3 全被 413 挡在外面。
+#
+# 峰值内存约为 body 的 5 倍（实测 64 MB → 314 MB：read 出的 bytes、decode 出的
+# str、json 里那份、再 b64decode 一份）。这台机器同时跑着 Hadoop，再往上放
+# 就该走命令行了——命令行没有这个限制。
+MAX_BODY = 64 << 20
+
+
+def _is_local_host(host):
+    """这个监听地址是不是「只有本机能连」。
+
+    127.0.0.0/8、::1、localhost 算本机；`0.0.0.0` / `::` / 局域网 IP
+    都是别人能连上的，必须带口令。
+    """
+    return host in ("localhost", "::1") or host.startswith("127.")
 
 
 # ---------------------------------------------------------------- 进制面板
@@ -595,6 +616,12 @@ def run_action(payload):
 class Handler(BaseHTTPRequestHandler):
     server_version = "puzzle-toolkit-ui"
 
+    # 单次 socket 操作超时（秒）。默认 None = 永不超时，而 ThreadingHTTPServer
+    # 是每连接一个线程：客户端报了 Content-Length 却每秒只发几个字节，就能把
+    # 线程和内存一直占着（slowloris）。`StreamRequestHandler.setup()` 会把它
+    # 设到 socket 上，超时后 handle_one_request 自己会收尾。
+    timeout = 30
+
     def log_message(self, fmt, *args):
         pass  # 别把每次请求都刷到终端，安静一点
 
@@ -653,6 +680,10 @@ class Handler(BaseHTTPRequestHandler):
                     # 用户看到的只是「没有选项」，完全猜不到原因。
                     "params": getattr(ui_params, "PARAMS", {}),
                     "tabs": getattr(ui_params, "TABS", []),
+                    # 前端拿它做上传预检。传文件要经 base64（体积涨 4/3），
+                    # 所以能传的原始文件比 MAX_BODY 小一截；这个数在后端算好
+                    # 一起下发，免得前后端各写一份换算公式然后悄悄分叉。
+                    "max_upload": (MAX_BODY - 1024) * 3 // 4,
                 }
                 if not body["tabs"]:
                     body["warning"] = ("ui_params.py 是旧版（没有 TABS），"
@@ -676,7 +707,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self._send(400, json.dumps(
+                {"ok": False, "error": "Content-Length 不是整数"}, ensure_ascii=False))
+            return
+        # 负数同样要拦：`read(-1)` 的语义是「一直读到对端关闭」，等于绕开
+        # 上限这个概念。过大则直接 413，连读都不读。
+        if length < 0 or length > MAX_BODY:
+            self.close_connection = True
+            self._send(413, json.dumps(
+                {"ok": False,
+                 "error": "请求体 %d 字节，上限 %d 字节。传文件时界面会把整个文件"
+                          "转成 base64 塞进请求（体积约为文件的 4/3），"
+                          "超大文件请改用命令行" % (length, MAX_BODY)},
+                ensure_ascii=False))
+            return
+        try:
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+        except TimeoutError:
+            # 超时说明对端半死不活，这个连接已不可信，别硬回响应
+            self.close_connection = True
+            return
         except Exception as e:
             self._send(400, json.dumps({"ok": False, "error": "请求解析失败：%s" % e}))
             return
@@ -1005,6 +1056,7 @@ async function loadList() {
     PARAMSPEC = data.params || {};
     SY_BY_GLYPH = null; SY_BY_ID = null;   // 参数表换了，符号索引得重建
     TABS = data.tabs || [];
+    MAX_UPLOAD = data.max_upload || 0;     // 文件选择时预检用
     if (!TABS.length)
       throw new Error(data.warning || "ui_params.py 是本目录下的旧版本");
     renderTabs();
@@ -1691,6 +1743,7 @@ input.addEventListener("keydown", (e) => {
 
 // stego 要原始字节，文本类选项卡仍按文本读；两边都存一份 base64 备用
 let FILE_B64 = null, FILE_NAME = "";
+let MAX_UPLOAD = 0;                     // 由 /api/list 回填，见 loadList()
 
 function b64FromBuffer(buf) {
   const bytes = new Uint8Array(buf);
@@ -1704,6 +1757,18 @@ function b64FromBuffer(buf) {
 $("file").onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) { FILE_B64 = null; FILE_NAME = ""; return; }
+  // 先自己拦一道：文件要转成 base64 塞进请求，超了就发不出去。不预检的话
+  // 服务端会在 413 后立刻关连接，而浏览器还在发 body —— 前端只会拿到
+  // 「网络错误」，完全看不出是「文件太大」。
+  if (MAX_UPLOAD && f.size > MAX_UPLOAD) {
+    FILE_B64 = null;
+    FILE_NAME = "";
+    $("filehint").textContent = "";
+    say("文件太大：" + (f.size / 1048576).toFixed(1) + " MB，界面最多 "
+        + (MAX_UPLOAD / 1048576).toFixed(1) + " MB"
+        + "（上传要经 base64，体积涨 4/3）。更大的文件用命令行。", "err");
+    return;
+  }
   FILE_NAME = f.name;
   try {
     FILE_B64 = b64FromBuffer(await f.arrayBuffer());
@@ -1735,17 +1800,26 @@ def main():
     ap = argparse.ArgumentParser(description="puzzle-toolkit 的本地图形界面")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--host", default="127.0.0.1",
-                    help="默认只监听本机；想让手机访问用 0.0.0.0")
+                    help="默认只监听本机；想让手机访问用 0.0.0.0"
+                         "（监听非本机地址会自动启用访问口令）")
     ap.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     ap.add_argument("--token", nargs="?", const="", default=None, metavar="口令",
-                    help="启用访问口令：给值 = 固定口令（重启不变）；"
-                         "不给值 = 每次启动随机生成。默认不启用（本机自用）")
+                    help="访问口令：给值 = 固定口令（重启不变）；"
+                         "不给值 = 每次启动随机生成。"
+                         "只在监听本机地址时才允许不启用")
     args = ap.parse_args()
 
+    # `--token 我的口令` 用给的；光写 `--token` 时 const="" → 随机生成。
+    # 随机值走 token_urlsafe：URL 安全字符，直接拼进地址不用转义。
     if args.token is not None:
-        # `--token 我的口令` 用给的；光写 `--token` 时 const="" → 随机生成。
-        # 随机值走 token_urlsafe：URL 安全字符，直接拼进地址不用转义。
         _EXPECT_TOKEN = args.token or secrets.token_urlsafe(18)
+    elif not _is_local_host(args.host):
+        # 以前这里什么也不做，README 写着「必须配 --token」但代码不拦，于是
+        # `--host 0.0.0.0` 一敲就是个无口令的对公网服务。既然监听非本机地址
+        # 已经是明确意图，就自动上一道口令，而不是默默裸奔。
+        _EXPECT_TOKEN = secrets.token_urlsafe(18)
+        print("★ 监听 %s 不是本机地址，已自动生成随机口令（想固定就用 --token 你的口令）"
+              % args.host)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     url = "http://%s:%d/" % ("127.0.0.1" if args.host == "0.0.0.0" else args.host,
