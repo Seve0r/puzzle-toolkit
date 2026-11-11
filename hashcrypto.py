@@ -714,8 +714,15 @@ def jwt_crack(tok, wordlist=None):
 
 # ------------------------------------------------------------------ CLI
 
+def _err(msg):
+    """错误统一走 stderr：`> out.txt` 只该拿到结果，`2>/dev/null` 才拦得住。"""
+    sys.stdout.flush()
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+
 def die(msg, code=2):
-    print(msg)
+    _err(msg)
     sys.exit(code)
 
 
@@ -845,7 +852,7 @@ def main():
         mask = mask_opt
         if mask is None:
             if not len_opt:
-                print("要给出 --mask，或者同时给 --len（和可选的 --charset）")
+                _err("要给出 --mask，或者同时给 --len（和可选的 --charset）")
                 return 2
             key = CHARSET_ALIAS.get((charset_opt or "digits").lower(),
                                     charset_opt or "?d")
@@ -861,7 +868,7 @@ def main():
                               prefix=prefix_opt, suffix=suffix_opt)
             dt = _t.time() - t0
         except Exception as e:
-            print("失败：%s" % e)
+            _err("失败：%s" % e)
             return 1
         if not hit:
             # 没找到也是「结果」，但参数和耗时是过程，别塞进结果框

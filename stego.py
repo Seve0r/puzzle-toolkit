@@ -1192,6 +1192,13 @@ def hexdump(data, limit=512):
 
 # ---------------------------------------------------------------- CLI
 
+def _err(msg):
+    """错误统一走 stderr：`> out.txt` 只该拿到结果，`2>/dev/null` 才拦得住。"""
+    sys.stdout.flush()
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
@@ -1223,7 +1230,7 @@ def main():
         print(__doc__)
         return 0
     if len(argv) < 2 and cmd not in ("help",):
-        print("缺少文件参数")
+        _err("缺少文件参数")
         return 2
     path = argv[1] if len(argv) > 1 else None
 
@@ -1414,12 +1421,12 @@ def main():
             print(hexdump(data, opt("-l", int, 1024)))
             return 0
 
-        print("未知子命令：%s" % cmd)
+        _err("未知子命令：%s" % cmd)
         print(__doc__)
         return 2
 
     except Exception as e:
-        print("出错：%s" % e)
+        _err("出错：%s" % e)
         return 1
 
 

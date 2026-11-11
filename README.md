@@ -155,6 +155,17 @@ python3 codec.py enc hex -f picture.png
 2. **混合编码不能自动分段**。一份文件里有 base64 + hex + 二进制时，`auto` 只套用一种解码器，得先手工切分、每次喂一段。
 3. **二进制文件（图片 / 音频 / 压缩包）用 `stego.py`**，`codec.py` 面向文本。
 
+**输出约定：结果走 `stdout`，错误和诊断走 `stderr`。** 五个脚本一致。
+
+```bash
+python3 codec.py dec hex -f cipher.txt > result.txt   # 文件里只有结果
+python3 codec.py dec hex bad 2>/dev/null              # 真能静默，不会漏一行
+r=$(python3 codec.py dec b64 "$s")                    # 失败时 r 是空的，不是错误文本
+```
+
+失败一律带非零退出码（`1` 数据错 / `2` 用法错），`&&`、`set -e`、`if` 都拦得住。
+诊断类提示（用了哪对编码、得分、分段还原了几段）也在 `stderr`，加 `-q` 可关。
+
 ## 先跑哪个
 
 手上有东西但不确定是什么，先查这张表：

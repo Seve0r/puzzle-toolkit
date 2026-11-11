@@ -87,6 +87,19 @@ def _hint(msg):
     sys.stderr.flush()
 
 
+def _err(msg):
+    """错误统一走 stderr（和 _hint 同一侧，但不受 `-q` 影响）。
+
+    结果走 stdout、错误和提示走 stderr。混在一起的话：`> out.txt` 会把
+    「失败：...」当成解码结果存进文件，`$(codec.py ...)` 把它装进变量，
+    而 `2>/dev/null` 反而一句都拦不住。`_hint` 的 docstring 里一直写着这条
+    分工，只是实现时有不少地方顺手写成了 print。
+    """
+    sys.stdout.flush()
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+
 def enc_name(*names):
     def wrap(fn):
         for n in names:
@@ -2720,7 +2733,7 @@ def main():
         if flag in argv:
             i = argv.index(flag)
             if i + 1 >= len(argv):
-                print("%s 后面要跟一个进制（2/8/10/16/36）" % flag)
+                _err("%s 后面要跟一个进制（2/8/10/16/36）" % flag)
                 return 2
             radix_opt = int(argv[i + 1])
             argv = argv[:i] + argv[i + 2:]
@@ -2730,7 +2743,7 @@ def main():
         if flag in argv:
             i = argv.index(flag)
             if i + 1 >= len(argv):
-                print("%s 后面要跟一个编码名（如 utf-8 / gbk / auto）" % flag)
+                _err("%s 后面要跟一个编码名（如 utf-8 / gbk / auto）" % flag)
                 return 2
             enc_opt = argv[i + 1]
             argv = argv[:i] + argv[i + 2:]
@@ -2755,7 +2768,7 @@ def main():
         while flag in argv:
             i = argv.index(flag)
             if i + 1 >= len(argv):
-                print("%s 后面要跟一个编码名（如 gbk / shift_jis）" % flag)
+                _err("%s 后面要跟一个编码名（如 gbk / shift_jis）" % flag)
                 return 2
             if key == "f":
                 mb_from = argv[i + 1]
@@ -2863,7 +2876,7 @@ def main():
         text, _ = read_input(args2[1:])
         b, err = blocks_to_bytes(text, width, radix)
         if b is None:
-            print("无法按 width=%d radix=%d 解析：%s" % (width, radix, err))
+            _err("无法按 width=%d radix=%d 解析：%s" % (width, radix, err))
             return 1
         print("bytes: %s" % list(b))
         print("ascii: %s" % b.decode("latin-1"))
@@ -2911,7 +2924,7 @@ def main():
 
     if cmd in ("dec", "decode", "enc", "encode"):
         if len(argv) < 2:
-            print("用法：codec.py %s <编码名> <文本>" % cmd)
+            _err("用法：codec.py %s <编码名> <文本>" % cmd)
             return 2
         name = argv[1]
         # enc + -f：直接用文件原始字节编码（enc hex / enc base64 的真实需求）。
@@ -2926,7 +2939,7 @@ def main():
         # 「解出来的结果靠不靠谱」——最硬的判据就是能不能把它造回去。
         if cmd.startswith("enc") and name == "mojibake":
             if not (mb_from and mb_to):
-                print("制造乱码要同时给出两个编码：\n"
+                _err("制造乱码要同时给出两个编码：\n"
                       "  --from <乱码那一侧声称的编码>   --to <原文真实的编码>\n"
                       "例：codec.py enc mojibake 'テスト用の文字列' "
                       "--from gbk --to shift_jis")
@@ -2934,7 +2947,7 @@ def main():
             try:
                 out = mojibake_encode(text, mb_from, mb_to, lossy=mb_lossy)
             except ValueError as e:
-                print("失败：%s" % e)
+                _err("失败：%s" % e)
                 return 1
             if mb_lossy and "\ufffd" in out:
                 _hint("\n  [制造乱码] --lossy：%d 处不合法字节已变成 ?\n"
@@ -2949,7 +2962,7 @@ def main():
         if cmd.startswith("enc") and name == "convert":
             res = convert_encode(text, radix_opt, enc_opt)
             if not res["ok"]:
-                print("失败：%s" % res["error"])
+                _err("失败：%s" % res["error"])
                 return 1
             _hint("\n  进制：%d　字符编码：%s　字节数：%d\n"
                   % (radix_opt, res["encoding"], len(res["bytes"])))
@@ -2962,7 +2975,7 @@ def main():
         if cmd.startswith("dec") and name == "convert":
             res = convert_decode(text, radix_opt, enc_opt)
             if not res["ok"]:
-                print("失败：%s" % res["error"])
+                _err("失败：%s" % res["error"])
                 return 1
             _hint("\n  进制：%d　字符编码：%s　字节数：%d\n"
                   % (radix_opt, res["how"], len(res["bytes"])))
@@ -2979,7 +2992,7 @@ def main():
             try:
                 out = mojibake_explicit(text, src, tgt)
             except ValueError as e:
-                print("失败：%s" % e)
+                _err("失败：%s" % e)
                 return 1
             _hint(
                 "\n  [显式] 按 %s 编回字节 → 按 %s 解%s\n"
@@ -3030,12 +3043,12 @@ def main():
             return 0
         fn = table.get(name)
         if not fn:
-            print("不支持的编码：%s（使用 `codec.py list` 查看全部编码）" % name)
+            _err("不支持的编码：%s（使用 `codec.py list` 查看全部编码）" % name)
             return 2
         try:
             out = fn(text)
         except Exception as e:
-            print("失败：%s" % e)
+            _err("失败：%s" % e)
             return 1
         # 和文モールス默认输出平假名；--katakana 转回片假名方便对照原表
         if katakana and name in ("wabun", "wabunmorse") and isinstance(out, str):
@@ -3043,7 +3056,7 @@ def main():
         print(out)
         return 0
 
-    print("未知子命令：%s" % cmd)
+    _err("未知子命令：%s" % cmd)
     print(__doc__)
     return 2
 

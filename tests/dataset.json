@@ -394,7 +394,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+    "stderr_contains": [
+     "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+    ]
    },
    "tags": [
     "basic",
@@ -413,7 +415,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+    "stderr_contains": [
+     "不支持的编码：--help（使用 `codec.py list` 查看全部编码）"
+    ]
    },
    "tags": [
     "basic",
@@ -626,7 +630,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：codec.py dec <编码名> <文本>"
+    "stderr_contains": [
+     "用法：codec.py dec <编码名> <文本>"
+    ]
    },
    "tags": [
     "error",
@@ -644,7 +650,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：codec.py enc <编码名> <文本>"
+    "stderr_contains": [
+     "用法：codec.py enc <编码名> <文本>"
+    ]
    },
    "tags": [
     "error",
@@ -687,7 +695,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "失败：纯 ASCII，不可能是被误读的结果"
+    "stderr_contains": [
+     "失败：纯 ASCII，不可能是被误读的结果"
+    ]
    },
    "tags": [
     "error",
@@ -725,7 +735,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "无法按 width=2 radix=36 解析：没有输入"
+    "stderr_contains": [
+     "无法按 width=2 radix=36 解析：没有输入"
+    ]
    },
    "tags": [
     "error",
@@ -1475,7 +1487,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少输入文本"
+    "stderr_contains": [
+     "缺少输入文本"
+    ]
    },
    "tags": [
     "error",
@@ -1494,7 +1508,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "需要 --key"
+    "stderr_contains": [
+     "需要 --key"
+    ]
    },
    "tags": [
     "error",
@@ -1512,7 +1528,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少输入文本"
+    "stderr_contains": [
+     "缺少输入文本"
+    ]
    },
    "tags": [
     "error",
@@ -1531,7 +1549,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "出错：文本太短（至少 20 个字母），单表替换破解不可靠"
+    "stderr_contains": [
+     "出错：文本太短（至少 20 个字母），单表替换破解不可靠"
+    ]
    },
    "tags": [
     "error",
@@ -1550,7 +1570,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "需要 --key"
+    "stderr_contains": [
+     "需要 --key"
+    ]
    },
    "tags": [
     "error",
@@ -1568,7 +1590,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少输入文本"
+    "stderr_contains": [
+     "缺少输入文本"
+    ]
    },
    "tags": [
     "error",
@@ -1738,7 +1762,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+    "stderr_contains": [
+     "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+    ]
    },
    "tags": [
     "basic",
@@ -1816,7 +1842,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    "stderr_contains": [
+     "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    ]
    },
    "tags": [
     "basic",
@@ -1835,7 +1863,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：rc4 --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    "stderr_contains": [
+     "用法：rc4 --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    ]
    },
    "tags": [
     "basic",
@@ -1854,7 +1884,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "需要 --n 和 --e"
+    "stderr_contains": [
+     "需要 --n 和 --e"
+    ]
    },
    "tags": [
     "basic",
@@ -2292,7 +2324,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+    "stderr_contains": [
+     "用法：hash <算法> <文本>　或　hash <文本> --algo md5"
+    ]
    },
    "tags": [
     "error",
@@ -2310,7 +2344,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少哈希"
+    "stderr_contains": [
+     "缺少哈希"
+    ]
    },
    "tags": [
     "error",
@@ -2329,7 +2365,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    "stderr_contains": [
+     "用法：aes --key KEY [--iv HEX] [--mode cbc] <data>  （加密输出 hex，解密输入 hex）"
+    ]
    },
    "tags": [
     "error",
@@ -2347,7 +2385,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "需要 --n 和 --e"
+    "stderr_contains": [
+     "需要 --n 和 --e"
+    ]
    },
    "tags": [
     "error",
@@ -2365,7 +2405,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少 token"
+    "stderr_contains": [
+     "缺少 token"
+    ]
    },
    "tags": [
     "error",
@@ -2383,7 +2425,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少数据"
+    "stderr_contains": [
+     "缺少数据"
+    ]
    },
    "tags": [
     "error",
@@ -3037,7 +3081,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "出错：图太小"
+    "stderr_contains": [
+     "出错：图太小"
+    ]
    },
    "tags": [
     "edge",
@@ -3114,7 +3160,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+    "stderr_contains": [
+     "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+    ]
    },
    "tags": [
     "error",
@@ -3132,7 +3180,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少文件参数"
+    "stderr_contains": [
+     "缺少文件参数"
+    ]
    },
    "tags": [
     "error",
@@ -3150,7 +3200,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少文件参数"
+    "stderr_contains": [
+     "缺少文件参数"
+    ]
    },
    "tags": [
     "error",
@@ -3168,7 +3220,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少文件参数"
+    "stderr_contains": [
+     "缺少文件参数"
+    ]
    },
    "tags": [
     "error",
@@ -3186,7 +3240,9 @@
    "stdin": null,
    "expect": {
     "exit": 2,
-    "stdout": "缺少文件参数"
+    "stderr_contains": [
+     "缺少文件参数"
+    ]
    },
    "tags": [
     "error",
@@ -3205,7 +3261,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+    "stderr_contains": [
+     "出错：[Errno 2] No such file or directory: 'no-such.bin'"
+    ]
    },
    "tags": [
     "error",
@@ -4967,7 +5025,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "出错：没有 'nope' 这个变体；可选：agrippa、cross、dotted、grid-cross、labuse、original、rot-cross、sandi、sandi-rot\n"
+    "stderr_contains": [
+     "出错：没有 'nope' 这个变体；可选：agrippa、cross、dotted、grid-cross、labuse、original、rot-cross、sandi、sandi-rot"
+    ]
    },
    "tags": [
     "classic",
@@ -5015,7 +5075,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "失败：按 gbk 解码失败：'gbk' codec can't decode byte 0x80 in position 8: illegal multibyte sequence\n（这堆字节里有 2 处在 gbk 中不合法，反向也不行 —— 这段文本造不出「utf-8 → gbk」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，不合法处变成 ?）\n"
+    "stderr_contains": [
+     "失败：按 gbk 解码失败：'gbk' codec can't decode byte 0x80 in position 8: illegal multibyte sequence\n（这堆字节里有 2 处在 gbk 中不合法，反向也不行 —— 这段文本造不出「utf-8 → gbk」的乱码，换一段文本或换编码对。加 --lossy 能强行生成，不合法处变成 ?）"
+    ]
    },
    "tags": [
     "codec",
@@ -5063,7 +5125,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "失败：十六进制位数是奇数（5），每两位表示一个字节"
+    "stderr_contains": [
+     "失败：十六进制位数是奇数（5），每两位表示一个字节"
+    ]
    },
    "tags": [
     "edge",
@@ -5147,7 +5211,9 @@
    "stdin": null,
    "expect": {
     "exit": 1,
-    "stdout": "失败：不是合法的 base58 字符：'0'（base58 不用 0 O I l）"
+    "stderr_contains": [
+     "失败：不是合法的 base58 字符：'0'（base58 不用 0 O I l）"
+    ]
    },
    "tags": [
     "edge",

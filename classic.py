@@ -1273,7 +1273,7 @@ def _sub_help(cmd):
             hit = s
             break
     if not hit:
-        print("没有 %r 这个子命令。" % cmd)
+        _err("没有 %r 这个子命令。" % cmd)
         print("用 `classic.py --help` 看全部子命令。")
         return 2
     print(hit)
@@ -1286,6 +1286,13 @@ def _sub_help(cmd):
         if l.strip():
             print(l.rstrip())
     return 0
+
+
+def _err(msg):
+    """错误统一走 stderr：`> out.txt` 只该拿到结果，`2>/dev/null` 才拦得住。"""
+    sys.stdout.flush()
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
 
 
 def main():
@@ -1363,19 +1370,19 @@ def main():
     cmd = argv[0]
     text = " ".join(argv[1:])
     if not text:
-        print("缺少输入文本")
+        _err("缺少输入文本")
         return 2
 
     try:
         if cmd == "caesar":
             if enc:
                 if key is None:
-                    print("加密需要 --key")
+                    _err("加密需要 --key")
                     return 2
                 try:
                     k = int(key)
                 except ValueError:
-                    print("凯撒的 --key 要是一个数字（位移量）")
+                    _err("凯撒的 --key 要是一个数字（位移量）")
                     return 2
                 print(shift_alpha(text, k))
                 return 0
@@ -1391,7 +1398,7 @@ def main():
 
         if cmd == "vigenere":
             if not key:
-                print("需要 --key")
+                _err("需要 --key")
                 return 2
             print(vig_shift(text, key, enc=enc))
             return 0
@@ -1410,7 +1417,7 @@ def main():
         if cmd == "affine":
             if enc:
                 if a_opt is None or b_opt is None:
-                    print("加密需要 --a 和 --b")
+                    _err("加密需要 --a 和 --b")
                     return 2
                 print(affine_enc(text, a_opt, b_opt))
                 return 0
@@ -1429,7 +1436,7 @@ def main():
 
         if cmd == "affine-enc":
             if a_opt is None or b_opt is None:
-                print("需要 --a 和 --b")
+                _err("需要 --a 和 --b")
                 return 2
             print(affine_enc(text, a_opt, b_opt))
             return 0
@@ -1488,14 +1495,14 @@ def main():
 
         if cmd == "playfair":
             if not key:
-                print("需要 --key")
+                _err("需要 --key")
                 return 2
             print(playfair(text, key, enc=enc, clean_pad=clean_pad))
             return 0
 
         if cmd == "adfgx":
             if not key:
-                print("需要 --key")
+                _err("需要 --key")
                 return 2
             print(adfgx_enc(text, key, trans_key) if enc else adfgx_dec(text, key, trans_key))
             return 0
@@ -1539,12 +1546,12 @@ def main():
                 print("  %-22s %7.1f  %s" % (name, sc, out))
             return 0
 
-        print("未知子命令：%s" % cmd)
+        _err("未知子命令：%s" % cmd)
         print(__doc__)
         return 2
 
     except Exception as e:
-        print("出错：%s" % e)
+        _err("出错：%s" % e)
         return 1
 
 
