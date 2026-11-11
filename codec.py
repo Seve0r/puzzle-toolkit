@@ -193,7 +193,10 @@ def _e_b32hex(s):
 def _d_hex(s):
     s = re.sub(r"(0x|\\x|[\s:,])", "", s)
     if len(s) % 2:
-        s = "0" + s
+        # 不左补零。补零等于替用户猜了一个字节，猜错还会静默改掉数值；
+        # 单独一个 "f" 到底是 0x0f 还是手滑少打一位，只有用户自己知道。
+        # 措辞和 `convert -r 16` 保持一致，两个入口别给两套说法。
+        raise ValueError("十六进制位数是奇数（%d），每两位表示一个字节" % len(s))
     return as_text(binascii.unhexlify(s))
 
 
@@ -207,9 +210,16 @@ B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 @dec_name("base58", "b58", "base58btc")
 def _d_b58(s):
+    # 先剥空白，和 base64/base32 一致：密文摊在网页或聊天里常被折行，
+    # 不剥的话空格会一路走到 alphabet.index() 里报「substring not found」，
+    # 提示指向 Python 内部，完全看不出是换行的问题。
+    s = re.sub(r"\s+", "", s)
     n = 0
     for ch in s:
-        n = n * 58 + B58_ALPHABET.index(ch)
+        try:
+            n = n * 58 + B58_ALPHABET.index(ch)
+        except ValueError:
+            raise ValueError("不是合法的 base58 字符：%r（base58 不用 0 O I l）" % ch)
     raw = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
     pad = len(s) - len(s.lstrip("1"))
     return as_text(b"\x00" * pad + raw)
@@ -371,11 +381,14 @@ def _e_b36(s):
 def _d_bin(s):
     bits = re.sub(r"[^01]", "", s)
     if len(bits) % 8:
-        raise ValueError("二进制位数不是 8 的倍数")
-    out = as_text(bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8)))
-    # 末尾的 0x00 是「位数补齐到 8 的倍数」留下的填充，没有信息量。
-    # 留着结果是带不可见字符的：终端看不出区别，但复制走、比较、再编码都会出问题。
-    return out.rstrip("\x00")
+        raise ValueError("二进制位数 %d 不是 8 的倍数，每 8 位表示一个字节"
+                         % len(bits))
+    # 这里**不能** rstrip("\x00")。原来那句注释说末尾 NUL 是「补齐到 8 的
+    # 倍数留下的填充」，但上面已经要求位数必须是 8 的倍数，根本不存在补零，
+    # 于是它实际是在静默吞掉一个合法字节：`dec bin "01000001 00000000"`
+    # 只会给出 "A"。NUL 在隐写/位流里是正常数据，丢掉不报错最要命。
+    return as_text(bytes(int(bits[i:i + 8], 2)
+                         for i in range(0, len(bits), 8)))
 
 
 @enc_name("bin", "binary")

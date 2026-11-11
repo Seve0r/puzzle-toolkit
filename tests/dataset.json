@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 238,
+  "count": 243,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -5050,6 +5050,111 @@
     "lossy"
    ],
    "note": "--lossy 强行生成，不合法处变 U+FFFD"
+  },
+  {
+   "id": "codec-edge-009",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "61626",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "失败：十六进制位数是奇数（5），每两位表示一个字节"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "hex"
+   ],
+   "note": "奇数位十六进制不左补零。原来静默补成 061626 解出一串乱码字节，少打一位和本来就这样完全分辨不出来"
+  },
+  {
+   "id": "codec-edge-010",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "bin",
+    "01000001 00000000",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "A\u0000"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "bin"
+   ],
+   "note": "末尾 NUL 是数据不是补齐填充。原来 rstrip 掉，只给出 A；而 _d_bin 本来就要求位数是 8 的倍数，不存在补零"
+  },
+  {
+   "id": "codec-edge-011",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b58",
+    "9Ajdvzr",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Hello"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b58"
+   ],
+   "note": "base58 正常解码（即 enc b58 Hello 的结果）。此前 codec 侧 b58 零覆盖"
+  },
+  {
+   "id": "codec-edge-012",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b58",
+    "  9Ajd vzr  ",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "Hello"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b58"
+   ],
+   "note": "base58 容忍空白/折行，和 base64、base32 一致。原来空格会一路走到 alphabet.index()，报 Python 内部的 substring not found"
+  },
+  {
+   "id": "codec-edge-013",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b58",
+    "abc0",
+    "-q"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stdout": "失败：不是合法的 base58 字符：'0'（base58 不用 0 O I l）"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b58"
+   ],
+   "note": "非法字符给明确提示并点名易混字符，不再抛 substring not found"
   }
  ]
 }

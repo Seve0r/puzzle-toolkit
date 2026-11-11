@@ -229,6 +229,10 @@ python3 codec.py enc hex -f picture.png
 `72 101 108 108 111 → Hello` 是**一列数**变字节，用 `codec dec dec`。
 判据：结果是文本用 codec，结果还是个数用 num.py。
 
+位宽不对是**报错**，不是补零（`dec hex 61626` → 「位数是奇数」；`dec bin 0100000`
+→ 「不是 8 的倍数」）。补零等于替你猜一个字节，猜错还会静默改掉数值。
+`dec bin` 也不会删末尾的 `\x00`——NUL 是数据。
+
 ### classic.py —— 古典密码
 
 | 命令 | 说明 |
