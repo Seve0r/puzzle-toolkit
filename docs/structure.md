@@ -434,17 +434,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
-| `run_action(payload)` | L430 | 唯一后端入口，按 `tab` 分发到各页 |
+| `run_action(payload)` | L435 | 唯一后端入口，按 `tab` 分发到各页 |
 | `_encoding_names()` | L145 | 把注册表按「同一概念」去重（并查集），下拉框用 |
-| `_run_mojibake` | L313 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
-| `Handler._authed()` | L638 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
+| `_run_mojibake` | L318 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `Handler._authed()` | L643 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
 | `_is_local_host()` | L66 | 判断监听地址是不是只有本机能连（决定要不要强制口令） |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | L1626 | 收集控件值 → POST `/api/run` |
-| 内嵌 JS `buildSymbolPad` | L1337 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
-| 内嵌 JS `updateSymPrev` | L1432 | 输入框下方的实时图形预览 |
-| 内嵌 JS `updateSymOut` | L1462 | 结果框下方回显（符号直接画、字母按变体画回符号） |
-| 内嵌 JS `pigpenLive` | L1497 | 实时双向换算，输入即出结果 |
+| 内嵌 JS `doRun()` | L1631 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `buildSymbolPad` | L1342 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
+| 内嵌 JS `updateSymPrev` | L1437 | 输入框下方的实时图形预览 |
+| 内嵌 JS `updateSymOut` | L1467 | 结果框下方回显（符号直接画、字母按变体画回符号） |
+| 内嵌 JS `pigpenLive` | L1502 | 实时双向换算，输入即出结果 |
 
 ### `ui_params.py`（489 行）
 
