@@ -13,7 +13,7 @@
 | `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1907 | 41 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui.py` | 1926 | 42 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | `_pigpen_slots_json` 22 行 | 界面参数表（纯数据，不 import codec） |
 
 ---
@@ -434,17 +434,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
-| `run_action(payload)` | L477 | 唯一后端入口，按 `tab` 分发到各页 |
-| `_encoding_names()` | L164 | 把注册表按「同一概念」去重（并查集），下拉框用 |
-| `_run_mojibake` | L360 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
-| `Handler._authed()` | L685 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
+| `run_action(payload)` | L490 | 唯一后端入口，按 `tab` 分发到各页 |
+| `_encoding_names()` | L177 | 把注册表按「同一概念」去重（并查集），下拉框用 |
+| `_run_mojibake` | L373 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `Handler._authed()` | L698 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
 | `_is_local_host()` | L67 | 判断监听地址是不是只有本机能连（决定要不要强制口令） |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | L1673 | 收集控件值 → POST `/api/run` |
-| 内嵌 JS `buildSymbolPad` | L1384 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
-| 内嵌 JS `updateSymPrev` | L1479 | 输入框下方的实时图形预览 |
-| 内嵌 JS `updateSymOut` | L1509 | 结果框下方回显（符号直接画、字母按变体画回符号） |
-| 内嵌 JS `pigpenLive` | L1544 | 实时双向换算，输入即出结果 |
+| 内嵌 JS `doRun()` | L1686 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `buildSymbolPad` | L1397 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
+| 内嵌 JS `updateSymPrev` | L1492 | 输入框下方的实时图形预览 |
+| 内嵌 JS `updateSymOut` | L1522 | 结果框下方回显（符号直接画、字母按变体画回符号） |
+| 内嵌 JS `pigpenLive` | L1557 | 实时双向换算，输入即出结果 |
 
 ### `ui_params.py`（489 行）
 

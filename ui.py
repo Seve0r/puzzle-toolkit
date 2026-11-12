@@ -91,6 +91,19 @@ def _lan_ip():
         s.close()
 
 
+def _is_private_ip(ip):
+    """RFC1918 私有地址。云主机在 NAT 后面时，探测到的是内网地址，
+    对外访问还得用弹性/公网 IP —— 要额外提示一句，否则用户会照着试然后超时。"""
+    if ip.startswith("10.") or ip.startswith("192.168."):
+        return True
+    if ip.startswith("172."):
+        try:
+            return 16 <= int(ip.split(".")[1]) <= 31
+        except (IndexError, ValueError):
+            return False
+    return False
+
+
 # ---------------------------------------------------------------- 进制面板
 
 def _run_num(payload):
@@ -1876,8 +1889,14 @@ def main():
     if args.host == "0.0.0.0":
         lan = _lan_ip()
         url = "http://%s:%d/" % (lan or "127.0.0.1", args.port)
-        note = ("  监听所有网卡：本机用 %s，别的机器用上面的地址" % local_url if lan
-                else "  监听所有网卡（没探测到对外 IP，别的机器请用本机实际地址）")
+        if not lan:
+            note = "  监听所有网卡（没探测到对外 IP，别的机器请用本机实际地址）"
+        elif _is_private_ip(lan):
+            # 云主机 / NAT 后面：探测到的是内网地址，公网访问用不上
+            note = ("  监听所有网卡：本机用 %s；%s 是内网地址，"
+                    "如果在 NAT/云主机后面，对外要用公网 IP" % (local_url, lan))
+        else:
+            note = "  监听所有网卡：本机用 %s，别的机器用上面的地址" % local_url
     else:
         url = "http://%s:%d/" % (args.host, args.port)
         note = ""
