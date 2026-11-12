@@ -460,8 +460,21 @@ puzzle-toolkit/
     num.md        ← num.py
     structure.md  ← 各脚本的代码结构图（维护者视角：改哪一段）
     testdata-prompt.md ← 让 AI 生成测试数据集的提示词
+  tools/
+    check_structure.py ← 校验结构图与代码是否一致（只读，提交前跑）
   CHANGELOG.md    更新日志
 ```
+
+**`tools/check_structure.py`**：结构图里全是硬编码行号，改一行代码就可能集体漂。
+这个脚本按 `ast` 重算一遍再和文档比对，只读、只报错：
+
+```bash
+python3 tools/check_structure.py      # 一致 → 退出码 0；有漂移 → 1 并列出差异
+python3 tools/check_structure.py -v   # 逐项列出对比
+```
+
+它查四类：脚本总表（行数 / 顶层对象 / 分区 / 最长函数）、各章节分区表的行范围、
+正文里「N 行 / M 个顶层对象」那几句、以及散落在正文中的 `函数名（L数字）`。
 
 ## 依赖
 

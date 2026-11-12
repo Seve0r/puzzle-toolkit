@@ -282,24 +282,24 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
-| 基础 | 63–152 | 90 | `is_az` / `only_letters` / `chi_squared` / `english_score` |
-| 词表打分 | 153–257 | 105 | `_load_wordlist` / `word_coverage` / `nonletters_ok` / `modinv` |
-| 凯撒 | 258–275 | 18 | `caesar_dec` / `caesar` |
-| 维吉尼亚 | 276–408 | 133 | `index_of_coincidence` / `_best_caesar` / `_refine_key` / `vigcrack` |
-| 仿射 | 409–449 | 41 | `affine_dec` / `affine_enc` / `affine`（312 种全爆破） |
-| 单表替换（爬山） | 450–514 | 65 | `sub_hillclimb` |
-| 培根 | 515–551 | 37 | 26 字母 / 24 字母两套表 |
-| 栅栏 | 552–586 | 35 | `rail_dec` / `rail_enc` / `railfence` |
-| 列置换 | 587–651 | 65 | `columnar_dec` / `_enc` / `_brute` |
-| Atbash / A1Z26 | 652–722 | 71 | `atbash` 自反、`a1z26_decode` / `_encode` |
-| 波利比奥斯 | 723–751 | 29 | 5×5 表 + 双向 |
-| 普莱菲尔 | 752–841 | 90 | `playfair_square` / `_pf_pos` / `_pf_strip_pad` / `playfair` |
-| ADFGX | 842–893 | 52 | 方阵 + 双向 |
-| 键盘错位 | 894–928 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
-| T9 九宫格 | 929–978 | 50 | `t9_encode` / `t9` |
-| 猪圈（符号替换） | 979–1193 | 215 | `PIGPEN_SLOTS` / `PIGPEN_SHAPE` / `PIGPEN_EDGES` / `pigpen_segments` / `PIGPEN_VARIANTS`（9 个）/ `pigpen_encode` / `pigpen_decode` |
-| auto | 1194–1246 | 53 | `auto` + `affine_enc_free` |
-| CLI | 1247–1551 | 305 | `show_list` / `main` |
+| 基础 | 64–153 | 90 | `is_az` / `only_letters` / `chi_squared` / `english_score` |
+| 词表打分 | 154–258 | 105 | `_load_wordlist` / `word_coverage` / `nonletters_ok` / `modinv` |
+| 凯撒 | 259–276 | 18 | `caesar_dec` / `caesar` |
+| 维吉尼亚 | 277–409 | 133 | `index_of_coincidence` / `_best_caesar` / `_refine_key` / `vigcrack` |
+| 仿射 | 410–450 | 41 | `affine_dec` / `affine_enc` / `affine`（312 种全爆破） |
+| 单表替换（爬山） | 451–515 | 65 | `sub_hillclimb` |
+| 培根 | 516–552 | 37 | 26 字母 / 24 字母两套表 |
+| 栅栏 | 553–587 | 35 | `rail_dec` / `rail_enc` / `railfence` |
+| 列置换 | 588–652 | 65 | `columnar_dec` / `_enc` / `_brute` |
+| Atbash / A1Z26 | 653–723 | 71 | `atbash` 自反、`a1z26_decode` / `_encode` |
+| 波利比奥斯 | 724–759 | 36 | 5×5 表 + 双向 |
+| 普莱菲尔 | 760–849 | 90 | `playfair_square` / `_pf_pos` / `_pf_strip_pad` / `playfair` |
+| ADFGX | 850–913 | 64 | 方阵 + 双向 |
+| 键盘错位 | 914–948 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
+| T9 九宫格 | 949–998 | 50 | `t9_encode` / `t9` |
+| 猪圈（符号替换） | 999–1213 | 215 | `PIGPEN_SLOTS` / `PIGPEN_SHAPE` / `PIGPEN_EDGES` / `pigpen_segments` / `PIGPEN_VARIANTS`（9 个）/ `pigpen_encode` / `pigpen_decode` |
+| auto | 1214–1266 | 53 | `auto` + `affine_enc_free` |
+| CLI | 1267–1598 | 332 | `show_list` / `main` |
 
 ### 改代码时从哪下手
 
@@ -334,8 +334,8 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | AES / RC4 | 429–505 | 77 | `_pad` / `_unpad` / `aes_run` / `rc4` |
 | RSA | 506–673 | 168 | `pollard_rho` / `factor` / `rsa_attack` / `_iroot` / `rsa_wiener` |
 | JWT | 674–714 | 41 | `b64u_*` / `jwt_parse` / `jwt_crack` |
-| CLI | 715–1006 | 292 | `die` / `main`（283 行） |
-| 按格式穷举 | 1007–1154 | 148 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
+| CLI | 715–1013 | 299 | `die` / `main`（283 行） |
+| 按格式穷举 | 1014–1161 | 148 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
 
 ### 改代码时从哪下手
 
@@ -371,7 +371,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 音频 | 547–572 | 26 | `spectrum`（要 `ffmpeg`） |
 | 点阵网格（grid） | 573–1147 | **575** | `_png_canvas` / `canvas_of` / `_png_encode_rgb` / `inverted_copy` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
 | 杂项 | 1148–1192 | 45 | `entropy` / `meta` / `hexdump` |
-| CLI | 1193–1427 | 235 | `main`（233 行） |
+| CLI | 1193–1434 | 242 | `main`（233 行） |
 
 ### 改代码时从哪下手
 
@@ -402,7 +402,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 五、`num.py`
 
-227 行 / 10 个顶层对象 / **无分区**。
+227 行 / 13 个顶层对象 / **无分区**。
 
 小文件，7 个函数线性排列，没到需要分区的规模：
 
