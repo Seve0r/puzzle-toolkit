@@ -28,6 +28,7 @@ import io
 import json
 import os
 import secrets
+import socket
 import sys
 import tempfile
 import threading
@@ -70,6 +71,24 @@ def _is_local_host(host):
     都是别人能连上的，必须带口令。
     """
     return host in ("localhost", "::1") or host.startswith("127.")
+
+
+def _lan_ip():
+    """探测本机对外的 IPv4，给 `--host 0.0.0.0` 的启动提示用。
+
+    做法是 UDP `connect` 到一个公网地址：UDP 不握手，**一个包都不会真发出去**，
+    但内核会按路由表把源地址填成出口网卡的地址——正是别人连进来要用的那个。
+
+    没装网卡 / 没有默认路由时抛 OSError，返回 None，由调用方退回 127.0.0.1。
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
 
 
 # ---------------------------------------------------------------- 进制面板
@@ -294,25 +313,48 @@ def _run_stego(action, params, payload):
 
     suffix = os.path.splitext(payload.get("filename") or "")[1] or ".bin"
     fd, path = tempfile.mkstemp(suffix=suffix)
+    produced = None          # stego 自己生成的产物（spec 的 PNG），也要清掉
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(raw)
+        params = dict(params or {})
+        if action == "spec":
+            # spectrum() 默认写死到 `$TMPDIR/spectrum.png`：两个请求同时跑会
+            # 互相覆盖（还会撞上命令行自己留下的同名文件）。这里显式给一个
+            # 唯一路径，读完图连它一起删。
+            fd_out, produced = tempfile.mkstemp(suffix=".png", prefix="spec_")
+            os.close(fd_out)
+            params["out"] = produced
         res = _run_subcommand(stego, action, params, path)
         # spec 会生成 PNG 但只把路径 print 出来，界面拿到一串文字没意义。
         # 顺手把图读成 base64 一起返回，前端直接 <img> 显示。
         if action == "spec" and res.get("ok"):
-            out_path = (res.get("result") or "").strip().splitlines()
-            out_path = out_path[-1].strip() if out_path else ""
-            if out_path and os.path.isfile(out_path):
-                with open(out_path, "rb") as f:
+            have = bool(produced) and os.path.isfile(produced) \
+                and os.path.getsize(produced) > 0
+            if not have:
+                # 兜底：万一没按 --out 写（报错提前返回之类），从它打印的
+                # 输出里取路径 —— 但只认临时目录里的，免得不小心删到用户文件。
+                lines = (res.get("result") or "").strip().splitlines()
+                cand = lines[-1].strip() if lines else ""
+                if (cand and os.path.isfile(cand)
+                        and os.path.realpath(os.path.dirname(cand))
+                        == os.path.realpath(tempfile.gettempdir())):
+                    produced, have = cand, True
+            if have:
+                with open(produced, "rb") as f:
                     res["image_b64"] = base64.b64encode(f.read()).decode()
-                res["image_name"] = os.path.basename(out_path)
+                res["image_name"] = "spectrum.png"
         return res
     finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+        # 以前只删输入临时文件，spec 生成的 PNG 就留在 $TMPDIR 里越攒越多。
+        # 图内容已经转成 base64 返回，删掉不影响界面显示。
+        for p in (path, produced):
+            if not p:
+                continue
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
 def _run_mojibake(text, payload, log):
@@ -1827,9 +1869,21 @@ def main():
               % args.host)
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
-    url = "http://%s:%d/" % ("127.0.0.1" if args.host == "0.0.0.0" else args.host,
-                             args.port)
+    # `--host 0.0.0.0` 是「所有网卡」而不是某个具体地址。以前一律打印
+    # 127.0.0.1 —— 从别的机器看过来，这个地址指的就是对方自己，等于没给。
+    # 现在打本机对外 IP，另外单列一行本机地址。
+    local_url = "http://127.0.0.1:%d/" % args.port
+    if args.host == "0.0.0.0":
+        lan = _lan_ip()
+        url = "http://%s:%d/" % (lan or "127.0.0.1", args.port)
+        note = ("  监听所有网卡：本机用 %s，别的机器用上面的地址" % local_url if lan
+                else "  监听所有网卡（没探测到对外 IP，别的机器请用本机实际地址）")
+    else:
+        url = "http://%s:%d/" % (args.host, args.port)
+        note = ""
     print("puzzle-toolkit UI 已启动：%s" % url)
+    if note:
+        print(note)
     if _EXPECT_TOKEN:
         print("访问口令：%s" % _EXPECT_TOKEN)
         print("  带口令的地址：%s?token=%s" % (url, _EXPECT_TOKEN))
@@ -1838,7 +1892,9 @@ def main():
     print("按 Ctrl+C 停止")
     sys.stdout.flush()          # nohup 重定向到文件时是块缓冲，不 flush 会看不到
     if not args.no_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        # 浏览器永远开本机环回地址：绑 0.0.0.0 时 url 是本机对外 IP，
+        # 那个地址在部分环境里回不来（防火墙 / 只有内网卡）。
+        threading.Timer(0.6, lambda: webbrowser.open(local_url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
