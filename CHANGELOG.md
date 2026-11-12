@@ -11,6 +11,27 @@
 
 ### 新增
 
+- **`tools/check_sync.py`：校验仓库版与 skill 版是否一致**。
+  如果你把本仓库同时装成了 dsh skill（`~/.dsh/skills/`），那 11 个文件各有两份
+  副本（5 个脚本 + `data/words.txt` + 5 个 `SKILL.md`）。分叉的后果很隐蔽：
+  在 dsh 里跑和在终端里跑结果不同，而**文档缺了完全没动静**。
+
+  以前靠 AGENTS.md 里一段 15 行的 `md5sum` 循环人工对账，它只能告诉你「不一致」，
+  还得自己 `diff` 才知道差在哪。现在：
+
+  ```bash
+  python3 tools/check_sync.py          # 11 对逐个比对
+  python3 tools/check_sync.py -v       # 逐项列出
+  ```
+
+  比 shell 版多三件事：
+
+  - 分叉时说清**差在哪**：各多少行、两边各独有几行，再附几行样例；
+  - **`skill 独有` 单独警告**。同步靠 `cp` 覆盖，skill 里有而仓库没有的内容会被
+    **静默删掉**——这就是原来那句 `diff ... | grep -c '^>'` 的自动化版本；
+  - 扫仓库根目录的 `*.py` 和 `docs/*.md`，发现**没登记**的新文件就提醒
+    （是该加进 `SYNC` 还是 `NOT_SYNCED`）。这种遗漏原本完全无声。
+
 - **`tools/check_structure.py`：校验结构图与代码是否一致**。
   `docs/structure.md` 里满是硬编码的行号、对象数、分区范围，改一行代码就可能
   集体漂，而这套数字靠手改一定会漏 —— 实测已经漏过三次：`codec.py main` 从

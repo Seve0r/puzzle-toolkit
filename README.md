@@ -462,6 +462,7 @@ puzzle-toolkit/
     testdata-prompt.md ← 让 AI 生成测试数据集的提示词
   tools/
     check_structure.py ← 校验结构图与代码是否一致（只读，提交前跑）
+    check_sync.py      ← 校验仓库版与 skill 版两份副本是否一致（只读）
   CHANGELOG.md    更新日志
 ```
 
@@ -475,6 +476,19 @@ python3 tools/check_structure.py -v   # 逐项列出对比
 
 它查四类：脚本总表（行数 / 顶层对象 / 分区 / 最长函数）、各章节分区表的行范围、
 正文里「N 行 / M 个顶层对象」那几句、以及散落在正文中的 `函数名（L数字）`。
+
+**`tools/check_sync.py`**：如果你把本仓库同时装成了 dsh skill（`~/.dsh/skills/`），
+两边是**各存一份副本**。分叉的后果很隐蔽——在 dsh 里跑和在终端里跑结果不同，
+而文档缺了完全没动静。这个脚本比对那 11 对文件（5 个脚本 + 词表 + 5 个文档）：
+
+```bash
+python3 tools/check_sync.py           # 11 对逐个比对
+python3 tools/check_sync.py -v        # 逐项列出
+```
+
+分叉时会说清各多少行、哪边独有几行。**「skill 独有」那项要当心**：同步靠 `cp`
+覆盖，skill 里有而仓库没有的内容会被静默删掉，所以它单独列为警告。
+
 
 ## 依赖
 
