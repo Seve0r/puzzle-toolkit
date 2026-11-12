@@ -248,6 +248,22 @@ def _encoding_names():
     return out
 
 
+@contextlib.contextmanager
+def _patched_argv(new_argv):
+    """临时把 `sys.argv` 换成 new_argv，出块就还原。
+
+    那几个脚本的 `main()` 都从 `sys.argv` 读参数，界面这条路只能靠替换它来
+    复用「和命令行逐字节相同」的执行路径。用 contextmanager 而不是手写
+    try/finally：少一层缩进，也不会出现「try 里 return 早退、把还原跳过」。
+    """
+    old = sys.argv
+    sys.argv = new_argv
+    try:
+        yield
+    finally:
+        sys.argv = old
+
+
 def _run_subcommand(module, action, params, operand, extra=None):
     """跑 `classic.py` / `hashcrypto.py` / `stego.py` 的子命令。
 
@@ -282,25 +298,24 @@ def _run_subcommand(module, action, params, operand, extra=None):
     # 里那堆网格参数/得分/路径，根本挑不出哪一行才是答案。
     out_buf = io.StringIO()
     err_buf = io.StringIO()
-    old_argv = sys.argv
     code = 0
-    try:
-        sys.argv = [module.__name__ + ".py"] + argv
-        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
-            try:
-                # main() 的返回值就是退出码（CLI 入口是 `sys.exit(main(...))`）。
-                # 这里把它的返回值丢了，于是脚本明明 `return 1` 报了错，code 仍
-                # 是 0 —— 接口回 `ok: true`，界面就把报错当成功显示：结果框空着、
-                # 错误只出现在底部日志里，看着像「解出来是空的」。
-                rv = module.main()
-                code = rv if isinstance(rv, int) else 0
-            except SystemExit as e:
-                code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
-            except Exception as e:          # 脚本没接住的异常，别让界面白屏
-                err_buf.write("\n执行出错：%s: %s" % (type(e).__name__, e))
-                code = 1
-    finally:
-        sys.argv = old_argv
+    # sys.argv 与 stdout/stderr 三样都要在退出时还原，一律交给 contextmanager
+    # （argv 那个是 _patched_argv）。手写 try/finally 要自己配对，容易漏。
+    with _patched_argv([module.__name__ + ".py"] + argv), \
+            contextlib.redirect_stdout(out_buf), \
+            contextlib.redirect_stderr(err_buf):
+        try:
+            # main() 的返回值就是退出码（CLI 入口是 `sys.exit(main(...))`）。
+            # 这里把它的返回值丢了，于是脚本明明 `return 1` 报了错，code 仍
+            # 是 0 —— 接口回 `ok: true`，界面就把报错当成功显示：结果框空着、
+            # 错误只出现在底部日志里，看着像「解出来是空的」。
+            rv = module.main()
+            code = rv if isinstance(rv, int) else 0
+        except SystemExit as e:
+            code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        except Exception as e:          # 脚本没接住的异常，别让界面白屏
+            err_buf.write("\n执行出错：%s: %s" % (type(e).__name__, e))
+            code = 1
 
     out = out_buf.getvalue().rstrip("\n")
     notes = err_buf.getvalue().rstrip("\n")
