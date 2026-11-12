@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 250,
+  "count": 260,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -23,6 +23,10 @@
   {
    "name": "qr_inverted.png",
    "content_b64": "iVBORw0KGgoAAAANSUhEUgAAAHQAAAB0CAIAAADb+IFwAAACEElEQVR42u3d0W7CQAxEUaj6/79M3ytFtTPrTaDnPrYBNiPrYpwNPB4AAADA5/E8+sfr9Vr/Ys/nn691dExlnZXH7jyvL/U1h3CF+558J07pOrHiyqPjK8d0XTxxXiqXFoSL1Lld1yS9auV5uo6+6rxULi0IF6lz70Clh03mFSqXFoSLT3NuxZV38KbKFa5wcaVzJ9yX9K1Hf++uc+K8VC4tCBdnnDtxrb/r0GmPq1xagHB3fMS/6oW7vku8aZ5LCxDu3fvcnf3mxD6wipenPa5yaUG4ODNbSD6zd316dHxln2+3XzZboAUI9+7O7V6/Svy7ypWVnrS75sp7j8qlBeGi6tzEU12XJZ/ru05Petuu91UuLQgXO2YLFcd1Hd3tqRNWXXNTubQgXFSdm/SkyX230/dBJI7urk3l0oJw8VtBE86dmAlUnL5zzZX1qFxaEC5S5+78roOJ51nlVtfQaEG4WDlbWOWyib2xq77vsfseU1m/yqUF4eJMnzvNxP6E5B7iiTmyyqUF4aLa507/nkJ3X9cqD+6ce6hcWhAuzswWpmep3ZlDslds53xZ5dKCcHHGuclMoOvZib0HSc+e9OAqlxaEi9S5EyS/XTax56zyfqByaUG4eFfnrupPp/eWufeXFoSL3c6d/i7aVXvLEm/at0ALwsWVzp3+nYjErRWfXnVPh8qlBeECAAAA+Af8APXNeuaHuep4AAAAAElFTkSuQmCC"
+  },
+  {
+   "name": "gbk.txt",
+   "content_b64": "1tDOxLLiytQ="
   }
  ],
  "cases": [
@@ -5380,6 +5384,215 @@
     "adfgx"
    ],
    "note": "奇数长度报错。原来循环上界写成 len(letters)-1，会把最后一位悄悄丢掉"
+  },
+  {
+   "id": "codec-edge-017",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "gbk",
+    "你好"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "ÄãºÃ"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "gbk"
+   ],
+   "note": "enc gbk 输出 latin-1 承载的 GBK 字节 c4e3bac3，不是 UTF-8 字节；早期误写成 decode，方向整个反了"
+  },
+  {
+   "id": "codec-edge-018",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "gbk",
+    "ÄãºÃ"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "你好"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "gbk",
+    "roundtrip"
+   ],
+   "note": "raw_bytes 还原 latin-1 承载的字节再按 GBK 解，与上面一条构成闭环"
+  },
+  {
+   "id": "codec-edge-019",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "gbk",
+    "-f",
+    "gbk.txt"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "中文测试"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "gbk",
+    "file"
+   ],
+   "note": "真实 GBK 文件：read_input 按 UTF-8 严格解失败后转 latin-1 承载，raw_bytes 还原"
+  },
+  {
+   "id": "codec-edge-020",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "b62",
+    "hello"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "7tQLFHz"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b62"
+   ],
+   "note": "文本的 base62 编码；编码端固定用 0-9A-Za-z 字母表"
+  },
+  {
+   "id": "codec-edge-021",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b62",
+    "7tQLFHz"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "hello"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b62",
+    "roundtrip"
+   ],
+   "note": "与上一条闭环"
+  },
+  {
+   "id": "codec-edge-022",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b62",
+    "000"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "\u0000\u0000\u0000"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "b62"
+   ],
+   "note": "前导 '0' = 前导 0x00 字节（base58 通行约定）。早期前导零会整个丢掉，enc b62 对 b'\\x00' 直接输出空串"
+  },
+  {
+   "id": "codec-edge-023",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "html",
+    "a<b&c"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "a&lt;b&amp;c"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "html"
+   ],
+   "note": "& < > \" ' 必须一起转义，否则输出不是合法 HTML 实体串"
+  },
+  {
+   "id": "codec-edge-024",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "html",
+    "a&lt;b&amp;c"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "a<b&c"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "html",
+    "roundtrip"
+   ],
+   "note": "与上一条闭环；含非 ASCII 时仍走 &#x4e2d; 全量实体"
+  },
+  {
+   "id": "codec-error-008",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b64",
+    "一段中文"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "含非 base64 字符"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "base64"
+   ],
+   "note": "validate=False 会静默丢弃非法字符，把乱码当成功结果；现在点名报出来"
+  },
+  {
+   "id": "codec-error-009",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "b64url",
+    "a+b/c="
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "含非 base64 字符"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "base64url"
+   ],
+   "note": "base64url 同样不能静默丢字符，并提示改用 base64"
   }
  ]
 }

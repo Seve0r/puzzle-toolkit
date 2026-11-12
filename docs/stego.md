@@ -81,9 +81,9 @@ python3 $S grid puzzle.png | python3 codec.py dec bin -f /dev/stdin
 python3 $S grid puzzle.png | python3 codec.py auto    -f /dev/stdin
 ```
 
-（`codec.py dec bin` 本来就用 `re.sub(r"[^01]","",s)` 取位，换行、空格都会被忽略，
-所以**整块点阵直接粘过去**就行。反过来说，正好不能带行号：行号里的数字会被
-当成二进制位，整份数据错位。）
+（`codec.py dec bin` 把换行、空格、逗号这些当分隔符忽略，所以**整块点阵直接
+粘过去**就行。反过来，行号必须去掉：行号里的 `1`/`0` 会被当成二进制位，`2`-`9`
+现在会直接报「含二进制以外的字符」——不会再静默错位。）
 
 **它自己做的事**
 

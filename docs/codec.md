@@ -232,7 +232,7 @@ braille、utf16/be/le、utf32/be/le、js、uu、gzip/zlib/bz2、punycode、gbk�
 
 ### 有几种编码的输出是二进制
 
-`utf16` / `utf32` / `uu` / `gzip` 编码后的东西**不是可读文本**——codec 统一
+`utf16` / `utf32` / `uu` / `gzip` / `gbk` 编码后的东西**不是可读文本**——codec 统一
 用 latin-1 承载（1 字符 = 1 字节），所以直接看是乱码。正常用法是接一层：
 
 ```bash
@@ -242,6 +242,30 @@ python3 codec.py enc utf16be "Hello" | python3 codec.py enc hex        # 十六�
 
 反过来解码也认这两种：`dec gzip` 和 `dec utf16` 内部走 `raw_bytes()`，
 会先判断输入是不是 latin-1 承载的字节流。
+
+### ★ 编出来必须能解回去（gbk / base62 / html / base64）
+
+`enc` 的输出只要用户会拿去 `dec`，就得保证往返 —— 造出一串解不回来的数据，
+比直接报错更坑。这四处曾经各有一个方向性的错，现在的约定是：
+
+| 编码 | 约定 | 曾经的错法 |
+|---|---|---|
+| `gbk` | `enc` 走 `encode('gbk')`，输出 latin-1 承载的 GBK 字节；`dec` 走 `raw_bytes()` | `enc` 里写成了 `decode('gbk')`，方向整个反了：`enc gbk '你好'` 吐的是 UTF-8 字节（显示为 `浣犲ソ`） |
+| `base62` | 每个前导 `0x00` 字节编码成一个 `'0'`（base58 通行约定） | 前导零在整数里不留痕迹，`enc b62 "\x00"` 直接输出空串，解回来成了空字节 |
+| `html` | `& < > " '` 一起转成实体，非 ASCII 仍转 `&#x4e2d;` | 只转非 ASCII，`enc html 'a<b'` 出来还是 `a<b`，根本不是合法 HTML 实体串 |
+| `base64` / `base64url` | 解码前先校验字符集，非法字符**点名报错** | `validate=False` 会静默丢弃非法字符，`dec b64 '一段中文'` 也能"成功"输出一串垃圾 |
+
+```bash
+python3 codec.py enc gbk '你好'        # ÄãºÃ        （latin-1 承载的 c4e3bac3）
+python3 codec.py dec gbk 'ÄãºÃ'        # 你好          ← 闭环
+python3 codec.py enc html 'a<b&c'      # a&lt;b&amp;c
+python3 codec.py dec b64 '一段中文'    # 失败：含非 base64 字符：'一' '中' '文' '段'
+```
+
+`dec b62` 对**单个字符**没法判断用哪张字母表（三张都能解出一个字节），所以
+单字符固定按 `0-9A-Za-z` 那张表走，保证 `enc` 的 1 字节输入可逆；多字符仍按
+文本得分挑字母表。任意二进制（含 `0x80` 以上字节）不保证往返 —— `dec b62`
+最终是按 UTF-8 解成文本的，非 UTF-8 字节会变成 `�`，这是它面向文本的定位。
 
 ### 只有解码方向的
 

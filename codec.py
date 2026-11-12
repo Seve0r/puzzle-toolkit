@@ -7,7 +7,10 @@
   auto   <text>        自动识别编码并递归剥皮，输出最可能的明文
   brute  <text>        把每一种编码都试一遍，列出所有可读结果
   dec    <enc> <text>  用指定编码解码
-  enc    <enc> <text>  用指定编码编码
+  enc    <enc> <text>  用指定编码编码。gbk / utf16 / utf32 / uu / gzip 的输出
+                       本质是二进制，统一用 latin-1 承载（1 字符 = 1 字节），
+                       直接看是乱码——这是设计，接一层 `enc hex` 或 `enc b64`
+                       才好看。承载的字节被 `dec` 原样接回，所以 enc→dec 闭环。
   list                 列出所有支持的编码名
   grid   <text>        切矩阵枚举读法（行/列/蛇形/反转），--rows --cols --width
   blocks <text>        定长块按进制转字节，-w 块宽 -r 进制（如 -w 2 -r 36）
@@ -154,11 +157,38 @@ def _bin_str(b):
 
 # ---------------------------------------------------------------- Base 系列
 
+# base64 的合法字符集（含 padding）。解码前用它把非法字符点名报出来。
+_B64_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+_B64URL_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=")
+
+
+def _reject_bad_b64(s, alphabet, desc, hint=""):
+    """base64 解码前先把非法字符报出来。
+
+    踩过：`b64decode(..., validate=False)` 会把非字母表字符**静默丢弃**，
+    于是 `dec base64 '一段中文'` 也能"成功"输出一串垃圾 —— 用户以为解出来了，
+    实际是拿乱码当答案。和 `_check_radix_chars` 是同一类病：**给不出正确
+    结果时给一个看起来正常的错误结果**，比直接报错糟得多。
+    """
+    bad = sorted(set(s) - alphabet)
+    if bad:
+        raise ValueError("含非 base64 字符：%s（%s）%s"
+                         % (" ".join(repr(c) for c in bad[:6]), desc, hint))
+
+
 @dec_name("base64", "b64")
 def _d_b64(s):
     s = re.sub(r"\s+", "", s)
     s += "=" * (-len(s) % 4)
-    return as_text(base64.b64decode(s, validate=False))
+    _reject_bad_b64(s, _B64_ALPHABET, "base64 只认 A-Za-z0-9+/=",
+                    "；若串里是 - 和 _ 请改用 base64url")
+    try:
+        return as_text(base64.b64decode(s, validate=True))
+    except binascii.Error as e:
+        # 补齐 padding 后长度仍不对（如原串长度 % 4 == 1）
+        raise ValueError("不是合法 base64（%s）" % e)
 
 
 @enc_name("base64", "b64")
@@ -170,7 +200,13 @@ def _e_b64(s):
 def _d_b64url(s):
     s = re.sub(r"\s+", "", s)
     s += "=" * (-len(s) % 4)
-    return as_text(base64.urlsafe_b64decode(s))
+    # 同 base64：不校验的话 urlsafe_b64decode 也会静默丢弃非法字符。
+    _reject_bad_b64(s, _B64URL_ALPHABET, "base64url 只认 A-Za-z0-9-_=",
+                    "；若串里是 + 和 / 请改用 base64")
+    try:
+        return as_text(base64.urlsafe_b64decode(s))
+    except binascii.Error as e:
+        raise ValueError("不是合法 base64url（%s）" % e)
 
 
 @enc_name("base64url", "b64url")
@@ -280,17 +316,48 @@ B62_SETS = ["0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
 
 @dec_name("base62", "b62")
 def _d_b62(s):
+    # 整串都是 '0' 只能表示「纯前导零」（数值为 0）。不先处理的话会掉进
+    # 下面的字母表猜测：'0' 在 'A-Za-z0-9' 表里是 52，解出来是 '4'，
+    # 分数还比 NUL 高，于是 `enc b62 "\x00"` → "0" → "4"，闭环断掉。
+    # 标准 base62 里 "0" 本来就是数值 0，解成 0x00 比猜成 '4' 也更靠谱。
+    if s and set(s) == {"0"}:
+        return "\x00" * len(s)
+
+    # 单字符无法判定字母表：三张表都能解出一个字节，按文本得分猜会选错
+    # （`enc b62 "\x01"` 产出 "1"，却被 'A-Za-z0-9' 表解成 '5'）。
+    # 编码端固定用第一张表，解码端在只有一个字符时也优先它，保证 1 字节可逆。
+    # 多字符仍走下面的得分比较——那才有足够区分度。
+    if len(s) == 1:
+        n = B62_SETS[0].index(s)          # 单字符必属于 0-9A-Za-z 全集
+        return bytes([n]).decode("latin-1") if n else ""
+
     # 三种常见字母表都试，取第一个能解出可打印 ASCII 的
-    best = None
+    best, best_sc = None, None
     for alpha in B62_SETS:
         try:
+            # 与编码端对称：开头的字母表首字符 = 同等数量的前导 0x00 字节。
+            # base62 是整数表示，前导零在数值上不留痕迹，只能借这个约定承载。
+            #
+            # 但**只对首字符 '0' 那张表生效**：另两张表（大写 / 小写开头）
+            # 的首字符在正常串里本来就会出现在第一位，一刀切会把真数据的
+            # 第一个字节吃掉。编码端固定用 '0' 那张表，闭环只需要它支持。
+            k = 0
+            if alpha[0] == "0":
+                while k < len(s) and s[k] == alpha[0]:
+                    k += 1
             n = 0
-            for ch in s:
+            for ch in s[k:]:
                 n = n * 62 + alpha.index(ch)
-            raw = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
+            body = n.to_bytes((n.bit_length() + 7) // 8, "big") if n else b""
+            raw = b"\x00" * k + body
             txt = raw.decode("utf-8", "replace")
-            if best is None or score(txt) > score(best):
-                best = txt
+            # 前导 0x00 是承载数据，不是噪音；评分时先剥掉再比。
+            # 不剥的话多出来的 NUL 会压低分数，把字母表判定整个翻转：
+            # "04e" 本该按 '0-9A-Za-z' 解得 b"\x00\x01 "，却因为分数变低
+            # 被判给另一张表，解出一串完全不相干的字节。
+            sc = score(txt.lstrip("\x00") if k else txt)
+            if best is None or sc > best_sc:
+                best, best_sc = txt, sc
         except Exception:
             continue
     if best is None:
@@ -302,14 +369,18 @@ def _d_b62(s):
 def _e_b62(s):
     # 解码端会拿三种字母表轮着试，编码固定用最常见的那种（0-9A-Za-z）
     alpha = B62_SETS[0]
-    n = int.from_bytes(as_bytes(s), "big")
-    if n == 0:
-        return ""
+    data = as_bytes(s)
+    # 前导 0x00 在 int.from_bytes 里会消失（b"\x00\x01" 与 b"\x01" 都是 1），
+    # 于是 `enc b62 "\x00"` 曾经输出空串、解回来成了 b"" —— 白丢一个字节。
+    # 按 base58 的通行约定：每个前导 0 字节编码成一个字母表首字符（'0'）。
+    # 正常文本的首字节不可能是 0x00，所以这条对文本场景没有影响。
+    pad = len(data) - len(data.lstrip(b"\x00"))
+    n = int.from_bytes(data, "big")
     out = []
     while n:
         n, r = divmod(n, 62)
         out.append(alpha[r])
-    return "".join(reversed(out))
+    return alpha[0] * pad + "".join(reversed(out))
 
 
 @dec_name("base85", "b85")
@@ -588,7 +659,14 @@ def _d_html(s):
 
 @enc_name("html", "htmlent", "entity")
 def _e_html(s):
-    return "".join("&#x%x;" % ord(c) if ord(c) > 127 else c for c in s)
+    # 早期只转非 ASCII（`ord(c) > 127`），`& < > " '` 原样放行 ——
+    # 输出其实**不是合法 HTML 实体串**：粘进页面会被当标签解析，
+    # `enc html 'a<b'` 拿到的还是 `a<b`，等于没转义。
+    # 现在特殊 ASCII 走 html.escape（& < > " ' → 实体），
+    # 非 ASCII 仍转全量实体的形式（&#x4e2d; 这类在 ARG 里更常见）。
+    # `dec html` 就是 html.unescape，两种写法都能还原，闭环不受影响。
+    return "".join("&#x%x;" % ord(c) if ord(c) > 127 else html.escape(c)
+                   for c in s)
 
 
 @dec_name("unicode", "uescape", "\\u")
@@ -1108,12 +1186,20 @@ def _e_utf16le(s):
 
 @dec_name("gbk")
 def _d_gbk(s):
-    return as_bytes(s).decode("gbk")
+    # 用 raw_bytes 而不是 as_bytes：`enc gbk` 产出的是 latin-1 承载的 GBK
+    # 字节，只有 raw_bytes 才能把它原样还原（与 utf16be/utf16le 同一套约定）。
+    # 用 as_bytes 会把 `ÄãºÃ` 先按 UTF-8 重编码成 `C3 84 C3 A3...`，
+    # 解出来是另一串乱码，enc→dec 的闭环直接断掉。
+    return raw_bytes(s).decode("gbk")
 
 
 @enc_name("gbk")
 def _e_gbk(s):
-    return as_bytes(s).decode("gbk", "replace")
+    # 这里是**编码**：输入是 Unicode 文本，输出是 GBK 字节，必须用
+    # _bin_str 按 latin-1 承载，才能被 `dec gbk` 的 raw_bytes 还原。
+    # 早期误写成 `.decode("gbk", "replace")`，方向整个反了 ——
+    # `enc gbk '你好'` 输出的是 `浣犲ソ`（UTF-8 字节），不是 GBK 字节。
+    return _bin_str(as_text(s).encode("gbk"))
 
 
 # ---------------------------------------------------------------- UTF-32
