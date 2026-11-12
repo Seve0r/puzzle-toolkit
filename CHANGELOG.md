@@ -11,6 +11,23 @@
 
 ### 新增
 
+- **`tools/check_structure.py --fix`：按实测值自动回写结构图**。
+
+  `docs/structure.md` 里全是硬编码行号，手算偏移已经漏过三次（`codec.py main`
+  347→356→370、ui.py 8 处偏 5、classic 整张分区表偏移 1 行）。校验脚本以前只
+  报错，改还是得人改。
+
+  现在加 `--fix`：数字全部由 `ast` 算出来，直接写回文档，写完自动复查一遍。
+
+  ```bash
+  python3 tools/check_structure.py --fix
+  # ✍  已按实测值修正 33 处，写回 docs/structure.md
+  #   复查一遍：… ✅ 全部一致
+  ```
+
+  默认仍只读。修的时候只替换单元格里的数字（`**171**` 的粗体不会丢），
+  同名函数有多处定义时**不猜**，留给人看。
+
 - **`tools/check_sync.py`：校验仓库版与 skill 版是否一致**。
   如果你把本仓库同时装成了 dsh skill（`~/.dsh/skills/`），那 11 个文件各有两份
   副本（5 个脚本 + `data/words.txt` + 5 个 `SKILL.md`）。分叉的后果很隐蔽：
@@ -1071,6 +1088,46 @@
 - README 改为公开仓库表述：clone 地址统一走 HTTPS、去掉「先配 GitHub 认证」的
   前置要求、补上 raw 直链下载（并注明国内直连会超时）。
 - `docs/codec.md` 新增「`€` 与私用区字符：乱码里的半个字节」一节。
+
+### 修复
+
+- **`codec.py` 的 `enc gbk` 方向整个反了**：它写的是 `decode('gbk')`，
+  于是 `enc gbk '你好'` 吐出来的是 UTF-8 字节（显示成 `浣犲ソ`），不是 GBK
+  字节 `c4e3bac3`。同时 `dec gbk` 用 `as_bytes()` 而不是 `raw_bytes()`，
+  接不住 latin-1 承载的字节。现在两个方向都对，`enc gbk` → `dec gbk` 能闭环，
+  `dec gbk -f 真实GBK文件` 也正常。
+
+- **`codec.py` 的 `enc b62` 丢前导零**：前导 `0x00` 在整数里不留痕迹，
+  `enc b62 "\x00"` 直接输出空串，解回来成了空字节。按 base58 的通行约定，
+  每个前导 `0x00` 字节编码成一个 `'0'`，`dec b62` 也认这个约定。
+  单字符输入固定按 `0-9A-Za-z` 那张表走——三张字母表都能解出一个字节，没法猜。
+
+- **`codec.py` 的 `enc html` 只转非 ASCII**：`& < > " '` 原样放行，输出其实
+  不是合法 HTML 实体串（`enc html 'a<b'` 出来还是 `a<b`）。现在一起转义成实体，
+  `dec html` 照样能还原。
+
+- **`codec.py` 的 `dec base64` 静默丢弃非法字符**：`validate=False` 让
+  `dec b64 '一段中文'` 也能"成功"输出一串垃圾——用户以为解出来了。现在解码前
+  点名报出非法字符；`base64url` 同样处理，并提示该换哪个。
+
+- **`ui.py` 的访问地址**：`--host 0.0.0.0` 时原来一律打印 `127.0.0.1`，
+  从别的机器看这个地址指的就是对方自己，等于没给地址。现在探测本机对外 IP
+  打印，并单列一行本机地址；浏览器仍开环回地址。
+
+- **`ui.py` 的频谱图不清理**：`stego spec` 生成的 PNG 留在 `$TMPDIR` 里越攒越多，
+  而且默认文件名写死成 `spectrum.png`（两个请求同时跑会互相覆盖）。现在指定
+  唯一路径，转成 base64 返回后立刻删掉。
+
+- **`tests/dataset.json` 补 10 条**覆盖上面这些路径：gbk 双向 + 真实 GBK 文件、
+  b62 前导零、html 特殊字符、base64/base64url 非法字符报错。
+
+### 文档
+
+- `docs/codec.md` 新增「★ 编出来必须能解回去（gbk / base62 / html / base64）」
+  一节，用表格列出四处约定和它们曾经的错法。
+- `docs/stego.md` 修掉「`dec bin` 用 `re.sub` 取位」的过时描述——它现在会校验
+  字符，`2`-`9` 直接报错而不是静默错位。
+- `README.md` / `AGENTS.md` 补上 `check_structure.py --fix` 的用法。
 
 ## [0.2.0] - 2026-10-24
 

@@ -461,21 +461,25 @@ puzzle-toolkit/
     structure.md  ← 各脚本的代码结构图（维护者视角：改哪一段）
     testdata-prompt.md ← 让 AI 生成测试数据集的提示词
   tools/
-    check_structure.py ← 校验结构图与代码是否一致（只读，提交前跑）
+    check_structure.py ← 校验结构图与代码是否一致（默认只读，`--fix` 可回写）
     check_sync.py      ← 校验仓库版与 skill 版两份副本是否一致（只读）
   CHANGELOG.md    更新日志
 ```
 
 **`tools/check_structure.py`**：结构图里全是硬编码行号，改一行代码就可能集体漂。
-这个脚本按 `ast` 重算一遍再和文档比对，只读、只报错：
+这个脚本按 `ast` 重算一遍再和文档比对：
 
 ```bash
-python3 tools/check_structure.py      # 一致 → 退出码 0；有漂移 → 1 并列出差异
-python3 tools/check_structure.py -v   # 逐项列出对比
+python3 tools/check_structure.py        # 一致 → 退出码 0；有漂移 → 1 并列出差异
+python3 tools/check_structure.py -v     # 逐项列出对比
+python3 tools/check_structure.py --fix  # 按实测值改回去，改完自动复查
 ```
 
 它查四类：脚本总表（行数 / 顶层对象 / 分区 / 最长函数）、各章节分区表的行范围、
 正文里「N 行 / M 个顶层对象」那几句、以及散落在正文中的 `函数名（L数字）`。
+
+默认只读。加 `--fix` 才会写文档——数字全部由 `ast` 算出来，不靠人眼对齐；
+这套偏移手算已经漏过三次（codec 的 main、ui 的 8 处行号、classic 整张分区表）。
 
 **`tools/check_sync.py`**：如果你把本仓库同时装成了 dsh skill（`~/.dsh/skills/`），
 两边是**各存一份副本**。分叉的后果很隐蔽——在 dsh 里跑和在终端里跑结果不同，

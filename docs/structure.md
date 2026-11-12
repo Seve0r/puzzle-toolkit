@@ -8,12 +8,12 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 3122 | 184 | 16 | `main` 370 行 | 编码识别与解码 |
+| `codec.py` | 3208 | 187 | 16 | `main` 370 行 | 编码识别与解码 |
 | `classic.py` | 1598 | 101 | 18 | `main` 268 行 | 古典密码 |
 | `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
-| `ui.py` | 1851 | 39 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
+| `ui.py` | 1907 | 41 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | `_pigpen_slots_json` 22 行 | 界面参数表（纯数据，不 import codec） |
 
 ---
@@ -24,23 +24,23 @@
 
 | 区 | 行范围 | 行数 | 对象 | 干什么 |
 |---|---|---:|---:|---|
-| 文件头 | 1–63 | 63 | — | docstring（也就是 `--help` 的内容）+ import |
-| 基础设施 | 64–154 | 91 | 11 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口、`_hint`（`-q` 的静默出口） |
-| Base 系列 | 155–413 | 259 | 27 | base64/32/58/62/85/91/36 等 8 对 |
-| 进制 / 二进制串 | 414–522 | 109 | 10 | hex·bin·dec·oct·block36 |
-| Punycode | 523–571 | 49 | 4 | IDN 编码 |
-| 文本转义 | 572–650 | 79 | 10 | url / html / unicode / js / quoted-printable |
-| 字符替换 | 651–702 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
-| 摩斯 | 703–750 | 48 | 4 | 国际摩斯 + 两张表 |
-| 和文モールス | 751–921 | 171 | 11 | Wabun code + 6 张表/工具 |
-| 盲文 | 922–1009 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
-| 压缩流与字符编码 | 1010–1118 | 109 | 12 | zlib/uu + utf16 + gbk |
-| UTF-32 | 1119–1170 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1171–2011 | 841 | 27 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 2012–2379 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2380–2445 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2446–2698 | 253 | 13 | `convert` |
-| CLI | 2699–3122 | 424 | 3 | `read_input` → `main` |
+| 文件头 | 1–66 | 66 | — | docstring（也就是 `--help` 的内容）+ import |
+| 基础设施 | 67–157 | 91 | 11 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口、`_hint`（`-q` 的静默出口） |
+| Base 系列 | 158–484 | 327 | 27 | base64/32/58/62/85/91/36 等 8 对 |
+| 进制 / 二进制串 | 485–593 | 109 | 10 | hex·bin·dec·oct·block36 |
+| Punycode | 594–642 | 49 | 4 | IDN 编码 |
+| 文本转义 | 643–728 | 86 | 10 | url / html / unicode / js / quoted-printable |
+| 字符替换 | 729–780 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
+| 摩斯 | 781–828 | 48 | 4 | 国际摩斯 + 两张表 |
+| 和文モールス | 829–999 | 171 | 11 | Wabun code + 6 张表/工具 |
+| 盲文 | 1000–1087 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
+| 压缩流与字符编码 | 1088–1204 | 117 | 12 | zlib/uu + utf16 + gbk |
+| UTF-32 | 1205–1256 | 52 | 7 | utf32/be/le |
+| **乱码还原** | 1257–2097 | 841 | 27 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 2098–2465 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2466–2531 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2532–2784 | 253 | 13 | `convert` |
+| CLI | 2785–3208 | 424 | 3 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -118,7 +118,7 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1683）
+#### 3.1 调度顺序（`_d_mojibake`, L1769）
 
 ```
 _d_mojibake(s)                ← 进来先 _mb_clean(s)：去掉首尾 ASCII 空白
@@ -226,12 +226,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2112 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2198 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1785）/ `bytes_to_text`（L2574） |
+| 报告里的编码名不对 | `text_encoding_name`（L1871）/ `bytes_to_text`（L2660） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2500）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2749）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2586）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2835）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---
@@ -434,17 +434,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
-| `run_action(payload)` | L435 | 唯一后端入口，按 `tab` 分发到各页 |
-| `_encoding_names()` | L145 | 把注册表按「同一概念」去重（并查集），下拉框用 |
-| `_run_mojibake` | L318 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
-| `Handler._authed()` | L643 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
-| `_is_local_host()` | L66 | 判断监听地址是不是只有本机能连（决定要不要强制口令） |
+| `run_action(payload)` | L477 | 唯一后端入口，按 `tab` 分发到各页 |
+| `_encoding_names()` | L164 | 把注册表按「同一概念」去重（并查集），下拉框用 |
+| `_run_mojibake` | L360 | mojibake 的四条通路（显式编码对 / best / deep / 普通） |
+| `Handler._authed()` | L685 | 口令校验（`X-Token` 头 / `?token=`），不通过就 401 |
+| `_is_local_host()` | L67 | 判断监听地址是不是只有本机能连（决定要不要强制口令） |
 | `_run_stego` / `_run_num` / `_run_subcommand` | — | 各 tab 的执行 |
-| 内嵌 JS `doRun()` | L1631 | 收集控件值 → POST `/api/run` |
-| 内嵌 JS `buildSymbolPad` | L1342 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
-| 内嵌 JS `updateSymPrev` | L1437 | 输入框下方的实时图形预览 |
-| 内嵌 JS `updateSymOut` | L1467 | 结果框下方回显（符号直接画、字母按变体画回符号） |
-| 内嵌 JS `pigpenLive` | L1502 | 实时双向换算，输入即出结果 |
+| 内嵌 JS `doRun()` | L1673 | 收集控件值 → POST `/api/run` |
+| 内嵌 JS `buildSymbolPad` | L1384 | 按 slots 数据画可点的 SVG 方块网格（符号面板） |
+| 内嵌 JS `updateSymPrev` | L1479 | 输入框下方的实时图形预览 |
+| 内嵌 JS `updateSymOut` | L1509 | 结果框下方回显（符号直接画、字母按变体画回符号） |
+| 内嵌 JS `pigpenLive` | L1544 | 实时双向换算，输入即出结果 |
 
 ### `ui_params.py`（489 行）
 

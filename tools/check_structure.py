@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""校验 docs/structure.md 与源码是否还一致。
+"""校验 docs/structure.md 与源码是否还一致，可选按实测值自动修正。
 
 structure.md 里那些行号、对象数、分区范围全是**派生数据**：改一行代码就可能
 让它们集体漂。AGENTS.md 写着「别手算偏移，一律用 ast 重新校准」——这个脚本把
 那条例行变成一条命令。
 
-**只读，不改任何文件。** 发现不一致就打印「文档写的 / 实测的」，然后以非零
-退出码结束，适合挂在提交前。
+默认**只读**：发现不一致就打印「文档写的 / 实测的」，以非零退出码结束，适合
+挂在提交前。加 `--fix` 才按实测值把文档改回去，改完自动复查一遍。
 
 用法：
     python3 tools/check_structure.py          # 只报不一致
+    python3 tools/check_structure.py --fix    # 按实测值修正文档，然后复查
     python3 tools/check_structure.py -v       # 逐项列出对比
     python3 tools/check_structure.py --doc X  # 换一份文档（默认 docs/structure.md）
 
@@ -21,6 +22,8 @@ structure.md 里那些行号、对象数、分区范围全是**派生数据**：
   · 「顶层对象」这一列的口径其实是 `len(ast.body)`（顶层**语句**数，含 import
     和常量赋值），不是「顶层 def/class 个数」——按后者算 codec 会得 126 而
     文档写 181，很容易把对的改成错的。脚本按真实口径校验。
+  · 手算偏移已经漏过三次（codec/classic/ui/num 各一次），所以补了 `--fix`：
+    数字全部由 ast 算出来，人只负责跑命令。
 """
 import argparse
 import ast
@@ -75,9 +78,41 @@ def _fmt_longest(info):
     return "`%s` %d 行" % info["longest"]
 
 
+# ---------------------------------------------------------------- 改写工具
+
+def _rewrite_groups(m, pairs):
+    """把 match 里指定分组换成新值，返回 (起点, 终点, 替换后整段文本)。
+
+    只替换分组本身，不动周围的 `**` 粗体和空格 —— 文档里有的单元格写的是
+    `**171**`，直接整段重写会把粗体弄丢。
+    """
+    row = m.group(0)
+    # 从右往左替换，这样左边的偏移不会被搅乱
+    for gi, val in sorted(pairs.items(), key=lambda kv: m.start(kv[0]), reverse=True):
+        row = row[:m.start(gi) - m.start(0)] + val + row[m.end(gi) - m.start(0):]
+    return m.start(0), m.end(0), row
+
+
+def _add_fix(fixes, span_or_pair):
+    if span_or_pair:
+        fixes.append(span_or_pair)
+
+
+def apply_fixes(doc, fixes):
+    """把 fixes 应用到 doc 上。重叠的改动只保留第一个（从右往左应用）。"""
+    out = doc
+    taken = []
+    for s, e, new in sorted(fixes, key=lambda x: x[0], reverse=True):
+        if any(not (e <= s2 or s >= e2) for s2, e2 in taken):
+            continue                     # 与已采纳的改动重叠，跳过
+        out = out[:s] + new + out[e:]
+        taken.append((s, e))
+    return out
+
+
 # ---------------------------------------------------------------- 各类检查
 
-def check_summary_table(doc, infos, problems, report):
+def check_summary_table(doc, infos, problems, fixes, report):
     """第一节那张「脚本 / 行数 / 顶层对象 / 分区 / 最长函数 / 职责」。"""
     for name in SCRIPTS:
         info = infos.get(name)
@@ -96,19 +131,24 @@ def check_summary_table(doc, infos, problems, report):
         want = (info["lines"], info["stmts"], real_sec, _fmt_longest(info))
         got = (d_lines, d_stmts, d_sec, d_longest)
         if want != got:
-            for label, w, g in zip(("行数", "顶层对象", "分区", "最长函数"), want, got):
+            pairs = {}
+            for idx, (label, w, g) in enumerate(
+                    zip(("行数", "顶层对象", "分区", "最长函数"), want, got)):
                 if w != g:
                     problems.append("脚本总表 `%s` 的%s：文档 %s，实测 %s"
                                     % (name, label, g, w))
+                    pairs[idx + 1] = str(w)
+            _add_fix(fixes, _rewrite_groups(m, pairs))
         else:
             report("  ✅ %s" % name)
 
 
 def sections_of(doc):
-    """把文档按 SECTION_MAP 切成 [(脚本名, 章节正文)]。
+    """把文档按 SECTION_MAP 切成 [(脚本名, 起点, 终点, 章节正文)]。
 
     分区表校验和正文行号校验都要「只看属于这个文件的章节」—— 全文盲搜会把
-    codec 的区间和 classic 的区间混在一起，对不上才怪。
+    codec 的区间和 classic 的区间混在一起，对不上才怪。带偏移是为了让
+    `--fix` 能把章节内的相对位置换算成全文位置。
     """
     marks = [(doc.find(t), f) for t, f in SECTION_MAP]
     marks = [(i, f) for i, f in marks if i >= 0]
@@ -116,33 +156,34 @@ def sections_of(doc):
     out = []
     for idx, (start, fname) in enumerate(marks):
         end = marks[idx + 1][0] if idx + 1 < len(marks) else len(doc)
-        out.append((fname, doc[start:end]))
+        out.append((fname, start, end, doc[start:end]))
     return out
 
 
-def check_section_tables(doc, infos, problems, report):
+def check_section_tables(doc, infos, problems, fixes, report):
     """各章节的分区表：`| 区 | 行范围 | 行数 | … |`。
 
     只校验有锚点的脚本；`num.py` 没有分区表。
     """
-    secs = dict(sections_of(doc))
+    secs = {name: (text, s0) for name, s0, _e, text in sections_of(doc)}
     for name in SCRIPTS:
         info = infos.get(name)
         if not info or not info["anchors"]:
             continue
-        sec = secs.get(name)
-        if sec is None:
+        if name not in secs:
             problems.append("structure.md 里找不到 %s 的章节" % name)
             continue
-        anchors = info["anchors"]
-        rows = [(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                for m in re.finditer(
-                    r"^\|\s*[^|]+?\s*\|\s*(\d+)[–-](\d+)\s*\|\s*\*{0,2}(\d+)\*{0,2}\s*\|",
-                    sec, re.M)]
+        sec, s0 = secs[name]
+        row_re = re.compile(
+            r"^\|\s*[^|]+?\s*\|\s*(\d+)[–-](\d+)\s*\|\s*\*{0,2}(\d+)\*{0,2}\s*\|",
+            re.M)
+        rows = [(m, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                for m in row_re.finditer(sec)]
         # 表里可能多一行「文件头」（从第 1 行开始、到第一个锚点前）。codec 有，
         # classic / hashcrypto / stego 没有 —— 按文档实际形态决定要不要补。
         expect = []
-        if rows and rows[0][0] == 1 and anchors[0] > 1:
+        anchors = info["anchors"]
+        if rows and rows[0][1] == 1 and anchors[0] > 1:
             expect.append((1, anchors[0] - 1, anchors[0] - 1))
         for i, a in enumerate(anchors):
             end = anchors[i + 1] - 1 if i + 1 < len(anchors) else info["lines"]
@@ -156,50 +197,80 @@ def check_section_tables(doc, infos, problems, report):
                             % (name, len(rows), len(expect)))
             continue
         bad = 0
-        for (ga, gb, gn), (ea, eb, en) in zip(rows, expect):
+        for (m, ga, gb, gn), (ea, eb, en) in zip(rows, expect):
             if (ga, gb, gn) != (ea, eb, en):
                 problems.append("%s 分区表：文档 %d–%d（%d 行），实测 %d–%d（%d 行）"
                                 % (name, ga, gb, gn, ea, eb, en))
+                # 行数那格可能是 **粗体**，只换数字。注意 m 的偏移是相对章节的，
+                # 要加上章节起点才是全文位置。
+                fs, fe, frow = _rewrite_groups(
+                    m, {1: str(ea), 2: str(eb), 3: str(en)})
+                _add_fix(fixes, (s0 + fs, s0 + fe, frow))
                 bad += 1
         if not bad:
             report("  ✅ %s（%d 区）" % (name, len(expect)))
 
 
-def check_prose_stats(doc, infos, problems, report):
-    """正文那句「N 行 / M 个顶层对象 / K 个分区」。"""
+def check_prose_stats(doc, infos, problems, fixes, report):
+    """正文那句「N 行 / M 个顶层对象 / K 个分区」。
+
+    定位靠**章节归属**而不是行数：行数一旦漂了，「按行数找是哪个脚本」就找不到，
+    而这正是最需要修的情形。
+    """
     pat = re.compile(r"(\d+) 行 / (\d+) 个顶层对象 / (?:(\d+) 个分区|\*\*无分区\*\*)")
-    index = {name: infos[name] for name in infos}
+    secs = sections_of(doc)
+
+    def owner(pos):
+        for nm, s, e, _text in secs:
+            if s <= pos < e:
+                return nm
+        return None
+
     for m in pat.finditer(doc):
         d_lines, d_stmts = int(m.group(1)), int(m.group(2))
         d_sec = m.group(3)          # None 表示文档写的是「无分区」
-        cand = [n for n, i in index.items() if i["lines"] == d_lines]
-        if len(cand) != 1:
-            problems.append("正文统计「%d 行 / %d 个顶层对象」对不上任何脚本的行数"
-                            % (d_lines, d_stmts))
-            continue
-        info = index[cand[0]]
+        name = owner(m.start())
+        if name not in infos:
+            # 落在章节之外（概览段之类）：退回按行数唯一匹配
+            cand = [n for n, i in infos.items() if i["lines"] == d_lines]
+            if len(cand) != 1:
+                problems.append("正文统计「%d 行 / %d 个顶层对象」对不上任何脚本的行数"
+                                % (d_lines, d_stmts))
+                continue
+            name = cand[0]
+        info = infos[name]
         real_sec = len(info["anchors"]) or None
+        wrong = (d_stmts != info["stmts"]
+                 or (d_sec is None) != (real_sec is None)
+                 or (real_sec is not None and int(d_sec) != real_sec))
+        if not wrong:
+            report("  ✅ %s" % name)
+            continue
         if d_stmts != info["stmts"]:
             problems.append("正文统计 %s：文档写 %d 个顶层对象，实测 %d"
-                            % (cand[0], d_stmts, info["stmts"]))
+                            % (name, d_stmts, info["stmts"]))
         elif (d_sec is None) != (real_sec is None):
             problems.append("正文统计 %s：分区有无不一致（实测 %s 个分区）"
-                            % (cand[0], real_sec or 0))
-        elif real_sec is not None and int(d_sec) != real_sec:
-            problems.append("正文统计 %s：文档写 %s 个分区，实测 %s"
-                            % (cand[0], d_sec, real_sec))
+                            % (name, real_sec or 0))
         else:
-            report("  ✅ %s" % cand[0])
+            problems.append("正文统计 %s：文档写 %s 个分区，实测 %s"
+                            % (name, d_sec, real_sec))
+        if real_sec is None:
+            new = "%d 行 / %d 个顶层对象 / **无分区**" % (info["lines"], info["stmts"])
+        else:
+            new = "%d 行 / %d 个顶层对象 / %d 个分区" % (
+                info["lines"], info["stmts"], real_sec)
+        _add_fix(fixes, (m.start(), m.end(), new))
 
 
-def check_line_refs(doc, infos, problems, report):
+def check_line_refs(doc, infos, problems, fixes, report):
     """正文里散落的 `函数名`（L数字），逐个核对那一行是不是该函数。"""
     secs = sections_of(doc)
     if not secs:
         problems.append("认不出任何章节，structure.md 结构变了？")
         return
     ref_re = re.compile(r"`([A-Za-z_][A-Za-z0-9_.()]*)`[^\n]{0,14}?（?L(\d+)(?!\s*[–-])")
-    for fname, sec in secs:
+    for fname, s0, _e, sec in secs:
         lines = infos[fname]["src_lines"]
         bad = 0
         for m in ref_re.finditer(sec):
@@ -217,6 +288,9 @@ def check_line_refs(doc, infos, problems, report):
                             % (fname, key, ln,
                                ("L" + "/L".join(map(str, real))) if real else "找不到该函数"))
             bad += 1
+            # 同名函数有多处定义时不猜，留给人看
+            if len(real) == 1:
+                _add_fix(fixes, (s0 + m.start(2), s0 + m.end(2), str(real[0])))
         if not bad:
             report("  ✅ %s（%d 处引用）" % (fname, len(ref_re.findall(sec))))
 
@@ -226,6 +300,8 @@ def check_line_refs(doc, infos, problems, report):
 def main(argv):
     ap = argparse.ArgumentParser(description="校验 docs/structure.md 与源码一致")
     ap.add_argument("--doc", default=DEFAULT_DOC, help="要校验的文档")
+    ap.add_argument("--fix", action="store_true",
+                    help="按实测值把文档改回去，改完自动复查")
     ap.add_argument("-v", "--verbose", action="store_true", help="逐项列出")
     args = ap.parse_args(argv)
 
@@ -252,31 +328,60 @@ def main(argv):
             return 2
 
     problems = []
+    fixes = []
     print("校验 %s" % os.path.relpath(args.doc, ROOT))
     print("[1] 脚本总表（行数 / 顶层对象 / 分区 / 最长函数）")
-    check_summary_table(doc, infos, problems, report)
+    check_summary_table(doc, infos, problems, fixes, report)
     print("[2] 各章节分区表的行范围")
-    check_section_tables(doc, infos, problems, report)
+    check_section_tables(doc, infos, problems, fixes, report)
     print("[3] 正文「N 行 / M 个顶层对象 / K 个分区」")
-    check_prose_stats(doc, infos, problems, report)
+    check_prose_stats(doc, infos, problems, fixes, report)
     print("[4] 正文里散落的函数行号")
-    check_line_refs(doc, infos, problems, report)
+    check_line_refs(doc, infos, problems, fixes, report)
 
     print()
     if not problems:
         print("✅ 全部一致")
         return 0
+
     # 去重（同一处可能被多条规则各报一次）
-    seen = set()
-    uniq = []
+    def uniq(items):
+        seen = set()
+        out = []
+        for x in items:
+            k = repr(x)
+            if k not in seen:
+                seen.add(k)
+                out.append(x)
+        return out
+
+    problems = uniq(problems)
+    fixes = uniq(fixes)
+    rel = os.path.relpath(args.doc, ROOT)
+
+    if args.fix:
+        if not fixes:
+            print("❌ 发现 %d 处不一致，但没有一处能自动修：" % len(problems))
+            for p in problems:
+                print("   · %s" % p)
+            return 1
+        new_doc = apply_fixes(doc, fixes)
+        if new_doc == doc:
+            print("⚠ 算出来 %d 处要改，但文本没变化，可能规则有 bug" % len(fixes))
+            return 1
+        with open(args.doc, "w", encoding="utf-8") as f:
+            f.write(new_doc)
+        print("✍  已按实测值修正 %d 处，写回 %s" % (len(fixes), rel))
+        print("   复查一遍：")
+        return main(["--doc", args.doc] + (["-v"] if args.verbose else []))
+
+    print("❌ 发现 %d 处不一致：" % len(problems))
     for p in problems:
-        if p not in seen:
-            seen.add(p)
-            uniq.append(p)
-    print("❌ 发现 %d 处不一致：" % len(uniq))
-    for p in uniq:
         print("   · %s" % p)
     print("\n按 AGENTS.md：一律用 ast 重新校准，别手算偏移。")
+    if fixes:
+        print("（这次 %d 处能自动修：`python3 tools/check_structure.py --fix`）"
+              % len(fixes))
     return 1
 
 
