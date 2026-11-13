@@ -46,7 +46,11 @@ import codec        # noqa: E402
 import stego        # noqa: E402
 
 # 本机计时噪音（百分比）。表格里用它判断「这个变化算不算数」。
-NOISE = 3.0
+#
+# 实测：秒级的项散布约 2%，毫秒级的项（mojibake_cross / brute）能到 8~16%。
+# 统一取 5%——比秒级项的实测噪音宽一点，避免毫秒级微基准天天误报；
+# 代价是「优化 3%」这种结论不再被当真，那本来也不该当真。
+NOISE = 5.0
 
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
 _PLAIN = ("the quick brown fox jumps over the lazy dog and then runs away " * 60)

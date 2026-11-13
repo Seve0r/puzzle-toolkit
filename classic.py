@@ -58,6 +58,12 @@ BIGRAMS = {
     "om": 0.5, "ur": 0.5,
 }
 
+# `BIGRAMS[pair] ** 1.5` 原来在 english_score 里对**每一个相邻字母对**现算。
+# 一个 24 字母的候选要算 23 次，而 a1z26 的枚举有 F(24)=75025 个候选 ——
+# 单这一个浮点幂就是 170 万次，是评分里最贵的一项。表是静态的，预计算一次，
+# 结果与每次现算完全相同（同一表达式、同一浮点运算），不改变任何行为。
+_BIGRAMS_P15 = {k: v ** 1.5 for k, v in BIGRAMS.items()}
+
 ALPHA = "abcdefghijklmnopqrstuvwxyz"
 
 
@@ -85,13 +91,39 @@ def chi_squared(letters):
     obs = [0] * 26
     for c in letters:
         obs[ord(c) - 97] += 1
+    return _chi_squared_obs(obs, n)
+
+
+def _chi_squared_obs(obs, n):
+    """卡方，输入已经是 26 个字母的计数。
+
+    和 `chi_squared` 分开，是为了让 english_score 的**增量**路径复用同一套公式：
+    a1z26_decode 要枚举上万个候选，每个候选都重建一次 obs、重扫一遍字母，
+    那两件事加起来比卡方本身还贵。**表达式和遍历顺序必须和原来完全一致**，
+    否则浮点末位会变，破解器的候选排序可能跟着翻。
+    """
+    exp = _exp_table(n)
     chi = 0.0
     for i in range(26):
-        exp = EN_FREQ[i] * n / 100.0
-        if exp <= 0:
+        e = exp[i]
+        if e <= 0:
             continue
-        chi += (obs[i] - exp) ** 2 / exp
+        chi += (obs[i] - e) ** 2 / e
     return chi
+
+
+# 期望频次表（`EN_FREQ[i] * n / 100`）只跟字母数 n 有关。a1z26 的候选字母数
+# 只有 12~24 这几种，却要按「每个候选 26 次」重复算上万遍。按 n 缓存起来，
+# 表达式一字不改，浮点结果逐位相同。n 最大就是词长，表的上限天然有界。
+_EXP_CACHE = {}
+
+
+def _exp_table(n):
+    t = _EXP_CACHE.get(n)
+    if t is None:
+        t = [EN_FREQ[i] * n / 100.0 for i in range(26)]
+        _EXP_CACHE[n] = t
+    return t
 
 
 def english_score(s):
@@ -111,6 +143,38 @@ def english_score(s):
         return -1e6
 
     n = len(letters)
+    obs = [0] * 26
+    for c in letters:
+        obs[ord(c) - 97] += 1
+
+    low = s.lower()
+    bl = len(low) - 1
+    big = 0.0
+    if bl > 0:
+        # 查预计算表，别在这里现算 `** 1.5`（见 _BIGRAMS_P15 的说明）
+        p15 = _BIGRAMS_P15.get
+        for i in range(bl):
+            big += p15(low[i:i + 2], 0.0)
+
+    return _score_core(n, obs, big, bl, re.findall(r"[a-z]{2,}", low))
+
+
+def _score_core(n, obs, big, bl, words):
+    """english_score 的内核：给定**统计量**算分。
+
+    参数就是 english_score 从字符串里解析出来的那几样：
+
+         n      字母数（= len(only_letters(s))）
+         obs    26 个字母的计数
+         big    bigram 权重累计（已经查过 _BIGRAMS_P15）
+         bl     bigram 个数（= len(s.lower()) - 1）
+         words  按 `[a-z]{2,}` 切出来的词列表
+
+    拆出来是为了让 a1z26_decode 那种要枚举上万个候选的地方增量维护这几个量，
+    而不是每个候选都重扫一遍字符串（实测那是它 60% 的时间）。
+
+    **公式一个字都不能改**——拆前拆后必须逐位相同，否则破解器的候选排序会变。
+    """
     # 样本量置信度：30 字母以下 chi² 完全不参与。
     # 16 个字母的英文天然"每个字母各出现一次"，chi² 会判它极不像英文，
     # 反而把均匀分布的乱码判成好文本——极短文本必须只看 bigram。
@@ -118,17 +182,11 @@ def english_score(s):
     chi_w = 1.2 * conf                  # 30 字母 0 → 90 字母 1.2
     big_w = 55.0 - 25.0 * conf          # 30 字母 55 → 90 字母 30
 
-    sc = -chi_squared(letters) * chi_w
+    sc = -_chi_squared_obs(obs, n) * chi_w
 
-    low = s.lower()
-    bl = len(low) - 1
     if bl > 0:
-        big = 0.0
-        for i in range(bl):
-            big += BIGRAMS.get(low[i:i + 2], 0.0) ** 1.5
         sc += (big / bl) * big_w
 
-    words = re.findall(r"[a-z]{2,}", low)
     if words:
         hits = sum(1 for w in words if w in COMMON_WORDS)
         sc += 25.0 * hits
@@ -693,11 +751,34 @@ def a1z26_decode(s):
                 i += 1
         return "".join(out)
 
-    results = []
+    # 边枚举边维护最优，**并且增量维护评分要用的统计量**。
+    #
+    # 原来每个候选都走一遍 english_score(txt)：only_letters 重扫、重建 26 位
+    # 计数、正则切词、Python 循环累加 bigram。24 位是 F(24)=75025 个候选，
+    # profile 显示这些重复劳动占了六成以上，而候选串本来就只有小写字母 ——
+    # only_letters(s) == s、words == [s]（没空格，整串算一个词）。
+    #
+    # 所以这里直接维护 obs（字母计数）和 bigs（相邻对的权重列表），到叶节点
+    # 交给 _score_core。公式和 english_score 完全同源，浮点逐位相同。
+    #
+    # bigs 存成列表而不是「累加再减」，是因为 big -= x 有浮点误差累积；
+    # sum(列表) 是 C 循环，既精确又快。
+    obs = [0] * 26
+    acc = []            # 已选的字母
+    bigs = []           # 相邻对的预计算权重，长度 = len(acc) - 1
+    best = None
+    best_sc = None
 
-    def rec(i, acc):
+    def rec(i):
+        nonlocal best, best_sc
         if i == len(digits):
-            results.append("".join(acc))
+            n = len(acc)
+            if n < 2:                       # 和 english_score 的早退一致
+                sc = -1e6
+            else:
+                sc = _score_core(n, obs, sum(bigs), len(bigs), ["".join(acc)])
+            if best_sc is None or sc > best_sc:
+                best, best_sc = "".join(acc), sc
             return
         for width in (1, 2):
             if i + width > len(digits):
@@ -705,16 +786,25 @@ def a1z26_decode(s):
             if width == 2 and digits[i] == "0":
                 continue
             v = int(digits[i:i + width])
-            if 1 <= v <= 26:
-                acc.append(chr(v + 96))
-                rec(i + width, acc)
-                acc.pop()
+            if not 1 <= v <= 26:
+                continue
+            ch = chr(v + 96)
+            added_big = False
+            if acc:                         # 新字母和上一个字母组成新的 bigram
+                bigs.append(_BIGRAMS_P15.get(acc[-1] + ch, 0.0))
+                added_big = True
+            acc.append(ch)
+            obs[v - 1] += 1
+            rec(i + width)
+            obs[v - 1] -= 1
+            acc.pop()
+            if added_big:
+                bigs.pop()
 
-    rec(0, [])
-    if not results:
+    rec(0)
+    if best is None:
         raise ValueError("无法按 A1Z26 切分")
-    results.sort(key=lambda x: -english_score(x))
-    return results[0]
+    return best
 
 
 def a1z26_encode(s):
