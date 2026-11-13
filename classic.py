@@ -126,7 +126,7 @@ def _exp_table(n):
     return t
 
 
-def english_score(s):
+def english_score(s, letters=None):
     """越大越像英文。
 
     权重经实测校准，两个坑都踩过：
@@ -137,8 +137,13 @@ def english_score(s):
     ② chi² 在短文本上不可靠。十几个字母时频率统计纯属噪声，会压过真正有意义的
        bigram/单词信号（实测 "Wkh txlfn eurzq ira" 的正确答案只赢 0.8 分）。
        所以按样本量自适应：字少时降 chi² 权重、升 bigram 权重，字多时反过来。
+
+    `letters` 是可选的「`only_letters(s)` 已经算好」的版本。爬山法每次评分都要
+    过滤一遍全串，而调用方手里本来就有这个结果 —— 传进来能省掉一遍 O(n) 扫描
+    （实测占破解总时间的 20% 以上）。不传就自己算，行为完全一样。
     """
-    letters = only_letters(s)
+    if letters is None:
+        letters = only_letters(s)
     if len(letters) < 2:
         return -1e6
 
@@ -509,22 +514,50 @@ def affine(text, a=None, b=None, top=10):
 # ------------------------------------------------------------------ 单表替换（爬山）
 
 def sub_hillclimb(text, restarts=12, iterations=4000):
-    """在 26! 空间里爬山，随机重启若干次取最优。返回几个不同结果。"""
+    """在 26! 空间里爬山，随机重启若干次取最优。返回几个不同结果。
+
+    ★ 评分是**增量**做的，不是每次重建整串。
+
+    原来每次迭代都 `apply(mapping)` 重建整串明文、`only_letters` 再扫一遍、
+    `english_score` 里第三遍 —— 默认参数要跑 5.2 万次评分，profile 里这些重复
+    扫描占了近一半时间（单 `only_letters` 就 0.48s / 1.8s）。
+
+    现在起点处铺一次全量，之后每次迭代只把「交换的那两个字母」覆盖到它们出现
+    过的位置：O(该字母出现次数)，而不是 O(n)。明文同时维护两个视图 —— 全串和
+    只含字母的串 —— 省掉每次都重新过滤。
+    """
     import random
     letters = only_letters(text)
     if len(letters) < 20:
         raise ValueError("文本太短（至少 20 个字母），单表替换破解不可靠")
 
-    def apply(mapping):
-        return "".join(mapping.get(c, c) for c in text.lower())
+    low = text.lower()
+    chars = list(low)                     # 当前明文全串（非字母位置永不动）
+    pos_of = {c: [] for c in ALPHA}       # 密文字母 -> 它在 chars 里的所有下标
+    slot = [-1] * len(chars)              # chars 下标 -> 它在 lts 里的位置
+    lts = []                              # 当前明文的字母序列
+    for i, ch in enumerate(chars):
+        if ch in pos_of:
+            slot[i] = len(lts)
+            lts.append(ch)
+            pos_of[ch].append(i)
 
-    def eval_map(mapping):
-        txt = apply(mapping)
-        letters_txt = only_letters(txt)
+    def paint(c, v):
+        """把密文字母 c 的所有位置涂成明文 v。"""
+        for p in pos_of[c]:
+            chars[p] = v
+            lts[slot[p]] = v
+
+    def ev():
+        txt = "".join(chars)
+        lt = "".join(lts)
         # 词表信号在短文本上会反向误导（错误映射也能切出一堆假词），
         # 随文本长度逐步加大权重，250 字母以上才给满。
-        w = 500.0 * min(1.0, len(letters_txt) / 250.0)
-        return english_score(txt) + word_coverage(letters_txt) * w
+        w = 500.0 * min(1.0, len(lt) / 250.0)
+        return english_score(txt, lt) + word_coverage(lt) * w
+
+    def apply(mapping):
+        return "".join(mapping.get(c, c) for c in low)
 
     # 起点一：按字母频率从高到低对齐英文字母频率（etaoin...）。
     # 纯随机起点在 200 字母以下的文本上很容易卡在局部最优。
@@ -546,17 +579,25 @@ def sub_hillclimb(text, restarts=12, iterations=4000):
     found = []
     for mapping0 in starts:
         mapping = dict(mapping0)
-        cur = eval_map(mapping)
+        for c in ALPHA:                   # 换起点时铺一次全量
+            paint(c, mapping.get(c, c))
+        cur = ev()
         for _ in range(iterations):
             i, j = random.sample(range(26), 2)
-            mapping[ALPHA[i]], mapping[ALPHA[j]] = mapping[ALPHA[j]], mapping[ALPHA[i]]
-            sc = eval_map(mapping)
+            ca, cb = ALPHA[i], ALPHA[j]
+            va, vb = mapping[ca], mapping[cb]
+            mapping[ca], mapping[cb] = vb, va
+            paint(ca, vb)
+            paint(cb, va)
+            sc = ev()
             if sc >= cur:
                 cur = sc
-            else:
-                mapping[ALPHA[i]], mapping[ALPHA[j]] = mapping[ALPHA[j]], mapping[ALPHA[i]]
+            else:                         # 撤销：映射和涂色都得退回去
+                mapping[ca], mapping[cb] = va, vb
+                paint(ca, va)
+                paint(cb, vb)
         found.append((cur, dict(mapping)))
-        if word_coverage(only_letters(apply(mapping))) > 0.95:
+        if word_coverage("".join(lts)) > 0.95:
             break                      # 已经能切成通顺英文，提前收敛
     found.sort(key=lambda x: -x[0])
     out = []

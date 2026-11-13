@@ -3,58 +3,58 @@
  "quick": false,
  "cases": {
   "hillclimb/400": {
-   "median": 1.800278,
-   "best": 1.745087,
-   "worst": 1.824393,
+   "median": 1.335837,
+   "best": 1.326469,
+   "worst": 1.336384,
    "digest": "a838a03f2cc4",
    "note": "单表替换爬山（报告 15）——最重的一项"
   },
   "hillclimb/800": {
-   "median": 0.940882,
-   "best": 0.939783,
-   "worst": 0.945386,
+   "median": 0.73033,
+   "best": 0.727941,
+   "worst": 0.733348,
    "digest": "5241f0e9fac1",
    "note": "同上，规模翻倍——看耗时是不是超线性"
   },
   "vigcrack/794": {
-   "median": 1.083905,
-   "best": 1.069836,
-   "worst": 1.088838,
+   "median": 1.054881,
+   "best": 1.043297,
+   "worst": 1.056629,
    "digest": "a1c19770ceb4",
    "note": "维吉尼亚自动破解（报告 16）"
   },
   "a1z26/24": {
-   "median": 0.336725,
-   "best": 0.335236,
-   "worst": 0.346266,
+   "median": 0.330327,
+   "best": 0.329152,
+   "worst": 0.330894,
    "digest": "20d12a87a1c0",
    "note": "无分隔符切分枚举（报告 17）——指数增长：每 +4 位约 ×7"
   },
   "mojibake_cross": {
-   "median": 0.000739,
-   "best": 0.000722,
-   "worst": 0.000772,
+   "median": 0.000704,
+   "best": 0.000692,
+   "worst": 0.000716,
    "digest": "fc8f693f6371",
    "note": "源编码 × 目标编码双循环（报告 18），输入 ×40 才有量级"
   },
   "codec/auto": {
-   "median": 0.002784,
-   "best": 0.002754,
-   "worst": 0.0028,
+   "median": 0.002537,
+   "best": 0.002527,
+   "worst": 0.002542,
    "digest": "1ba70c240cfc",
    "note": "递归剥皮 + 乱码兜底（报告 20），三层 base64 嵌套"
   },
   "codec/brute": {
-   "median": 0.00045,
-   "best": 0.000426,
-   "worst": 0.000536,
+   "median": 0.00041,
+   "best": 0.0004,
+   "worst": 0.000464,
    "digest": "a623ef7944b5",
    "note": "把每种编码都试一遍"
   },
   "stego/grid": {
-   "median": 0.800186,
-   "best": 0.796128,
-   "worst": 0.81447,
+   "median": 0.78371,
+   "best": 0.78022,
+   "worst": 0.790849,
    "digest": "fe5047de7735",
    "note": "点阵图切格读位（报告 21）——640×640，图由 bench 现场生成"
   }
