@@ -10,7 +10,7 @@
 |---|---:|---:|---:|---|---|
 | `codec.py` | 3217 | 187 | 16 | `main` 370 行 | 编码识别与解码 |
 | `classic.py` | 1769 | 109 | 18 | `main` 268 行 | 古典密码 |
-| `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
+| `hashcrypto.py` | 1223 | 51 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
 | `ui.py` | 1941 | 43 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
@@ -324,7 +324,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 三、`hashcrypto.py`
 
-1161 行 / 50 个顶层对象 / 8 个分区。
+1223 行 / 51 个顶层对象 / 8 个分区。
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
@@ -335,7 +335,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | RSA | 506–673 | 168 | `pollard_rho` / `factor` / `rsa_attack` / `_iroot` / `rsa_wiener` |
 | JWT | 674–714 | 41 | `b64u_*` / `jwt_parse` / `jwt_crack` |
 | CLI | 715–1013 | 299 | `die` / `main`（283 行） |
-| 按格式穷举 | 1014–1161 | 148 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
+| 按格式穷举 | 1014–1223 | 210 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
 
 ### 改代码时从哪下手
 

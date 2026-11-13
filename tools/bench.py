@@ -45,6 +45,7 @@ sys.path.insert(0, ROOT)
 
 import classic      # noqa: E402
 import codec        # noqa: E402
+import hashcrypto   # noqa: E402
 import stego        # noqa: E402
 
 # 本机计时噪音（百分比）。表格里用它判断「这个变化算不算数」。
@@ -179,6 +180,14 @@ CASES = [
         "note": "点阵图切格读位（报告 21）——640×640，图由 bench 现场生成",
         "seed": 0,
         "run": lambda q: stego.grid_read(_grid_fixture(40 if q else 64, 10)),
+    },
+    {
+        "name": "hashcrypto/brute",
+        "note": "掩码爆破吞吐：用不可能命中的 target 跑满，测纯吞吐",
+        # 4 线程固定：本机 32 核时既稳定又接近用户那种 4 核机器的形态
+        "seed": 0,
+        "run": lambda q: hashcrypto.brute_force(
+            "f" * 32, "?d" * (6 if q else 7), algo="md5", threads=4),
     },
 ]
 

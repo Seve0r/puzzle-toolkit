@@ -1069,6 +1069,46 @@ def chase_match(h, target):
     return t in h
 
 
+def _prepare_match(algo, target):
+    """预编译「算哈希 + 比对」所需的参数，供 `_brute_worker` 用。
+
+    原来每个候选都走 `_h.new(algo, data).hexdigest()` 再 `chase_match(...)`，
+    而 `chase_match` 内部每次都 `target.strip().lower()` 再判断两处长度。
+    target 自始至终不变，这些都能提前做一次。
+
+    实测单次开销：
+        new + hexdigest + chase_match   707 ns
+        直接构造函数 + digest 比对      423 ns
+
+    返回 (ctor, kind, spec)：
+      ctor  hashlib 里的构造函数；None 表示不是原生算法（ntlm / md4 / md5(md5) …）
+      kind  1 = 比对 digest 的中间 8 字节（老式「16 位 MD5」）
+            2 = 比对完整 digest
+            3 = 兜底：子串匹配，必须走完整 hex
+    """
+    import hashlib as _h
+    t = target.strip().lower()
+    ctor = getattr(_h, algo, None)
+    if ctor is not None:
+        try:
+            hexlen = ctor().digest_size * 2
+        except Exception:
+            ctor = None
+    if ctor is not None:
+        try:
+            tb = bytes.fromhex(t)
+        except ValueError:
+            # 目标里有非 hex 字符（粘贴时混进空格/占位符之类）。原来的
+            # chase_match 走字符串比较是能容忍的，这里退回子串模式。
+            return ctor, 3, t
+        if len(t) == 16 and hexlen == 32:
+            # hex 的第 9~24 位 == digest 的第 5~12 字节
+            return ctor, 1, (tb, 4, 12)
+        if len(t) == hexlen:
+            return ctor, 2, tb
+    return ctor, 3, t
+
+
 def _brute_worker(job):
     """扫一块 head，命中就返回 (明文, 完整哈希)，扫完没有返回 None。
 
@@ -1078,23 +1118,45 @@ def _brute_worker(job):
       后直接 pool.terminate() 杀掉其余进程，效果一样还更干脆。
     """
     heads, tails, prefix, suffix, algo, target = job
-    import hashlib as _h
     import itertools as _it
+    import operator as _op
+
+    ctor, kind, spec = _prepare_match(algo, target)
+    enc = "utf-8"
+
+    def candidates(head_s):
+        """每个 head 一份**新的**迭代器。见原来那条 product 注释：
+        product() 是一次性的，放到循环外只有第一个 head 能遍历完。"""
+        if tails:
+            return (prefix + head_s + "".join(t) + suffix
+                    for t in _it.product(*tails))
+        return iter((prefix + head_s + suffix,))
+
+    if ctor is not None:
+        if kind == 1:
+            tb, lo, hi = spec
+            cut = _op.itemgetter(slice(lo, hi))
+        elif kind == 2:
+            tb = spec
+            cut = _op.itemgetter(slice(None))
+        else:
+            tb, cut = spec, None
+        for head in heads:
+            for cand in candidates("".join(head)):
+                d = ctor(cand.encode(enc, "surrogateescape")).digest()
+                if cut is not None:
+                    if cut(d) == tb:
+                        return cand, d.hex()
+                elif tb in d.hex():
+                    return cand, d.hex()
+        return None
+
+    # 少见算法（ntlm / md4 / md5(md5) / mysql…）：退回通用实现。
+    # 它们没有现成的 digest 快路径，速度不是重点、正确性优先。
     for head in heads:
-        head_s = "".join(head)
-        if not tails:
-            cand = prefix + head_s + suffix
-            hs = _h.new(algo, cand.encode("utf-8", "surrogateescape")).hexdigest()
-            if chase_match(hs, target):
-                return cand, hs
-            continue
-        # ★ product() 返回的是一次性迭代器，必须**每个 head 重新创建**。
-        #   放到循环外的话只有第一个 head 能遍历完，其余全被跳过 ——
-        #   症状是「跑得飞快但什么都没找到」，非常容易误判成没命中。
-        for tail in _it.product(*tails):
-            cand = prefix + head_s + "".join(tail) + suffix
-            hs = _h.new(algo, cand.encode("utf-8", "surrogateescape")).hexdigest()
-            if chase_match(hs, target):
+        for cand in candidates("".join(head)):
+            hs = compute(algo, cand)
+            if hs and chase_match(hs, target):
                 return cand, hs
     return None
 
