@@ -463,6 +463,8 @@ puzzle-toolkit/
   tools/
     check_structure.py ← 校验结构图与代码是否一致（默认只读，`--fix` 可回写）
     check_sync.py      ← 校验仓库版与 skill 版两份副本是否一致（只读）
+    bench.py           ← 性能基准（计时 + 结果摘要比对）
+    bench_baseline.json ← 本机测出来的基线，换机器要重测
   CHANGELOG.md    更新日志
 ```
 
@@ -492,6 +494,25 @@ python3 tools/check_sync.py -v        # 逐项列出
 
 分叉时会说清各多少行、哪边独有几行。**「skill 独有」那项要当心**：同步靠 `cp`
 覆盖，skill 里有而仓库没有的内容会被静默删掉，所以它单独列为警告。
+
+**`tools/bench.py`**：性能基准。和 `tests/run.py` 分工——后者断言「行为对不对」，
+前者度量「跑得快不快」，**同时校验结果没变**（优化前后摘要必须一致，否则「变快」
+很可能是拿正确性换的）。
+
+```bash
+python3 tools/bench.py                     # 跑一遍全部（约 30 秒）
+python3 tools/bench.py --list              # 列出基准项
+python3 tools/bench.py --quick             # 缩小规模，改代码时自查用
+python3 tools/bench.py --save base.json    # 存基线
+python3 tools/bench.py --compare base.json # 跟基线比
+```
+
+它按四条原则保证数字可信：固定随机种子（每次工作量一致）、重复取中位数、
+记录结果摘要、**报噪音水平**。每项有自己的波动范围——1.7 秒的任务散布约 2%，
+0.4 毫秒的任务能差 16%——阈值以内的差异会标成「无显著差异」，不算改善。
+
+仓库里的 `tools/bench_baseline.json` 是在一台 32 核 Ryzen 9（Linux）上测的，
+**换机器请重新 `--save`**，别拿别人的基线判断自己的优化。
 
 
 ## 依赖
