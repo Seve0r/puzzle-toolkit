@@ -164,6 +164,18 @@ def english_score(s, letters=None):
     return _score_core(n, obs, big, bl, re.findall(r"[a-z]{2,}", low))
 
 
+def _score_text(txt):
+    """english_score + 「输入是纯小写字母」快路径。
+
+    vigcrack 内部要评几千次分，而 `vig_shift` 的输出在原文纯字母时也是纯字母。
+    每次都让 english_score 重扫一遍 only_letters 是白费——794 字符 × 3802 次
+    就是三百万字符的重复扫描，实测占优化后总时间的三成。
+    """
+    if txt.isascii() and txt.isalpha() and txt.islower():
+        return english_score(txt, txt)
+    return english_score(txt)
+
+
 def _score_core(n, obs, big, bl, words):
     """english_score 的内核：给定**统计量**算分。
 
@@ -339,10 +351,38 @@ def caesar(text, key=None, top=26):
 
 # ------------------------------------------------------------------ 维吉尼亚
 
+# vig_shift 快路径用的平移表：26 个位移量各一张。
+# 维吉尼亚每列的位移量固定，所以可以整列一次 bytes.translate（C 级），
+# 不必逐字符做 is_az / islower / ord / chr 四次 Python 调用。
+_VIG_ENC = [
+    bytes.maketrans(b"abcdefghijklmnopqrstuvwxyz",
+                    bytes(97 + (i + k) % 26 for i in range(26)))
+    for k in range(26)
+]
+_VIG_DEC = [_VIG_ENC[(26 - k) % 26] for k in range(26)]
+
+
 def vig_shift(s, key, enc=False):
     k = clean_key(key)
     if not k:
         raise ValueError("密钥不能为空")
+
+    # 快速路径：整串都是 ASCII 小写字母。vigcrack 的输入已经 only_letters 过，
+    # 正好命中；而且它内部要跑几千次 vig_shift（_refine_key 对每个密钥位试
+    # 25 个候选 × 2 轮 × 5 个 key）。通用路径下 794 字符 × 3802 次 = 三百万
+    # 字符、每次 4 个函数调用，profile 里占 65% 的时间。
+    if s.isascii() and s.isalpha() and s.islower():
+        data = s.encode("ascii")
+        tables = _VIG_ENC if enc else _VIG_DEC
+        shifts = [ord(c) - 97 for c in k]
+        if len(k) == 1:
+            return data.translate(tables[shifts[0]]).decode("ascii")
+        out = bytearray(len(data))
+        for c in range(len(k)):
+            out[c::len(k)] = data[c::len(k)].translate(tables[shifts[c]])
+        return out.decode("ascii")
+
+    # 通用路径：大小写混排、含空格标点都可能，逐字符处理（非字母原样保留）
     out = []
     i = 0
     for c in s:
@@ -390,7 +430,7 @@ def _refine_key(text, key, rounds=2):
     这里用整段明文的契合度做坐标下降，把密钥微调到最优。"""
     k = list(key)
     best_txt = vig_shift(text, "".join(k), enc=False)
-    best = english_score(best_txt)
+    best = _score_text(best_txt)
     for _ in range(rounds):
         improved = False
         for i in range(len(k)):
@@ -400,7 +440,7 @@ def _refine_key(text, key, rounds=2):
                     continue
                 k[i] = cand
                 txt = vig_shift(text, "".join(k), enc=False)
-                sc = english_score(txt)
+                sc = _score_text(txt)
                 if sc > best + 1e-9:
                     best, best_txt, improved = sc, txt, True
                     old = cand
@@ -443,7 +483,7 @@ def vigcrack(text, maxlen=20, top=5):
         key = "".join(ALPHA[_best_caesar(letters[i::kl])[0]] for i in range(kl))
         plain = vig_shift(text, key, enc=False)
         # 长密钥自由度大、更容易刷高契合度（过拟合），必须按长度扣分
-        rough.append((english_score(plain) - LEN_PENALTY * kl, key, plain))
+        rough.append((_score_text(plain) - LEN_PENALTY * kl, key, plain))
     rough.sort(key=lambda x: -x[0])
 
     # 每个密钥长度只留最好的一个，避免 12 位变体把 6 位挤掉
@@ -465,7 +505,7 @@ def vigcrack(text, maxlen=20, top=5):
         if sig in seen_sig:
             continue
         seen_sig.add(sig)
-        results.append((english_score(plain) - LEN_PENALTY * len(k2), k2, plain))
+        results.append((_score_text(plain) - LEN_PENALTY * len(k2), k2, plain))
     results.sort(key=lambda x: -x[0])
     return results[:top], base_ic
 

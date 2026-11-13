@@ -9,7 +9,7 @@
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
 | `codec.py` | 3217 | 187 | 16 | `main` 370 行 | 编码识别与解码 |
-| `classic.py` | 1729 | 106 | 18 | `main` 268 行 | 古典密码 |
+| `classic.py` | 1769 | 109 | 18 | `main` 268 行 | 古典密码 |
 | `hashcrypto.py` | 1161 | 50 | 8 | `main` 283 行 | 哈希与现代密码 |
 | `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
@@ -274,7 +274,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 二、`classic.py`
 
-1688 行 / 106 个顶层对象 / 18 个分区。
+1769 行 / 109 个顶层对象 / 18 个分区。
 
 **结构特点：一个密码一个区，`xxx_dec` 和 `xxx_enc` 相邻。** 这点和 `codec.py`
 相反——codec 曾经把编码器全堆在文件末尾（2026-11 才归位），classic 从一开始
@@ -282,24 +282,24 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
-| 基础 | 70–216 | 147 | `is_az` / `only_letters` / `chi_squared` / `english_score` |
-| 词表打分 | 217–321 | 105 | `_load_wordlist` / `word_coverage` / `nonletters_ok` / `modinv` |
-| 凯撒 | 322–339 | 18 | `caesar_dec` / `caesar` |
-| 维吉尼亚 | 340–472 | 133 | `index_of_coincidence` / `_best_caesar` / `_refine_key` / `vigcrack` |
-| 仿射 | 473–513 | 41 | `affine_dec` / `affine_enc` / `affine`（312 种全爆破） |
-| 单表替换（爬山） | 514–614 | 101 | `sub_hillclimb` |
-| 培根 | 615–651 | 37 | 26 字母 / 24 字母两套表 |
-| 栅栏 | 652–686 | 35 | `rail_dec` / `rail_enc` / `railfence` |
-| 列置换 | 687–751 | 65 | `columnar_dec` / `_enc` / `_brute` |
-| Atbash / A1Z26 | 752–854 | 103 | `atbash` 自反、`a1z26_decode` / `_encode` |
-| 波利比奥斯 | 855–890 | 36 | 5×5 表 + 双向 |
-| 普莱菲尔 | 891–980 | 90 | `playfair_square` / `_pf_pos` / `_pf_strip_pad` / `playfair` |
-| ADFGX | 981–1044 | 64 | 方阵 + 双向 |
-| 键盘错位 | 1045–1079 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
-| T9 九宫格 | 1080–1129 | 50 | `t9_encode` / `t9` |
-| 猪圈（符号替换） | 1130–1344 | 215 | `PIGPEN_SLOTS` / `PIGPEN_SHAPE` / `PIGPEN_EDGES` / `pigpen_segments` / `PIGPEN_VARIANTS`（9 个）/ `pigpen_encode` / `pigpen_decode` |
-| auto | 1345–1397 | 53 | `auto` + `affine_enc_free` |
-| CLI | 1398–1729 | 332 | `show_list` / `main` |
+| 基础 | 70–228 | 159 | `is_az` / `only_letters` / `chi_squared` / `english_score` |
+| 词表打分 | 229–333 | 105 | `_load_wordlist` / `word_coverage` / `nonletters_ok` / `modinv` |
+| 凯撒 | 334–351 | 18 | `caesar_dec` / `caesar` |
+| 维吉尼亚 | 352–512 | 161 | `index_of_coincidence` / `_best_caesar` / `_refine_key` / `vigcrack` |
+| 仿射 | 513–553 | 41 | `affine_dec` / `affine_enc` / `affine`（312 种全爆破） |
+| 单表替换（爬山） | 554–654 | 101 | `sub_hillclimb` |
+| 培根 | 655–691 | 37 | 26 字母 / 24 字母两套表 |
+| 栅栏 | 692–726 | 35 | `rail_dec` / `rail_enc` / `railfence` |
+| 列置换 | 727–791 | 65 | `columnar_dec` / `_enc` / `_brute` |
+| Atbash / A1Z26 | 792–894 | 103 | `atbash` 自反、`a1z26_decode` / `_encode` |
+| 波利比奥斯 | 895–930 | 36 | 5×5 表 + 双向 |
+| 普莱菲尔 | 931–1020 | 90 | `playfair_square` / `_pf_pos` / `_pf_strip_pad` / `playfair` |
+| ADFGX | 1021–1084 | 64 | 方阵 + 双向 |
+| 键盘错位 | 1085–1119 | 35 | `LAYOUTS` / `keyboard` / `keyboard_all` |
+| T9 九宫格 | 1120–1169 | 50 | `t9_encode` / `t9` |
+| 猪圈（符号替换） | 1170–1384 | 215 | `PIGPEN_SLOTS` / `PIGPEN_SHAPE` / `PIGPEN_EDGES` / `pigpen_segments` / `PIGPEN_VARIANTS`（9 个）/ `pigpen_encode` / `pigpen_decode` |
+| auto | 1385–1437 | 53 | `auto` + `affine_enc_free` |
+| CLI | 1438–1769 | 332 | `show_list` / `main` |
 
 ### 改代码时从哪下手
 
@@ -307,8 +307,8 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 |---|---|
 | 加一个古典密码 | 新开一个 `# ---- 密码名` 区，照现有模式写 `xxx_dec` / `xxx_enc` / `xxx` 三个函数 |
 | 破解不准 | `词表打分` 区的 `english_score` / `word_coverage` |
-| 加进 auto | `auto`（L1347 附近），把新密码接进它的候选循环 |
-| 加子命令 | `main`（L1458，258 行，手写参数解析） |
+| 加进 auto | `auto`（L1387 附近），把新密码接进它的候选循环 |
+| 加子命令 | `main`（L1498，258 行，手写参数解析） |
 
 ### 注意
 
