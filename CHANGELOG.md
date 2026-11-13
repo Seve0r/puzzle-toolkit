@@ -639,6 +639,32 @@
 
 ### 修复
 
+- **`stego` / `hashcrypto` / `codec` 的参数解析还没跟上：缺值或类型不对直接甩栈**。
+  `opt()` 是 `main()` 里的闭包，`cast(argv[i + 1])` 裸调用 ——
+  `stego.py strings a.bin -n abc` 甩一屏 `ValueError`，`-n` 落在末尾则
+  `IndexError`；`codec` 的 `blocks` / `grid` 分支同病，而 `--radix` / `--depth`
+  主路径早就改好了，这两处漏在分支里。
+
+  统一成 `classic` 的写法：缺值报「X 后面要跟一个值」、类型不对报
+  「X 的值不合法：'abc'」，**退出码 2**，不甩栈。`stego` 的 `opt()` 在 `main()`
+  的 `try` **之前**执行、`__main__` 也没有兜底，所以必须由 `opt()` 自己
+  `raise SystemExit(2)`（新加 `_bad()`，与 `classic` 同一份实现）。
+  `hashcrypto` 复用已有的 `die()`。
+
+- **`dec hex` 会把 `a0xb` 悄悄当成 `ab`**。`_d_hex` 用一条 `re.sub` 全局剥
+  `0x` / `\x` / 分隔符，数据里真出现 `0x` 两个字面字符时就被吃掉了。现在
+  `\x` 仍无条件剥（`\x41\x42` 是明确的「字节字面」写法，`\x` 不可能是数据），
+  `0x` 只在**串首或分隔符之后**剥；`a0xb` 报「十六进制串里有不是 0-9 / a-f
+  的字符」。顺手把 `unhexlify` 那句英文 `Non-hexadecimal digit found` 也换成
+  中文——同一个函数里两套措辞没必要。
+
+- **`enc wabun` / `dec wabun` 首尾空格往返丢失**。编码端用空 token 表示空格，
+  `join` 之后中间的空 token 产生两个斜杠、而落在首/尾的只产生一个；解码端却
+  一律按「斜杠数 − 1」算，于是 `' ア '` → `/--.--/` → 解回来只剩 `'あ'`。
+  现在首尾按原样计数、中间规则不变，`' ア '` → `' あ '` 闭环。这条属于
+  「编码能产出、解码还原不了」，和 `gbk` / `base62` / `html` 那几个往返问题是
+  同一类。
+
 - **`ui.py` 把脚本的退出码丢了，报错全当成功**。`_run_subcommand` 直接调
   `module.main()` 却不要返回值，而 `main()` 的返回值就是退出码（CLI 入口是
   `sys.exit(main(...))`）。于是 classic / hashcrypto / stego 里那些
@@ -1244,6 +1270,11 @@
   并 flush stdout 保证顺序。
 
 ### 文档
+
+- 上面三条修复的行为说明补进各自文档，并同步到 skill 侧 `SKILL.md`：
+  `docs/codec.md` 加了「`0x` / `\x` 剥离规则」对照表和「首尾空格不会丢」小节；
+  `docs/stego.md` 的已知局限里补了「退出码 2 + 哪个选项出了问题」；
+  `docs/hashcrypto.md` 的「参数与格式约定」补了同样的约定。
 
 - 新增 `tests/` 测试基线：`dataset.json`（200 条用例）+ `run.py`（runner）。
   覆盖 5 个脚本各 40 条，含 `fixtures` 机制（自动写到临时目录当 cwd，

@@ -741,8 +741,13 @@ def main():
         nonlocal argv
         if name in argv:
             i = argv.index(name)
-            v = cast(argv[i + 1])
-            argv = argv[:i] + argv[i + 2:]
+            if i + 1 >= len(argv):
+                die("%s 后面要跟一个值" % name)
+            try:
+                v = cast(argv[i + 1])
+            except (TypeError, ValueError):
+                die("%s 的值不合法：%r" % (name, argv[i + 1]))
+            argv = argv[:i] + argv[i + 2:]   # 同时吃掉选项名和它的值
             return v
         return default
 

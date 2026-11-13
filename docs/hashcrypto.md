@@ -51,6 +51,12 @@ hex 字符。这种情况脚本会在 stderr 提示一句；本意是文本 key 
 **`jwt --crack` 按 token 头里的 `alg` 选哈希**，支持 HS256 / HS384 / HS512。
 非 HS 系列（如 RS256）会明确报错，而不是给一个误导性的"没爆破出来"。
 
+**选项值不合法会直接报错退出（码 2）**，和 classic / num 同一水位：
+`crack xxx --len abc` → 「--len 的值不合法：'abc'」；`--len` 后面什么都没跟
+→ 「--len 后面要跟一个值」。早期版本会落到通用 `except` 打出
+`invalid literal for int() with base 10: 'abc'`——能收敛，但没有用法提示，
+和另外两个脚本不一致。
+
 ## 四个坑
 
 **① `hashlib.new("md4")` 在 OpenSSL 3 上直接报错。**

@@ -264,13 +264,21 @@ def _check_radix_chars(s, allowed, label):
 
 @dec_name("base16", "hex")
 def _d_hex(s):
-    s = re.sub(r"(0x|\\x|[\s:,])", "", s)
+    # `\x` 是明确的「字节前缀」写法（\x41\x42），无条件剥掉；`0x` 则只在串首或
+    # 分隔符之后才剥 —— 原来三个分支全局替换，`a0xb` 会被悄悄当成 `ab`，
+    # 用户输入里的字面 `0x` 就凭空消失了。宁可报「不是十六进制」也别猜。
+    s = re.sub(r"\\x|(?:\A|(?<=[\s:,]))0x|[\s:,]", "", s)
     if len(s) % 2:
         # 不左补零。补零等于替用户猜了一个字节，猜错还会静默改掉数值；
         # 单独一个 "f" 到底是 0x0f 还是手滑少打一位，只有用户自己知道。
         # 措辞和 `convert -r 16` 保持一致，两个入口别给两套说法。
         raise ValueError("十六进制位数是奇数（%d），每两位表示一个字节" % len(s))
-    return as_text(binascii.unhexlify(s))
+    try:
+        return as_text(binascii.unhexlify(s))
+    except (ValueError, TypeError):
+        # unhexlify 原本报英文的 "Non-hexadecimal digit found"，和上面那句
+        # 中文措辞不一致，这里统一掉。
+        raise ValueError("十六进制串里有不是 0-9 / a-f 的字符")
 
 
 @enc_name("base16", "hex")
@@ -919,8 +927,16 @@ def _d_wabun(s):
     idx = 0
     for k, seg in enumerate(segs):
         if k % 2:                       # 奇数位是分隔符
-            if len(seg) > 1:
-                out.append(" " * (len(seg) - 1))
+            # 「斜杠数 − 1 = 空格数」只在分隔符**两侧都有内容**时成立：编码端
+            # 用空 token 表示空格，join 之后中间空 token 产生两个斜杠，而落在
+            # 首/尾的空 token 只产生一个。所以首尾要按原样计数，否则
+            # `' ア'`→`/--.--`、`'ア '`→`--.--/` 解回来会丢掉首尾空白
+            # （编码能产出、解码还原不了，等于往返不闭环）。
+            at_edge = ((k == 1 and not segs[0])
+                       or (k == len(segs) - 2 and not segs[-1]))
+            n = len(seg) if at_edge else len(seg) - 1
+            if n > 0:
+                out.append(" " * n)
             continue
         if not seg:
             continue
@@ -3014,11 +3030,20 @@ def main():
         args2 = list(argv)
         width = int(os.environ.get("ARG_BLOCK_WIDTH", "2"))
         radix = int(os.environ.get("ARG_BLOCK_RADIX", "36"))
-        for flags, key in ((( "-w", "--width"), "w"), (("-r", "--radix"), "r")):
+        for flags, key in ((("-w", "--width"), "w"), (("-r", "--radix"), "r")):
             for flag in flags:
                 if flag in args2:
                     i = args2.index(flag)
-                    val = int(args2[i + 1])
+                    if i + 1 >= len(args2):
+                        _err("%s 后面要跟一个数字" % flag)
+                        return 2
+                    # 不接异常的话 `--width abc` 会甩一屏 Python traceback，
+                    # 用户看到的是内部栈而不是「这个值不对」（同 --radix 主路径）。
+                    try:
+                        val = int(args2[i + 1])
+                    except ValueError:
+                        _err("%s 要跟一个数字，收到：%r" % (flag, args2[i + 1]))
+                        return 2
                     args2 = args2[:i] + args2[i + 2:]
                     if key == "w":
                         width = val
@@ -3047,7 +3072,14 @@ def main():
             for flag in flags:
                 if flag in args2:
                     i = args2.index(flag)
-                    val = int(args2[i + 1])
+                    if i + 1 >= len(args2):
+                        _err("%s 后面要跟一个数字" % flag)
+                        return 2
+                    try:
+                        val = int(args2[i + 1])
+                    except ValueError:
+                        _err("%s 要跟一个数字，收到：%r" % (flag, args2[i + 1]))
+                        return 2
                     args2 = args2[:i] + args2[i + 2:]
                     if key == "r":
                         rows = val

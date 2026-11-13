@@ -1219,6 +1219,16 @@ def _err(msg):
     sys.stderr.flush()
 
 
+def _bad(msg):
+    """参数不合法：报错并以用法错误的退出码（2）结束。
+
+    `main()` 里那些 `opt()` 是闭包，没法直接 return 到调用方；直接 `int()`
+    不接异常又会甩一屏 Python traceback。
+    """
+    _err(msg)
+    raise SystemExit(2)
+
+
 def main():
     argv = sys.argv[1:]
     quiet = "-q" in argv or "--quiet" in argv
@@ -1230,8 +1240,13 @@ def main():
         nonlocal argv
         if name in argv:
             i = argv.index(name)
-            v = cast(argv[i + 1])
-            argv = argv[:i] + argv[i + 2:]
+            if i + 1 >= len(argv):
+                _bad("%s 后面要跟一个值" % name)
+            try:
+                v = cast(argv[i + 1])
+            except (TypeError, ValueError):
+                _bad("%s 的值不合法：%r" % (name, argv[i + 1]))
+            argv = argv[:i] + argv[i + 2:]   # 同时吃掉选项名和它的值
             return v
         return default
 

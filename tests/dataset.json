@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 260,
+  "count": 269,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -5593,6 +5593,208 @@
     "base64url"
    ],
    "note": "base64url 同样不能静默丢字符，并提示改用 base64"
+  },
+  {
+   "id": "codec-edge-025",
+   "script": "codec.py",
+   "args": [
+    "enc",
+    "wabun",
+    " ア"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": "/--.--"
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "wabun",
+    "roundtrip"
+   ],
+   "note": "空格占一个空 token；落在首部的空 token join 后只产生一个斜杠（中间是两个）"
+  },
+  {
+   "id": "codec-edge-026",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "wabun",
+    "/--.--/"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 0,
+    "stdout": " あ "
+   },
+   "tags": [
+    "edge",
+    "codec",
+    "wabun",
+    "roundtrip"
+   ],
+   "note": "与上一条闭环。原来「斜杠数−1=空格数」只对两侧都有内容的分隔符成立，首尾按 −1 算会把空白吃掉"
+  },
+  {
+   "id": "codec-error-010",
+   "script": "codec.py",
+   "args": [
+    "dec",
+    "hex",
+    "a0xb"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 1,
+    "stderr_contains": [
+     "不是 0-9 / a-f"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "hex"
+   ],
+   "note": "0x 前缀只在串首或分隔符之后才剥；全局替换会把 a0xb 悄悄当成 ab解出 0xab"
+  },
+  {
+   "id": "codec-error-011",
+   "script": "codec.py",
+   "args": [
+    "blocks",
+    "2W3",
+    "--width",
+    "abc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--width 要跟一个数字"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "blocks",
+    "argv"
+   ],
+   "note": "blocks 分支原来直接 int()，非数字会甩 Python traceback"
+  },
+  {
+   "id": "codec-error-012",
+   "script": "codec.py",
+   "args": [
+    "blocks",
+    "2W3",
+    "--width"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--width 后面要跟一个数字"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "blocks",
+    "argv"
+   ],
+   "note": "选项在末尾缺值：原来 args2[i+1] 越界抛 IndexError"
+  },
+  {
+   "id": "codec-error-013",
+   "script": "codec.py",
+   "args": [
+    "grid",
+    "0101",
+    "--rows"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--rows 后面要跟一个数字"
+    ]
+   },
+   "tags": [
+    "error",
+    "codec",
+    "grid",
+    "argv"
+   ],
+   "note": "grid 分支同 blocks，三个整数选项都没做越界检查"
+  },
+  {
+   "id": "stego-error-007",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "no-such.bin",
+    "-n",
+    "abc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "-n 的值不合法"
+    ]
+   },
+   "tags": [
+    "error",
+    "stego",
+    "argv"
+   ],
+   "note": "opt() 在 main 的 try 之前执行，__main__ 也没有兜底 —— cast 失败原来直接 traceback"
+  },
+  {
+   "id": "stego-error-008",
+   "script": "stego.py",
+   "args": [
+    "strings",
+    "no-such.bin",
+    "--out"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--out 后面要跟一个值"
+    ]
+   },
+   "tags": [
+    "error",
+    "stego",
+    "argv"
+   ],
+   "note": "选项在末尾缺值：原来 argv[i+1] 越界抛 IndexError"
+  },
+  {
+   "id": "hashcrypto-error-007",
+   "script": "hashcrypto.py",
+   "args": [
+    "crack",
+    "5d41402abc4b2a76b9719d911017c592",
+    "--len",
+    "abc"
+   ],
+   "stdin": null,
+   "expect": {
+    "exit": 2,
+    "stderr_contains": [
+     "--len 的值不合法"
+    ]
+   },
+   "tags": [
+    "error",
+    "hashcrypto",
+    "argv"
+   ],
+   "note": "原来只落到通用 except 打出 invalid literal，没有用法提示；现与 classic/num 同一水准"
   }
  ]
 }

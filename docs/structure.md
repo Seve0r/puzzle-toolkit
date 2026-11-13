@@ -8,10 +8,10 @@
 
 | 脚本 | 行数 | 顶层对象 | 分区 | 最长函数 | 职责 |
 |---|---:|---:|---:|---|---|
-| `codec.py` | 3217 | 187 | 16 | `main` 370 行 | 编码识别与解码 |
+| `codec.py` | 3249 | 187 | 16 | `main` 386 行 | 编码识别与解码 |
 | `classic.py` | 1769 | 109 | 18 | `main` 268 行 | 古典密码 |
-| `hashcrypto.py` | 1223 | 51 | 8 | `main` 283 行 | 哈希与现代密码 |
-| `stego.py` | 1454 | 55 | 7 | `main` 229 行 | 文件隐写 |
+| `hashcrypto.py` | 1228 | 51 | 8 | `main` 288 行 | 哈希与现代密码 |
+| `stego.py` | 1469 | 56 | 7 | `main` 234 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
 | `ui.py` | 1941 | 43 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | `_pigpen_slots_json` 22 行 | 界面参数表（纯数据，不 import codec） |
@@ -26,21 +26,21 @@
 |---|---|---:|---:|---|
 | 文件头 | 1–67 | 67 | — | docstring（也就是 `--help` 的内容）+ import |
 | 基础设施 | 68–158 | 91 | 11 | 两张注册表、两个装饰器、`str ↔ bytes` 出入口、`_hint`（`-q` 的静默出口） |
-| Base 系列 | 159–485 | 327 | 27 | base64/32/58/62/85/91/36 等 8 对 |
-| 进制 / 二进制串 | 486–594 | 109 | 10 | hex·bin·dec·oct·block36 |
-| Punycode | 595–643 | 49 | 4 | IDN 编码 |
-| 文本转义 | 644–729 | 86 | 10 | url / html / unicode / js / quoted-printable |
-| 字符替换 | 730–781 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
-| 摩斯 | 782–829 | 48 | 4 | 国际摩斯 + 两张表 |
-| 和文モールス | 830–1000 | 171 | 11 | Wabun code + 6 张表/工具 |
-| 盲文 | 1001–1088 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
-| 压缩流与字符编码 | 1089–1205 | 117 | 12 | zlib/uu + utf16 + gbk |
-| UTF-32 | 1206–1257 | 52 | 7 | utf32/be/le |
-| **乱码还原** | 1258–2106 | 849 | 27 | 多层假设流水线，见第三节 |
-| 评分 / 识别 | 2107–2474 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
-| 矩阵重排 | 2475–2540 | 66 | 3 | `grid` |
-| 编码 × 进制 | 2541–2793 | 253 | 13 | `convert` |
-| CLI | 2794–3217 | 424 | 3 | `read_input` → `main` |
+| Base 系列 | 159–493 | 335 | 27 | base64/32/58/62/85/91/36 等 8 对 |
+| 进制 / 二进制串 | 494–602 | 109 | 10 | hex·bin·dec·oct·block36 |
+| Punycode | 603–651 | 49 | 4 | IDN 编码 |
+| 文本转义 | 652–737 | 86 | 10 | url / html / unicode / js / quoted-printable |
+| 字符替换 | 738–789 | 52 | 7 | rot13 / rot47 / atbash（自反变换） |
+| 摩斯 | 790–837 | 48 | 4 | 国际摩斯 + 两张表 |
+| 和文モールス | 838–1016 | 179 | 11 | Wabun code + 6 张表/工具 |
+| 盲文 | 1017–1104 | 88 | 8 | 2 解码 + 1 编码 + 5 张表 |
+| 压缩流与字符编码 | 1105–1221 | 117 | 12 | zlib/uu + utf16 + gbk |
+| UTF-32 | 1222–1273 | 52 | 7 | utf32/be/le |
+| **乱码还原** | 1274–2122 | 849 | 27 | 多层假设流水线，见第三节 |
+| 评分 / 识别 | 2123–2490 | 368 | 13 | `score` / `structural_candidates` / `auto` / `brute` |
+| 矩阵重排 | 2491–2556 | 66 | 3 | `grid` |
+| 编码 × 进制 | 2557–2809 | 253 | 13 | `convert` |
+| CLI | 2810–3249 | 440 | 3 | `read_input` → `main` |
 
 **每个编码概念的 `_d_*` / `_e_*` 都是相邻的**（实测间距 ≤60 行）。
 这是 2026-11 重排的结果——之前编码器全堆在文件末尾，最远的
@@ -118,7 +118,7 @@
 这里不一样——它是**多层假设、逐级降级**的流水线，23 个对象横跨 722 行，
 而且每层能接住的情况互不重叠。不理解层的顺序，改一个阈值就会连带弄坏别层。
 
-#### 3.1 调度顺序（`_d_mojibake`, L1778）
+#### 3.1 调度顺序（`_d_mojibake`, L1794）
 
 ```
 _d_mojibake(s)                ← 进来先 _mb_clean(s)：去掉首尾 ASCII 空白
@@ -226,12 +226,12 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 想做什么 | 去哪 |
 |---|---|
 | 加一个新编码 | 找到同类区，`_d_xxx` 和 `_e_xxx` **紧挨着写**，两处都要 `@dec_name` / `@enc_name` |
-| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2207 附近）有没有认它 |
+| 某个编码解不出来 | 先看它的 `_d_*`，再看 `structural_candidates`（L2223 附近）有没有认它 |
 | `auto` 选错了路径 | `structural_candidates` 的候选顺序 + `STRUCT_BONUS` 权重 |
-| 报告里的编码名不对 | `text_encoding_name`（L1880）/ `bytes_to_text`（L2669） |
+| 报告里的编码名不对 | `text_encoding_name`（L1896）/ `bytes_to_text`（L2685） |
 | 乱码还原过度/不足 | 先判断是哪一层（看 stderr 的提示），再调那一层的阈值，**别动别层** |
-| 进制解析报错不对 | `radix_to_bytes`（L2595）：顺序必须是 字符集 → 长度 → 范围 |
-| 加子命令 | `main`（L2844）；参数解析是手写的，没有通用 `opt()` |
+| 进制解析报错不对 | `radix_to_bytes`（L2611）：顺序必须是 字符集 → 长度 → 范围 |
+| 加子命令 | `main`（L2860）；参数解析是手写的，没有通用 `opt()` |
 | 界面相关 | 不在本文件。`ui.py`（渲染/事件）+ `ui_params.py`（参数表） |
 
 ---
@@ -334,8 +334,8 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | AES / RC4 | 429–505 | 77 | `_pad` / `_unpad` / `aes_run` / `rc4` |
 | RSA | 506–673 | 168 | `pollard_rho` / `factor` / `rsa_attack` / `_iroot` / `rsa_wiener` |
 | JWT | 674–714 | 41 | `b64u_*` / `jwt_parse` / `jwt_crack` |
-| CLI | 715–1013 | 299 | `die` / `main`（283 行） |
-| 按格式穷举 | 1014–1223 | 210 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
+| CLI | 715–1018 | 304 | `die` / `main`（283 行） |
+| 按格式穷举 | 1019–1228 | 210 | `MASK_SETS` / `parse_mask` / `chase_match` / `brute_force` |
 
 ### 改代码时从哪下手
 
@@ -361,7 +361,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 四、`stego.py`
 
-1454 行 / 55 个顶层对象 / 7 个分区。
+1469 行 / 56 个顶层对象 / 7 个分区。
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
@@ -371,7 +371,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 音频 | 548–573 | 26 | `spectrum`（要 `ffmpeg`） |
 | 点阵网格（grid） | 574–1167 | **594** | `_png_canvas` / `canvas_of` / `_png_encode_rgb` / `inverted_copy` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
 | 杂项 | 1168–1212 | 45 | `entropy` / `meta` / `hexdump` |
-| CLI | 1213–1454 | 242 | `main`（233 行） |
+| CLI | 1213–1469 | 257 | `main`（233 行） |
 
 ### 改代码时从哪下手
 
@@ -380,7 +380,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 加一种容器格式的解析 | 照 `ZIP` 区那样，`xxx_entries` / `xxx_extract` 成对写 |
 | grid 读错格子 | `_otsu_split`（阈值）+ `_fit_axis`（格宽）；两个都有实测依据，改动前先看注释 |
 | LSB 看不出东西 | `lsb_scan`（按通道/位序枚举）+ `longest_printable`（挑最像人话的） |
-| 加子命令 | `main`（L1222） |
+| 加子命令 | `main`（L1232） |
 
 ### 注意
 
