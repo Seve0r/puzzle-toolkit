@@ -89,6 +89,11 @@ def _nested(layers=3):
 #   '僥僗僩梡偺暥帤楍'（能解出 8 条）并放大到 40 倍，才有意义。
 _MOJI_CASE = "僥僗僩梡偺暥帤楍" * 40
 
+# mojibake_split 走的是「含 U+FFFD 的分段还原」，输入必须带替换符才会进那段
+# 代码（否则 _d_mojibake 一级就返回了，测的是别的路径）。同样放大到能解出
+# 结果的长度——纯 '缂栫爜' 那种会返回 None，digest 全是 None 就失去意义了。
+_MOJI_SPLIT_CASE = ("僥僗僩梡偺暥帤楍\ufffd" * 30).rstrip("\ufffd")
+
 _GRID_FIXTURES = {}
 
 
@@ -162,6 +167,13 @@ CASES = [
         "note": "源编码 × 目标编码双循环（报告 18），输入 ×40 才有量级",
         "seed": 0,
         "run": lambda q: codec.mojibake_cross(_MOJI_CASE[:len(_MOJI_CASE) // (4 if q else 1)]),
+    },
+    {
+        "name": "mojibake/split",
+        "note": "含 U+FFFD 的分段还原，同款 src×tgt 双循环；每段只该编码一次",
+        "seed": 0,
+        "run": lambda q: codec.mojibake_split(
+            _MOJI_SPLIT_CASE[:len(_MOJI_SPLIT_CASE) // (4 if q else 1)]),
     },
     {
         "name": "codec/auto",

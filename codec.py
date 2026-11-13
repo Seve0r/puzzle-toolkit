@@ -1660,24 +1660,41 @@ def mojibake_split(s, min_plain=0.85, min_ok_ratio=0.5):
         return None
     best = None
     for src in MOJIBAKE_ENCODINGS:
+        # 同一 src 下，每段「编回字节」的结果与 tgt 无关。原来这句在 tgt 循环
+        # **里面**，等于把同一段编码 len(MOJIBAKE_TARGETS) 次 —— 12×12×段数
+        # 降到 12×段数，profile 里 _encode_back 占本函数 44%。
+        # 编不回去的段先标 None，和原来「抛异常 → o=None」的老路径等价。
+        raw_parts = []
+        for p in parts:
+            if not p.strip():
+                raw_parts.append(None)   # 空段/纯空白：原样保留，不计成功数
+                continue
+            try:
+                raw_parts.append(_encode_back(p, src))
+            except (UnicodeEncodeError, LookupError):
+                raw_parts.append(None)
         for tgt in MOJIBAKE_TARGETS:
             if _same_encoding_family(src, tgt):
                 continue
             outs = []
             ok = 0
             score = 0.0
-            for p in parts:
-                if not p.strip():
-                    outs.append(None)    # 空段/纯空白：原样保留，不计入成功数
+            for rawp in raw_parts:
+                if rawp is None:
+                    outs.append(None)
                     continue
-                o = None
                 try:
-                    o = _encode_back(p, src).decode(tgt)
-                except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+                    o = rawp.decode(tgt)
+                except (UnicodeDecodeError, LookupError):
                     o = None
-                if o is not None and _plain(o) >= min_plain:
+                if o is None:
+                    outs.append(None)
+                    continue
+                # _plain(o) 只算一次：原来判门槛算一次、累加又算一次
+                pl = _plain(o)
+                if pl >= min_plain:
                     ok += 1
-                    score += _plain(o)
+                    score += pl
                     outs.append(o)
                 else:
                     outs.append(None)
