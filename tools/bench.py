@@ -27,6 +27,7 @@
     单次相对中位的偏差全在 ±1.6% 以内。所以 **>5% 的变化才值得当真**。
 """
 import argparse
+import atexit
 import base64
 import contextlib
 import hashlib
@@ -36,6 +37,7 @@ import os
 import random
 import statistics
 import sys
+import tempfile
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -85,6 +87,41 @@ def _nested(layers=3):
 #   0.04ms —— 那不是「它很快」，是「它什么也没做」。换成真实案例
 #   '僥僗僩梡偺暥帤楍'（能解出 8 条）并放大到 40 倍，才有意义。
 _MOJI_CASE = "僥僗僩梡偺暥帤楍" * 40
+
+_GRID_FIXTURES = {}
+
+
+def _grid_fixture(cols=64, cell=10):
+    """生成一张白底黑块的点阵图，返回路径。第一次调用时生成，之后复用。
+
+    用 `stego._png_encode_rgb`（它本来就是纯标准库的 PNG 编码器，qr 反色
+    那里在用），所以仓库里不用存一张大图，也不需要谁去准备素材。
+
+    实测识别率：48/64/96 格 × 8~12px，grid_read 报出来的 cols / rows / cell
+    全部准确 —— 测的是真正的切格路径，不是早退。
+    """
+    key = (cols, cell)
+    path = _GRID_FIXTURES.get(key)
+    if path is not None:
+        return path
+    w = h = cols * cell
+    rnd = random.Random(1)                 # 固定种子：图的 bit 布局每次相同
+    bits = [rnd.randrange(2) for _ in range(cols * cols)]
+    lines = []
+    for cy in range(cols):
+        row = bytearray(w)
+        for cx in range(cols):
+            v = 0 if bits[cy * cols + cx] else 255
+            row[cx * cell:(cx + 1) * cell] = bytes([v]) * cell
+        lines.append(bytes(row))
+    full = b"".join(r for r in lines for _ in range(cell))
+    png = stego._png_encode_rgb(w, h, full, full, full)
+    fd, path = tempfile.mkstemp(suffix=".png", prefix="bench_grid_")
+    with os.fdopen(fd, "wb") as f:
+        f.write(png)
+    _GRID_FIXTURES[key] = path
+    atexit.register(lambda p=path: os.path.exists(p) and os.unlink(p))
+    return path
 
 
 # ---------------------------------------------------------------- 基准项
@@ -136,6 +173,12 @@ CASES = [
         "note": "把每种编码都试一遍",
         "seed": 0,
         "run": lambda q: codec.brute("&#x4f60;&#x597d;" * (1 if q else 4)),
+    },
+    {
+        "name": "stego/grid",
+        "note": "点阵图切格读位（报告 21）——640×640，图由 bench 现场生成",
+        "seed": 0,
+        "run": lambda q: stego.grid_read(_grid_fixture(40 if q else 64, 10)),
     },
 ]
 
