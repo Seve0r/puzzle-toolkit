@@ -39,6 +39,7 @@ import struct
 import subprocess
 import math
 import shutil
+from collections import Counter
 import tempfile
 
 try:
@@ -880,17 +881,36 @@ def _fit_axis(prof, min_cell=3):
 
     # 粗搜必须带小数：图像缩放过以后格宽是 10.66 这种，整数周期会一路漂移、
     # 得分被「格宽 32」这种侥幸对齐三个峰的错误周期反超，细化就再也回不去了。
+    #
+    # ★ 大周期的相位不再逐个扫。原先是 `phstep=1.0` 一路扫完 [0, p)，总扫描量
+    #   是 Σp ≈ 8 万次/方向 —— 而**格线只可能落在 peaks 上**，所以正确相位必然
+    #   等于某个 `pk mod p`。真周期时这些余数会聚成一个尖峰，假周期时散开，
+    #   于是「按余数投票取前 4 个簇」就是现成的候选集，每个簇再取 ±1 像素邻点。
+    #   200 周期的相位从 200 个降到 20 个，而结果不变（见基准 digest）。
+    #   小周期（≤50）本来就只有几十个相位，继续全扫最稳，不掺这个逻辑。
     cand = []
     pstep = 0.25 if n <= 1500 else 0.5
     p = float(min_cell)
     while p <= max_lag:
-        ph = 0.0
-        phstep = 0.5 if p <= 20 else 1.0
-        while ph < p:
+        if p <= 50.0:
+            phstep = 0.5 if p <= 20 else 1.0
+            phases = []
+            ph = 0.0
+            while ph < p:
+                phases.append(ph)
+                ph += phstep
+        else:
+            votes = Counter(round(pk % p) for pk in peaks)
+            phases = []
+            for base, _cnt in votes.most_common(4):
+                for d in (-1.0, -0.5, 0.0, 0.5, 1.0):
+                    x = base + d
+                    if 0.0 <= x < p:
+                        phases.append(x)
+        for ph in phases:
             sc = evaluate(ph, p)
             if sc > 0:
                 cand.append((sc, p, ph))
-            ph += phstep
         p += pstep
     if not cand:
         raise ValueError("没找到周期性网格")

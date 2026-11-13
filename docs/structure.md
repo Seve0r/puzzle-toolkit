@@ -11,7 +11,7 @@
 | `codec.py` | 3217 | 187 | 16 | `main` 370 行 | 编码识别与解码 |
 | `classic.py` | 1769 | 109 | 18 | `main` 268 行 | 古典密码 |
 | `hashcrypto.py` | 1223 | 51 | 8 | `main` 283 行 | 哈希与现代密码 |
-| `stego.py` | 1434 | 54 | 7 | `main` 229 行 | 文件隐写 |
+| `stego.py` | 1454 | 55 | 7 | `main` 229 行 | 文件隐写 |
 | `num.py` | 227 | 13 | — | `main` 96 行 | 进制转换（数值视角） |
 | `ui.py` | 1941 | 43 | 4 | `run_action` 182 行 | 本地界面（HTTP + 内嵌 HTML/JS） |
 | `ui_params.py` | 489 | 21 | 8 | `_pigpen_slots_json` 22 行 | 界面参数表（纯数据，不 import codec） |
@@ -361,17 +361,17 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 四、`stego.py`
 
-1434 行 / 54 个顶层对象 / 7 个分区。
+1454 行 / 55 个顶层对象 / 7 个分区。
 
 | 区 | 行范围 | 行数 | 内容 |
 |---|---:|---:|---|
-| 魔数 | 50–221 | 172 | `read` / `binwalk` / `_gif_end` / `tail_data` / `strings` / `mark_suspect` |
-| 图片 | 222–463 | 242 | `open_img` / `lsb_extract` / `lsb_scan` / `png_chunks` / `png_text` / `exif_info` / `qr_scan` |
-| ZIP | 464–546 | 83 | `zip_entries` / `zip_comment` / `zip_fake_encrypt` / `zip_extract` |
-| 音频 | 547–572 | 26 | `spectrum`（要 `ffmpeg`） |
-| 点阵网格（grid） | 573–1147 | **575** | `_png_canvas` / `canvas_of` / `_png_encode_rgb` / `inverted_copy` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
-| 杂项 | 1148–1192 | 45 | `entropy` / `meta` / `hexdump` |
-| CLI | 1193–1434 | 242 | `main`（233 行） |
+| 魔数 | 51–222 | 172 | `read` / `binwalk` / `_gif_end` / `tail_data` / `strings` / `mark_suspect` |
+| 图片 | 223–464 | 242 | `open_img` / `lsb_extract` / `lsb_scan` / `png_chunks` / `png_text` / `exif_info` / `qr_scan` |
+| ZIP | 465–547 | 83 | `zip_entries` / `zip_comment` / `zip_fake_encrypt` / `zip_extract` |
+| 音频 | 548–573 | 26 | `spectrum`（要 `ffmpeg`） |
+| 点阵网格（grid） | 574–1167 | **594** | `_png_canvas` / `canvas_of` / `_png_encode_rgb` / `inverted_copy` / `_otsu_split` / `_fit_axis` / `grid_read` / `print_grid` |
+| 杂项 | 1168–1212 | 45 | `entropy` / `meta` / `hexdump` |
+| CLI | 1213–1454 | 242 | `main`（233 行） |
 
 ### 改代码时从哪下手
 
@@ -380,7 +380,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 加一种容器格式的解析 | 照 `ZIP` 区那样，`xxx_entries` / `xxx_extract` 成对写 |
 | grid 读错格子 | `_otsu_split`（阈值）+ `_fit_axis`（格宽）；两个都有实测依据，改动前先看注释 |
 | LSB 看不出东西 | `lsb_scan`（按通道/位序枚举）+ `longest_printable`（挑最像人话的） |
-| 加子命令 | `main`（L1202） |
+| 加子命令 | `main`（L1222） |
 
 ### 注意
 

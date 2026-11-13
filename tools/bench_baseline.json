@@ -3,65 +3,65 @@
  "quick": false,
  "cases": {
   "hillclimb/400": {
-   "median": 1.381418,
-   "best": 1.364783,
-   "worst": 1.393046,
+   "median": 1.39567,
+   "best": 1.379626,
+   "worst": 1.39956,
    "digest": "a838a03f2cc4",
    "note": "单表替换爬山（报告 15）——最重的一项"
   },
   "hillclimb/800": {
-   "median": 0.763331,
-   "best": 0.762817,
-   "worst": 0.775273,
+   "median": 0.768723,
+   "best": 0.759733,
+   "worst": 0.774408,
    "digest": "5241f0e9fac1",
    "note": "同上，规模翻倍——看耗时是不是超线性"
   },
   "vigcrack/794": {
-   "median": 0.438305,
-   "best": 0.437712,
-   "worst": 0.438759,
+   "median": 0.430534,
+   "best": 0.418925,
+   "worst": 0.436498,
    "digest": "a1c19770ceb4",
    "note": "维吉尼亚自动破解（报告 16）"
   },
   "a1z26/24": {
-   "median": 0.343726,
-   "best": 0.343046,
-   "worst": 0.344441,
+   "median": 0.33893,
+   "best": 0.33815,
+   "worst": 0.339518,
    "digest": "20d12a87a1c0",
    "note": "无分隔符切分枚举（报告 17）——指数增长：每 +4 位约 ×7"
   },
   "mojibake_cross": {
-   "median": 0.00075,
-   "best": 0.000747,
-   "worst": 0.00077,
+   "median": 0.000734,
+   "best": 0.000722,
+   "worst": 0.000738,
    "digest": "fc8f693f6371",
    "note": "源编码 × 目标编码双循环（报告 18），输入 ×40 才有量级"
   },
   "codec/auto": {
-   "median": 0.002628,
-   "best": 0.002626,
-   "worst": 0.00264,
+   "median": 0.002727,
+   "best": 0.002702,
+   "worst": 0.002732,
    "digest": "1ba70c240cfc",
    "note": "递归剥皮 + 乱码兜底（报告 20），三层 base64 嵌套"
   },
   "codec/brute": {
-   "median": 0.000431,
-   "best": 0.000418,
-   "worst": 0.000484,
+   "median": 0.000432,
+   "best": 0.000417,
+   "worst": 0.000479,
    "digest": "a623ef7944b5",
    "note": "把每种编码都试一遍"
   },
   "stego/grid": {
-   "median": 0.82026,
-   "best": 0.815525,
-   "worst": 0.8222,
+   "median": 0.482877,
+   "best": 0.480323,
+   "worst": 0.484101,
    "digest": "fe5047de7735",
    "note": "点阵图切格读位（报告 21）——640×640，图由 bench 现场生成"
   },
   "hashcrypto/brute": {
-   "median": 1.381466,
-   "best": 1.376787,
-   "worst": 1.405993,
+   "median": 1.365196,
+   "best": 1.355179,
+   "worst": 1.382626,
    "digest": "6eef6648406c",
    "note": "掩码爆破吞吐：用不可能命中的 target 跑满，测纯吞吐"
   }
