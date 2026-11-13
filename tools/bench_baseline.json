@@ -1,74 +1,80 @@
 {
  "noise": 5.0,
  "quick": false,
+ "machine": {
+  "cpu": "AMD Ryzen 9 8940HX with Radeon Graphics",
+  "logical_cores": 32,
+  "os": "Linux 7.0.0-42-generic",
+  "python": "3.12.3"
+ },
  "cases": {
   "hillclimb/400": {
-   "median": 1.361548,
-   "best": 1.358086,
-   "worst": 1.375739,
+   "median": 1.38974,
+   "best": 1.381376,
+   "worst": 1.393645,
    "digest": "a838a03f2cc4",
    "note": "单表替换爬山（报告 15）——最重的一项"
   },
   "hillclimb/800": {
-   "median": 0.764172,
-   "best": 0.762368,
-   "worst": 0.778666,
+   "median": 0.749247,
+   "best": 0.746831,
+   "worst": 0.759621,
    "digest": "5241f0e9fac1",
    "note": "同上，规模翻倍——看耗时是不是超线性"
   },
   "vigcrack/794": {
-   "median": 0.414307,
-   "best": 0.411778,
-   "worst": 0.418667,
+   "median": 0.434671,
+   "best": 0.42666,
+   "worst": 0.442576,
    "digest": "a1c19770ceb4",
    "note": "维吉尼亚自动破解（报告 16）"
   },
   "a1z26/24": {
-   "median": 0.335756,
-   "best": 0.331975,
-   "worst": 0.339165,
+   "median": 0.352909,
+   "best": 0.340484,
+   "worst": 0.355407,
    "digest": "20d12a87a1c0",
    "note": "无分隔符切分枚举（报告 17）——指数增长：每 +4 位约 ×7"
   },
   "mojibake_cross": {
    "median": 0.000737,
-   "best": 0.00073,
-   "worst": 0.000764,
+   "best": 0.000705,
+   "worst": 0.000773,
    "digest": "fc8f693f6371",
    "note": "源编码 × 目标编码双循环（报告 18），输入 ×40 才有量级"
   },
   "mojibake/split": {
-   "median": 0.001195,
-   "best": 0.001194,
-   "worst": 0.001202,
+   "median": 0.001169,
+   "best": 0.001163,
+   "worst": 0.001183,
    "digest": "ac166ca75369",
    "note": "含 U+FFFD 的分段还原，同款 src×tgt 双循环；每段只该编码一次"
   },
   "codec/auto": {
-   "median": 0.00265,
-   "best": 0.002642,
-   "worst": 0.002666,
+   "median": 0.002607,
+   "best": 0.002599,
+   "worst": 0.002621,
    "digest": "1ba70c240cfc",
    "note": "递归剥皮 + 乱码兜底（报告 20），三层 base64 嵌套"
   },
   "codec/brute": {
-   "median": 0.000435,
-   "best": 0.000415,
-   "worst": 0.00049,
+   "median": 0.000433,
+   "best": 0.00042,
+   "worst": 0.000515,
    "digest": "a623ef7944b5",
    "note": "把每种编码都试一遍"
   },
   "stego/grid": {
-   "median": 0.472249,
-   "best": 0.469259,
-   "worst": 0.474565,
+   "median": 0.48829,
+   "best": 0.48243,
+   "worst": 0.492932,
    "digest": "fe5047de7735",
    "note": "点阵图切格读位（报告 21）——640×640，图由 bench 现场生成"
   },
   "hashcrypto/brute": {
-   "median": 1.355566,
-   "best": 1.343816,
-   "worst": 1.393578,
+   "median": 1.342711,
+   "best": 1.338526,
+   "worst": 1.358144,
    "digest": "6eef6648406c",
    "note": "掩码爆破吞吐：用不可能命中的 target 跑满，测纯吞吐"
   }

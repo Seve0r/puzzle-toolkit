@@ -14,13 +14,18 @@
     python3 tools/bench.py --save base.json    # 存基线
     python3 tools/bench.py --compare base.json # 跟基线比
 
-四条原则（缺一条，数字就不可信）
+五条原则（缺一条，数字就不可信）
     1. **固定种子**：每次调用前 `random.seed()`。那几个爬山/爆破函数都吃全局
        random，不固定的话每次做的工作量都不同，快慢混在一起看不出因果关系。
     2. **重复取中位数**：偶发 GC 和调度会把平均值拖高，中位数扛得住。
     3. **记录结果摘要**：优化前后摘要必须一致。否则「变快」很可能是拿正确性
        换的——这是性能改动唯一真正危险的地方，也是本工具存在的理由。
     4. **报噪音水平**：小于噪音的变化不算改善，表格里直接标「无显著差异」。
+    5. **记住是哪台机器测的**：基线里的毫秒数绑死在机器上。`--save` 会把 CPU
+       型号 / 逻辑核数 / OS / Python 版本一起写进 `machine` 字段，`--compare`
+       发现和当前机器不同时**只校验结果摘要、不判快慢**。没有这条，「换了台
+       慢机器」和「代码退化了」在输出里长得一模一样，只能靠人记住当初在哪测
+       的——靠不住。注意摘要本身是机器无关的，换机器时它仍然要照常校验。
 
 本机噪音（2026-11-13 实测，32 核 Ryzen 9 8940HX，VSCode 开着）
     同一任务连跑 10 次：最小 1.826s / 中位 1.855s / 最大 1.879s，散布 2.9%，
@@ -34,6 +39,7 @@ import hashlib
 import io
 import json
 import os
+import platform
 import random
 import statistics
 import sys
@@ -258,16 +264,67 @@ def fmt_sec(x):
     return "%.2fms" % (x * 1000)
 
 
+# ---------------------------------------------------------------- 机器指纹
+
+def _machine():
+    """本机指纹。**基线里的毫秒数绑死在机器上**，换台机器比没有意义。
+
+    不记这个就没法区分两种「变慢」：一种是代码退化了（该查），另一种是
+    换了台更慢的机器（无事发生）。同一条 `--compare` 输出，两种情况长得
+    一模一样，全靠人记住当初在哪测的——靠不住。
+
+    注意：`digest`（结果摘要）是**机器无关**的，同样的输入永远同样的输出。
+    所以换机器时只该跳过耗时的快慢判断，摘要仍然要照常校验。
+    """
+    cpu = ""
+    # Linux：/proc/cpuinfo 里有完整型号；platform.processor() 只给 "x86_64"。
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    cpu = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    if not cpu:
+        # Windows：PROCESSOR_IDENTIFIER 才有 "AMD64 Family 25 Model 97 …"
+        # 这种信息，platform.processor() 常常只有 "AMD64"。
+        cpu = (os.environ.get("PROCESSOR_IDENTIFIER")
+               or platform.processor() or platform.machine() or "?")
+    return {
+        "cpu": cpu.strip(),
+        "logical_cores": os.cpu_count(),
+        "os": ("%s %s" % (platform.system(), platform.release())).strip(),
+        "python": platform.python_version(),
+    }
+
+
+_MACHINE_FIELDS = ("cpu", "logical_cores", "os", "python")
+
+
+def _machine_line(m):
+    return "%s / %s 逻辑核 / %s / Python %s" % (
+        m.get("cpu") or "?", m.get("logical_cores") or "?",
+        m.get("os") or "?", m.get("python") or "?")
+
+
+def _machine_diffs(base_m, cur_m):
+    """返回不同的字段名列表；空列表 = 同一台机器。"""
+    return [k for k in _MACHINE_FIELDS if base_m.get(k) != cur_m.get(k)]
+
+
 # ---------------------------------------------------------------- 两种模式
 
 def do_measure(cases, reps, quick, save_path):
+    mach = _machine()
+    print("本机：%s" % _machine_line(mach))
     print("本机噪音 ±%.1f%%（小于它的变化不可信）%s"
           % (NOISE, "　[quick 模式，规模已缩小]" if quick else ""))
     print()
     print("%-18s %4s %9s %9s %7s  %s"
           % ("项目", "重复", "中位", "最小", "波动", "结果摘要"))
     print("-" * 72)
-    out = {"noise": NOISE, "quick": quick, "cases": {}}
+    out = {"noise": NOISE, "quick": quick, "machine": mach, "cases": {}}
     for case in cases:
         med, best, worst, dg = measure(case, reps, quick)
         out["cases"][case["name"]] = {
@@ -282,7 +339,8 @@ def do_measure(cases, reps, quick, save_path):
     if save_path:
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(out, f, ensure_ascii=False, indent=1)
-        print("基线已存：%s" % save_path)
+        print("基线已存：%s（绑在本机：%s）" % (save_path, _machine_line(mach)))
+        print("  换机器后请重新 --save，别拿这份的耗时判断快慢。")
     return 0
 
 
@@ -292,6 +350,27 @@ def do_compare(cases, reps, quick, base_path):
     by_name = {c["name"]: c for c in cases}
     noise = base.get("noise", NOISE)
     warn_quick = "　[quick 模式，与全量基线不可比！]" if quick else ""
+
+    # 先确认这份基线是不是本机测的。不是同一台机器时，秒数之间没有可比性
+    # ——但 digest 仍然有意义（同样的输入永远同样的输出），所以只跳过快慢判断。
+    cur_m = _machine()
+    base_m = base.get("machine")
+    machine_ok = True
+    if not base_m:
+        print("⚠ 这份基线没有机器信息（旧格式存的），无法确认是否本机。")
+        print("    建议重新 --save 一次，之后换机器会被自动识别。")
+        print()
+    else:
+        diffs = _machine_diffs(base_m, cur_m)
+        if diffs:
+            machine_ok = False
+            print("⚠ 基线和本机不是同一台机器 —— 下面的耗时不可比，只校验结果摘要。")
+            print("    基线：%s" % _machine_line(base_m))
+            print("    本机：%s" % _machine_line(cur_m))
+            for k in diffs:
+                print("    差异 %-14s %s  →  %s" % (k, base_m.get(k), cur_m.get(k)))
+            print("    要拿耗时说话，先在这台机器上 --save 一份新基线。")
+            print()
 
     print("基线：%s（噪音 ±%.1f%%）%s" % (base_path, noise, warn_quick))
     print()
@@ -317,6 +396,8 @@ def do_compare(cases, reps, quick, base_path):
         if dg != b["digest"]:
             verdict = "★ 结果变了！"
             failed += 1
+        elif not machine_ok:
+            verdict = "摘要一致（耗时不可比：换了机器）"
         elif abs(delta) <= threshold:
             verdict = "一致（±%.1f%% 内，无显著差异）" % threshold
         elif delta < 0:
@@ -331,6 +412,9 @@ def do_compare(cases, reps, quick, base_path):
         print("❌ %d 项的结果摘要和基线不同 —— 这次改动改变了行为，"
               "「变快」不成立，先查正确性。" % failed)
         return 1
+    if not machine_ok:
+        print("✅ 结果摘要全部一致。耗时差异未判断：基线不是这台机器测的。")
+        return 0
     print("✅ 结果全部一致。每项按自己的波动范围判断，阈值以内的差异不算改善。")
     return 0
 

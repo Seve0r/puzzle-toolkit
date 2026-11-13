@@ -448,6 +448,35 @@
 
 ### 变更
 
+- **`bench.py` 的基线现在带机器指纹，换机器后不会再误报「全线变慢」**。
+
+  基线里的毫秒数绑死在那台机器上，可文件里原先只有数字。换一台 CPU 慢一半的
+  机器跑 `--compare`，10 项全部报「变慢」——和「代码退化了」在输出里长得**一
+  模一样**，只能靠人记住当初在哪台机器上测的，靠不住。
+
+  `--save` 现在多写一个 `machine` 字段（CPU 型号 / 逻辑核数 / OS / Python
+  版本）。`--compare` 发现不是同一台机器时：
+
+  ```
+  ⚠ 基线和本机不是同一台机器 —— 下面的耗时不可比，只校验结果摘要。
+      基线：Intel Xeon Platinum 8255C / 4 逻辑核 / Linux 5.15.0-91-generic / Python 3.12.3
+      本机：AMD Ryzen 9 8940HX with Radeon Graphics / 32 逻辑核 / Linux 7.0.0-42-generic / Python 3.12.3
+      差异 cpu            Intel Xeon Platinum 8255C  →  AMD Ryzen 9 8940HX with Radeon Graphics
+      差异 logical_cores  4  →  32
+      要拿耗时说话，先在这台机器上 --save 一份新基线。
+  ```
+
+  表格里那几行标成「摘要一致（耗时不可比：换了机器）」，最后一行改成「耗时
+  差异未判断」。**摘要照常校验**——`digest` 是机器无关的，同样的输入永远同样
+  的输出，那部分换机器也必须一致。
+
+  没有 `machine` 字段的旧基线不报错，只提示「无法确认是否本机」并建议重存，
+  向后兼容。
+
+  CPU 型号取法：Linux 读 `/proc/cpuinfo` 的 `model name`（`platform.processor()`
+  在 Linux 上只给 `x86_64`），Windows 用 `PROCESSOR_IDENTIFIER`（那个才有完整
+  型号，`platform.processor()` 常只有 `AMD64`），都没有再退到 `platform.machine()`。
+
 - **`codec.mojibake_split` 提速 2.3~3.8 倍**（20 段含 U+FFFD：2.11ms → 0.55ms），
   还原结果逐位不变。
 
