@@ -3,7 +3,7 @@
   "generator": "auto-test-dataset-builder",
   "tool": "puzzle-toolkit",
   "schema_version": 1,
-  "count": 269,
+  "count": 272,
   "fixture_fix": "原 png1x1.png 的 IDAT CRC 损坏，已替换为合法 2x2 RGBA",
   "corrected": "按实测行为重写 expect；原版见 dataset.as-generated.json"
  },
@@ -27,6 +27,14 @@
   {
    "name": "gbk.txt",
    "content_b64": "1tDOxLLiytQ="
+  },
+  {
+   "name": "qr_lowres.png",
+   "content_b64": "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAAAAADEa8dEAAABFUlEQVR42qWUW46EUAhEq4z73/KZD+ACtp2ZZDodo1gi9UCj33/XHzC6JTnPkYyUx1G9+krrdNbuBEuyLCxkyeJUEyQX0kKBnNW3wc3jvQsE57ZfQVsvmKV7I4wszH7wnr37fpLsRx8yMWit1x08bsEDTYC8h3YfvToZyVjVSnU2JcA9MxQzELKlK6rIxqll2OZW4TqMZdnhCN4K398z0sBmF8a32NEurmHNmiW6JMiZABF08m8JOs4+g1KmUQ652NEZUElpfSpOW0I2bueSnQajE4sRmrUtMYags2LmtiRlsxIQna+PvWSJLfljpVzml8zPZI6ONX0yfWzLyUNEgZdtOVoTGSy7r70Xw+Nj72Ol/vWl+wH4Mp1AaczvMgAAAABJRU5ErkJggg=="
+  },
+  {
+   "name": "qr_tilted.png",
+   "content_b64": "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"
   }
  ],
  "cases": [
@@ -5795,6 +5803,94 @@
     "argv"
    ],
    "note": "原来只落到通用 except 打出 invalid literal，没有用法提示；现与 classic/num 同一水准"
+  },
+  {
+   "id": "stego-edge-011",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "qr_lowres.png"
+   ],
+   "stdin": null,
+   "requires": [
+    "zbarimg"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "没识别到二维码/条形码"
+    ],
+    "stderr_contains": [
+     "分辨率不足",
+     "每模块只有"
+    ]
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "qr",
+    "diagnose"
+   ],
+   "note": "36px 图（每模块 1.25 像素）zbar 扫不出；放大/锐化/二值化都救不回来，实测 JPEG q=10、对比度压到 110~150、模糊 r=1.8 仍能识别，只有分辨率是真限制"
+  },
+  {
+   "id": "stego-edge-012",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "qr_tilted.png"
+   ],
+   "stdin": null,
+   "requires": [
+    "zbarimg"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_contains": [
+     "没识别到二维码/条形码"
+    ],
+    "stderr_contains": [
+     "量出来不一致"
+    ],
+    "stderr_not_contains": [
+     "不是真实编码"
+    ]
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "qr",
+    "diagnose"
+   ],
+   "note": "倾斜的真码（手机侧拍的教室场景，内容是 http://www.evvh-yyq-m.top/）：水平扫过被透视压缩的定位图案，逐行量出的宽度自然不同，众数只占 34% —— 和「画的假码」特征完全重合。所以只报「量不出来」，绝不判它是假的"
+  },
+  {
+   "id": "stego-edge-013",
+   "script": "stego.py",
+   "args": [
+    "qr",
+    "qr_inverted.png"
+   ],
+   "stdin": null,
+   "requires": [
+    "zbarimg"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "https://example.com/arg",
+    "stderr_not_contains": [
+     "分辨率不足",
+     "不是真实编码"
+    ]
+   },
+   "tags": [
+    "edge",
+    "stego",
+    "qr",
+    "diagnose",
+    "no-false-positive"
+   ],
+   "note": "扫描成功时一句诊断都不该有。只用 stderr_contains 的话，把所有图都误报一遍也能全绿"
   }
  ]
 }

@@ -14,7 +14,8 @@
   zipinfo <zip>               不依赖 unzip：列条目、注释、伪加密标记
   unzip <zip> [--out DIR]     解压到目录（store/deflate，加密条目跳过，带路径越界防护）
   hexdump <file> [-l N]       十六进制查看
-  qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试）
+  qr <image>                  用 zbarimg 识别二维码/条形码（--all 放大 2x/4x 重试；
+                              扫不出时会说清是分辨率不足、还是那张图压根不是真码）
                               扫不出会自动反色再试（白码黑底）；--no-invert 关掉，
                               --invert 直接按反色扫。PNG 走内置解码器，其它格式需 Pillow
   spec <audio> [--out a.png]  ffmpeg 生成频谱图（看隐藏的摩斯/文字）
@@ -460,6 +461,116 @@ def qr_scan(path, allres=False, invert=None):
         return _uniq(got), False, ""
     got, why = _try_inverted()
     return _uniq(got), bool(got), why
+
+
+def qr_module_size(path):
+    """估算二维码「每模块几像素」，用定位图案反推。返回 (k, 说明)，k=None 表示测不出。
+
+    为什么需要：zbar 扫不出时，「图太小」和「图里压根不是二维码」在命令行里
+    长得一模一样 —— 都是一句「没识别到」。使用者只能去试放大、二值化、锐化，
+    白耗一轮。给个每模块像素数就能直接分流：≥2 说明分辨率不是瓶颈，别再折腾
+    放大；<2 才值得回去换更清晰的源。
+
+    判据：三个角上的定位图案是 7×7 模块，沿一条穿过它中心的横线，黑白游程
+    严格是 1:1:3:1:1。取中间那段（3 模块）除以 3 即每模块像素数。
+
+    ★ **一致性只能用来「信不信这个数」，不能用来判断真假**。真实二维码上三个
+      定位图案宽度相同，正立时同一个值能占六成以上；但**歪着的真码同样会散**——
+      水平扫描穿过被透视压缩的定位图案，逐行量出的宽度本来就不一样。实测一张
+      倾斜的真码（教室场景手机侧拍，内容 http://www.evvh-yyq-m.top/）众数只有
+      34%，和「画的示意码」特征完全重合。所以不一致时只报「量不出来」。
+    """
+    if not HAVE_PIL:
+        return None, "需要 Pillow 才能量分辨率"
+    try:
+        im = open_img(path).convert("L")
+    except Exception as e:
+        return None, "读图失败：%s" % e
+    w, h = im.size
+    if w < 16 or h < 16:
+        return None, "图只有 %dx%d，太小" % (w, h)
+
+    # Otsu：图里只有码和底两种色调时最稳，不用"猜"一个固定阈值。
+    data = list(im.getdata())
+    hist = [0] * 256
+    for v in data:
+        hist[v] += 1
+    total = len(data)
+    sum_all = sum(i * hist[i] for i in range(256))
+    sum_b = 0.0
+    w_b = 0
+    best = -1.0
+    thr = 128
+    for t in range(256):
+        w_b += hist[t]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += t * hist[t]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        var = w_b * w_f * (m_b - m_f) ** 2
+        if var > best:
+            best = var
+            thr = t
+
+    px = im.load()
+    ks = []
+    for y in range(h):
+        # 每行转成 0/1 游程。深色记 1 —— 定位图案是「黑 白 黑 白 黑」。
+        # ★ 必须用 `<=` 而不是 `<`：纯黑白图（历史素材常见）上 Otsu 的最大
+        #   方差在 t=0 就出现，之后所有 t 方差相同、`>` 不再更新，阈值停在 0。
+        #   这时 `< 0` 恒假，整张图被当成全白，一个游程都找不出来 —— 实测表现
+        #   是「真二维码也报没找到定位图案」。
+        runs = []
+        cur = 1 if px[0, y] <= thr else 0
+        n = 1
+        for x in range(1, w):
+            v = 1 if px[x, y] <= thr else 0
+            if v == cur:
+                n += 1
+            else:
+                runs.append((cur, n))
+                cur = v
+                n = 1
+        runs.append((cur, n))
+        for i in range(len(runs) - 4):
+            seg = runs[i:i + 5]
+            if [s[0] for s in seg] != [1, 0, 1, 0, 1]:
+                continue
+            L = [s[1] for s in seg]
+            unit = (L[0] + L[1] + L[4]) / 3.0      # 三个单模块段的均值
+            if unit < 1.0:
+                continue
+            # 容差放宽到 50%/33%：斜着的码在屏幕上会有透视，比例本来就会偏。
+            if (abs(L[0] / unit - 1) > 0.5 or abs(L[1] / unit - 1) > 0.5
+                    or abs(L[2] / unit - 3) > 1.0
+                    or abs(L[3] / unit - 1) > 0.5 or abs(L[4] / unit - 1) > 0.5):
+                continue
+            # 取两位小数当 key：游程是整数像素，真值只会落在少数几个点上，
+            # 四舍五入后正好能用来数众数。
+            ks.append(round(L[2] / 3.0, 2))
+
+    if not ks:
+        return None, "没找到定位图案（不是二维码，或歪得太厉害）"
+    # 用**众数占比**决定这个 k 值可不可信：正立的真码同一宽度占六成以上
+    # （实测 62~64%），量散了就说明形态不规整，不给结论。
+    # 比极值分位稳 —— 后者会被像素量化的 ±1 波动误伤（真码 k=6 实测值
+    # 4/6/8，极值法相对离散度 67%，把真码也拒了）。
+    top, hits = Counter(ks).most_common(1)[0]
+    if hits < len(ks) * 0.5:
+        # 量出来的宽度不集中 → 拿不到可信的 k，就此打住。
+        # ★ **绝不能**据此断言「这不是真二维码」：实测一张倾斜的**真**码
+        #   （手机侧拍的教室场景，扫出来是 http://www.evvh-yyq-m.top/），
+        #   水平扫描穿过被透视压缩的定位图案，逐行量出的宽度自然不同，
+        #   众数只占 34% —— 和「画的假码」的特征完全重合。
+        #   把真码判成假码会让人直接放弃一条真线索，比不给提示有害得多。
+        return None, ("定位图案量出来不一致（%d 次测量里最常见 %.2f 像素只占 "
+                      "%.0f%%），多半是拍歪了或有透视，判断不了分辨率"
+                      % (len(ks), top, 100.0 * hits / len(ks)))
+    return top, ""
 
 
 # ---------------------------------------------------------------- ZIP
@@ -1414,6 +1525,22 @@ def main():
                     print("没识别到二维码/条形码（反色重试没做成：%s）" % inv_why)
                 else:
                     print("没识别到二维码/条形码（正色、反色都试过了）")
+                # 扫不出时再说一句「为什么」——否则用户只能去试放大/二值化/
+                # 锐化，而实测这几样 zbar 自己就能扛（JPEG q=10、对比度压到
+                # 110~150、模糊 r=1.8 都仍能识别），真正卡人的只有分辨率。
+                # 诊断走 stderr：stdout 只留「结果」和那句结论，重定向时干净。
+                if not quiet:
+                    k, why = qr_module_size(path)
+                    if k is not None and k < 2.0:
+                        sys.stdout.flush()
+                        sys.stderr.write(
+                            "  每模块只有 %.1f 像素（低于 2）—— 分辨率不足，"
+                            "换更清晰的源，放大和锐化救不回来\n" % k)
+                        sys.stderr.flush()
+                    elif k is None and why:
+                        sys.stdout.flush()
+                        sys.stderr.write("  %s\n" % why)
+                        sys.stderr.flush()
                 return 0
             if used_inv and not quiet:
                 # 「是反色才认出」这件事必须说出来：否则用户以为图本来就是正的，

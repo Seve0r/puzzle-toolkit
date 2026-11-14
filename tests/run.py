@@ -12,6 +12,7 @@
   · expect.stdout            去掉末尾换行后**逐字符相等**
   · expect.stdout_contains   所有子串都出现在 stdout
   · expect.stderr_contains   所有子串都出现在 stderr
+  · expect.stderr_not_contains  这些子串都**不**出现在 stderr（防「乱加提示」）
   · expect.exit              退出码相等
   · expect.unknown           跳过（数据集里明确标了"没把握"的条目）
   · requires                 用例依赖的外部命令，本机缺了 → skip（如 ["zbarimg"]）
@@ -100,6 +101,12 @@ def check(case, tmp, verbose=False):
         for s in exp["stderr_contains"]:
             if s not in err:
                 problems.append("stderr 缺 %r" % s)
+    # 「不该出现」的断言：用于验证「正常路径不误报提示」。只有 contains 的话，
+    # 一律多加一句诊断也能全绿——那正是最该防的退化。
+    if "stderr_not_contains" in exp:
+        for s in exp["stderr_not_contains"]:
+            if s in err:
+                problems.append("stderr 不该有 %r" % s)
     if not problems and "stdout" not in exp and "stdout_contains" not in exp:
         # 没给任何 stdout 断言时只校验 exit —— 提醒一下，不算失败
         pass
