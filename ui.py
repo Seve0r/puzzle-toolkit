@@ -1072,6 +1072,19 @@ PAGE = r"""<!DOCTYPE html>
     .filrow input[type=file] { max-width:100%; }
     .filrow .hint { flex:1 1 100%; }
 
+    /* 符号选择器 4 组并排要 516px，390px 放不下会横向溢出、把右边半列切掉 */
+    .sypad { flex-wrap:wrap; }
+
+    /* 参数带展开后它自己就吃掉 236px，main 只剩 229px —— 右栏放不下「结果框 +
+       符号回显」（猪圈密码那种下方要画图形的最明显），超出 100dvh 的部分会被
+       body 直接裁掉，符号回显整个消失。实测 body.scrollHeight 737 > 视口 694。
+       所以展开时把 main 变成可滚动长列表：不裁任何东西，往下滚就能看到全部。
+       收起时维持原来的「撑满一屏」，因为那时候空间是够的。 */
+    body.paramopen main { overflow-y:auto; }
+    body.paramopen .pane { flex:0 0 auto; }
+    body.paramopen .pane textarea { flex:0 0 auto; min-height:140px; }
+    #symout, #cands { flex:0 0 auto; }   /* 这两块不许被压缩掉 */
+
     /* 输入和结果上下堆叠。只给左栏定比例，右栏吃掉剩下的。 */
     main { flex-direction:column; }
     .pane { padding:8px 12px; }
