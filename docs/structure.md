@@ -428,9 +428,14 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 
 ## 六、`ui.py` / `ui_params.py`
 
-### `ui.py`（1851 行）
+### `ui.py`（2059 行）
 
 本地界面：`http.server` + **内嵌的 HTML/CSS/JS**（单文件，不需要前端构建）。
+
+布局有**两套**，改样式时两边都要看：桌面是默认那套（左右双栏）；手机/窄屏是
+`PAGE` 里那块 `@media (max-width:720px)`（竖排、参数带折叠、日志栏收缩）。
+**桌面宽屏看不出来的问题，多半就在窄屏那边** —— 比如中文提示被挤成竖排、
+`.filrow` 占掉 242px 把输入框压扁，宽屏下都完全正常。
 
 | 部分 | 位置 | 职责 |
 |---|---|---|
@@ -445,6 +450,7 @@ _ENABLE_LATIN1_MOJIBAKE = False   # L1237
 | 内嵌 JS `updateSymPrev` | L1612 | 输入框下方的实时图形预览 |
 | 内嵌 JS `updateSymOut` | L1642 | 结果框下方回显（符号直接画、字母按变体画回符号） |
 | 内嵌 JS `pigpenLive` | L1677 | 实时双向换算，输入即出结果 |
+| 内嵌 JS `syncParamsBtn` | L1422 | 窄屏参数带的折叠开关（桌面不显示这个按钮，见 PAGE 里的 `@media`） |
 
 ### `ui_params.py`（489 行）
 

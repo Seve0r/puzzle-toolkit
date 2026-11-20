@@ -263,6 +263,30 @@ def check_prose_stats(doc, infos, problems, fixes, report):
         _add_fix(fixes, (m.start(), m.end(), new))
 
 
+def check_heading_lines(doc, infos, problems, fixes, report):
+    """章节小标题里的「`脚本`（N 行）」。
+
+    ★ 这是个长期盲区，2026-11 才补上：它长得像个标题、不像一处数字。
+    `check_prose_stats` 只认「N 行 / M 个顶层对象 / K 个分区」那种连写句式，
+    `check_line_refs` 只认「`函数名`（L数字）」，两边都不匹配。
+    实测 `### ui.py`（1851 行）比实际少了 208 行，工具一路是绿的 ——
+    紧挨着的 `### ui_params.py`（489 行）恰好从来没变过，
+    于是「看起来对」掩盖了「其实从没被检查」。
+    """
+    pat = re.compile(r"^#{2,4}\s+`([A-Za-z_][\w.]*)`[^\n]*?（(\d+)\s*行）", re.M)
+    for m in pat.finditer(doc):
+        name = m.group(1)
+        if name not in infos:
+            continue
+        real = infos[name]["lines"]
+        if int(m.group(2)) == real:
+            report("  ✅ %s（%d 行）" % (name, real))
+            continue
+        problems.append("章节标题 `%s`：文档写 %d 行，实测 %d 行"
+                        % (name, int(m.group(2)), real))
+        _add_fix(fixes, (m.start(2), m.end(2), str(real)))
+
+
 def check_line_refs(doc, infos, problems, fixes, report):
     """正文里散落的 `函数名`（L数字），逐个核对那一行是不是该函数。"""
     secs = sections_of(doc)
@@ -338,6 +362,8 @@ def main(argv):
     check_prose_stats(doc, infos, problems, fixes, report)
     print("[4] 正文里散落的函数行号")
     check_line_refs(doc, infos, problems, fixes, report)
+    print("[5] 章节小标题里的「`脚本`（N 行）」")
+    check_heading_lines(doc, infos, problems, fixes, report)
 
     print()
     if not problems:
