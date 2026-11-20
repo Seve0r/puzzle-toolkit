@@ -18,6 +18,8 @@ puzzle-toolkit 的本地图形界面（浏览器版，纯标准库）。
   ★ 只 import 现有脚本，绝不复制任何解码逻辑。改了 codec.py，界面立刻跟着变。
   ★ 解码器会用 sys.stderr 输出提示（损失率、查不到的段…），浏览器里没有终端，
     这些必须接住显示出来，否则「解不出」和「解得不准」就分不清了。
+  ★ 窄屏（≤720px）走另一套布局，见 PAGE 里那块 @media。手机和桌面差得太多，
+    不用媒体查询硬挤的话输入框会被压到只剩十几像素。
 """
 
 import argparse
@@ -969,7 +971,12 @@ PAGE = r"""<!DOCTYPE html>
   .numrow .numval:hover { border-color:var(--line); }
   .numrow .numval:focus { outline:none; border-color:var(--accent); background:#1d222b; }
 
-  .filrow { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; }
+  /* flex-wrap 不是可选项：没它时下面那句提示文字会被文件选择框挤到宽度 0，
+     中文能在任意字符间断行，于是「读取文件时会替换上面的内容」**竖排成十几行**，
+     整行高 242px，把左边的输入框从 ~280px 压到 59px（390px 宽实测）。
+     桌面宽屏一放得下就看不出任何异常，所以这个坑长期没被发现。 */
+  .filrow { display:flex; align-items:center; gap:8px; margin-top:8px;
+            font-size:12px; flex-wrap:wrap; }
   .filrow input[type=file] { color:var(--dim); font-size:12px; max-width:210px; }
   .filrow .hint { color:var(--dim); }
 
@@ -1016,6 +1023,74 @@ PAGE = r"""<!DOCTYPE html>
   footer .ok { color:var(--ok); }
   footer .warn { color:var(--warn); }
   .meta { color:var(--dim); font-size:12px; margin-left:8px; }
+
+  /* 参数面板的折叠按钮。只在窄屏出现 —— 桌面一屏放得下，多一个按钮是噪声。 */
+  #btn-params { display:none; }
+
+  /* ===================== 手机 / 窄屏 =====================
+     桌面那套是「左右双栏 + 一行工具栏」，窄到 390px 会整个崩掉：输入框和结果
+     各只剩 171px 宽，参数一多（掩码爆破 7 项、点阵 6 项）参数区就吃掉大半屏。
+     390x700 实测输入框只剩 14px 高，等于不能输入。
+     所以下面整块只在小屏生效，**桌面一个像素都不动**。
+
+     为什么还要折叠参数：光把字段排整齐反而更糟 —— 每项独占一行后参数区从
+     165px 涨到 228px，输入框只从 59 涨到 62，结果框反而从 165 掉到 76。
+     折起来之后 main 从 279 回到 517，输入框 118、结果框 258，宽度也都翻倍。 */
+  @media (max-width: 720px) {
+    /* 移动浏览器地址栏伸缩时 100vh 会跳一下。写两行，老浏览器留 100vh 兜底。 */
+    body { height:100vh; height:100dvh; }
+
+    /* 5 个选项卡挤在 390px 里会逐字拆行（「编\n码」「古典密\n码」）。改成横向滚动。 */
+    header { padding:8px 12px 0; }
+    nav { overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
+    nav::-webkit-scrollbar { display:none; }
+    nav button { flex:0 0 auto; white-space:nowrap; padding:10px 12px; }
+
+    /* 按钮撑到手指点得准（约 44px），下拉吃掉剩余宽度 */
+    .bar { padding:8px 12px; gap:6px; }
+    #search { width:100%; }
+    #enc { flex:1 1 auto; min-width:0; }
+    button.act { padding:9px 14px; }
+
+    /* 参数区默认收起，点「⚙ 参数」展开。字段独占一行，标签不许拆字
+       （不写 nowrap 的话「列数」会被压成竖排单字）。项多时可滚动。
+       ★ 两个选择器都要写：上面那条 `.bar.sub.on` 是三个类，只写 `.bar.sub`
+         特异性不够（2 < 3），收起会被它顶掉 —— 参数照样全部展开。 */
+    .bar.sub,
+    .bar.sub.on { display:none; }
+    body.paramopen .bar.sub.on { display:flex; }
+    .bar.sub { gap:8px 10px; max-height:34vh; overflow-y:auto; }
+    #btn-params.show { display:inline-flex; }
+    /* 展开时按钮换个色，否则按下去没任何反馈，不知道是生效了还是没点到 */
+    #btn-params.on { background:#25507f; border-color:#2f6dad; }
+    .pfield { flex:1 1 100%; min-width:0; flex-wrap:wrap; }
+    .pfield .plabel { flex:0 0 auto; white-space:nowrap; }
+    .pfield select,
+    .pfield input[type=text],
+    .pfield input[type=number] { flex:1 1 120px; min-width:0; }
+    .pfield .phint { flex:1 1 100%; }
+    .filrow input[type=file] { max-width:100%; }
+    .filrow .hint { flex:1 1 100%; }
+
+    /* 输入和结果上下堆叠。只给左栏定比例，右栏吃掉剩下的。 */
+    main { flex-direction:column; }
+    .pane { padding:8px 12px; }
+    .pane + .pane { border-left:none; border-top:1px solid var(--line); }
+    .pane:first-child { flex:0 0 42%; }
+
+    /* 日志栏写死 168px，在 700px 高的屏幕上占 24%，而它常常只有一行字 */
+    footer { height:auto; max-height:16vh; flex:0 0 auto; padding:6px 12px; }
+
+    /* 小于 16px 的输入框会让 iOS Safari 在聚焦时把整页放大，并且不自动缩回 */
+    input[type=text], select, textarea { font-size:16px; }
+
+    /* 候选行原本 white-space:pre，长文本会横向溢出 */
+    .cand { white-space:pre-wrap; word-break:break-all; }
+
+    /* 猪圈符号选择器：30px 的格子手指点不准 */
+    .sygrp { grid-template-columns:repeat(3,38px);
+             grid-template-rows:14px repeat(3,38px); }
+  }
 </style>
 </head>
 <body data-tab="codec">
@@ -1040,6 +1115,9 @@ PAGE = r"""<!DOCTYPE html>
   <span class="sep codec-only"></span>
   <button class="act codec-only" id="btn-brute" title="每一种编码都试一遍">全试一遍</button>
   <button class="act primary not-codec" id="btn-run">执行</button>
+  <!-- 窄屏专用：当前功能有参数时才出现，点一下展开/收起下面那条参数带。
+       桌面由 CSS 隐藏（见 #btn-params 那几条规则）。 -->
+  <button class="act" id="btn-params" title="显示/隐藏当前功能的参数">⚙ 参数</button>
 </div>
 
 <div class="bar sub" id="params"></div>
@@ -1323,11 +1401,25 @@ async function doStruct() {
 }
 
 // ---- 参数区：完全由 ui_params.py 的声明驱动，这里不认识任何具体功能 ----
+// ---- 参数带的折叠按钮（只有窄屏看得见，桌面由 CSS 隐藏按钮和整条参数带）----
+//
+// 为什么需要：手机上参数一多，那条带子会把输入框压到只剩几十像素（390x700
+// 实测 14px）。而「把字段排整齐」解决不了这个问题 —— 每项独占一行后参数区反而
+// 从 165px 涨到 228px。真正的解法是默认收起，需要调参时再点开。
+function syncParamsBtn() {
+  const btn = $("btn-params");
+  const n = (PARAMSPEC[paramKey()] || []).length;
+  btn.classList.toggle("show", n > 0);      // 没有参数就别摆一个空按钮
+  btn.textContent = "⚙ 参数 (" + n + ")";
+  btn.classList.toggle("on", document.body.classList.contains("paramopen"));
+}
+
 function renderParams() {
   const box = $("params");
   const spec = PARAMSPEC[paramKey()] || [];
   box.innerHTML = "";
   box.classList.toggle("on", spec.length > 0);
+  syncParamsBtn();
   // 切换动作时同步预览条：当前动作没有 symbols 参数就要把它清空
   updateSymPrev();
   updateSymOut();            // 变体换了之后结果栏的符号也要重画
@@ -1793,6 +1885,14 @@ $("btn-decode").onclick = () => doDecodeOrEncode("decode");
 $("btn-encode").onclick = () => doDecodeOrEncode("encode");
 $("btn-run").onclick = doRun;
 
+// 窄屏参数带的开关。默认收起，手动展开过就记住 —— 习惯不同的人不必反复点。
+// localStorage 在隐私模式/被禁时可能抛异常，所以包一层，失败就当没记住。
+$("btn-params").onclick = () => {
+  const on = document.body.classList.toggle("paramopen");
+  try { localStorage.setItem("pt_params_open", on ? "1" : "0"); } catch (e) {}
+  syncParamsBtn();
+};
+
 // 参数控件是每次切换功能时重建的，所以事件挂在容器上做委托。
 // 进制页改「按几进制读」后必须立刻重算——之前只绑了输入框的 input 事件，
 // 改下拉没反应，得在输入框里敲一下才会刷。
@@ -1858,6 +1958,11 @@ $("file").onchange = async (e) => {
 };
 
 document.body.dataset.tab = "codec";
+// 恢复上次的参数带展开状态（默认收起，见 syncParamsBtn 那段注释）
+try {
+  if (localStorage.getItem("pt_params_open") === "1")
+    document.body.classList.add("paramopen");
+} catch (e) {}
 loadList();
 updateMeta();
 updateSymPrev();
